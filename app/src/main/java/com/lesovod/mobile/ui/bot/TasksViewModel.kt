@@ -33,6 +33,8 @@ class TasksViewModel(application: Application) : AndroidViewModel(application) {
     private val queueManager = OfflineQueueManager.getInstance(application)
     private val json = Json { ignoreUnknownKeys = true }
 
+    val session = sessionManager.session
+
     private val _uiState = MutableStateFlow(TasksUiState())
     val uiState = _uiState.asStateFlow()
 

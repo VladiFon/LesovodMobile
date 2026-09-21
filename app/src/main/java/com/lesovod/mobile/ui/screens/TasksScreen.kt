@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Forest
 import androidx.compose.material.icons.filled.HowToReg
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
+import com.lesovod.mobile.data.session.canInputProba
 import com.lesovod.mobile.ui.bot.TasksViewModel
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.ForestAccent
@@ -38,9 +40,12 @@ import com.lesovod.mobile.ui.theme.ForestSuccess
 @Composable
 fun TasksScreen(
     onOpenAttendance: () -> Unit,
+    onOpenProba: () -> Unit = {},
     viewModel: TasksViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val session by viewModel.session.collectAsState()
+    val canInputProba = session?.role?.canInputProba == true
 
     Column(
         modifier = Modifier
@@ -73,6 +78,33 @@ fun TasksScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    }
+                }
+            }
+
+            if (canInputProba) {
+                item {
+                    Card(
+                        onClick = onOpenProba,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(Icons.Filled.Forest, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Column {
+                                Text("Проба рубок ухода", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Укладки и расчёт запаса",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }

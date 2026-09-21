@@ -12,6 +12,8 @@ import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
+import com.lesovod.mobile.data.network.dto.ProbaResponse
+import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
@@ -131,6 +133,10 @@ class BotRepository(
 
     suspend fun listNotes(): Result<List<NoteDto>> = safeCall {
         api.listNotes(requireToken())
+    }
+
+    suspend fun submitProba(request: ProbaSaveRequest): Result<ProbaResponse> = safeCall {
+        api.createProba(requireToken(), request)
     }
 
     private fun requireToken(): String =

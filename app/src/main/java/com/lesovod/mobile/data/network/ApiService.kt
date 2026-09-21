@@ -11,6 +11,8 @@ import com.lesovod.mobile.data.network.dto.LoginResponseDto
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.PhotoUploadResponseDto
+import com.lesovod.mobile.data.network.dto.ProbaResponse
+import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
@@ -113,6 +115,12 @@ interface ApiService {
     suspend fun listNotes(
         @Header("Authorization") bearerToken: String,
     ): List<NoteDto>
+
+    @POST("api/uhody/proby")
+    suspend fun createProba(
+        @Header("Authorization") bearerToken: String,
+        @Body body: ProbaSaveRequest,
+    ): ProbaResponse
 
     // Карта и таксация (app/routers/map.py, app/routers/taxation.py) — публичные,
     // Authorization не требуют (см. докстринг app/auth.py про Этап 1 роутеры).

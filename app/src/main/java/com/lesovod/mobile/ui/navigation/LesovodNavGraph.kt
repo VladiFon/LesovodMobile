@@ -34,6 +34,7 @@ import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.kubaturnik.KubaturnikScreen
 import com.lesovod.mobile.ui.notes.NotesScreen
+import com.lesovod.mobile.ui.proba.ProbaScreen
 import com.lesovod.mobile.ui.screens.AttendanceScreen
 import com.lesovod.mobile.ui.screens.BreakdownScreen
 import com.lesovod.mobile.ui.screens.LoginScreen
@@ -70,7 +71,10 @@ fun LesovodNavGraph() {
         }
         composable(Screen.Tasks.route) {
             MainScaffold(navController) {
-                TasksScreen(onOpenAttendance = { navController.navigate(Screen.Attendance.route) })
+                TasksScreen(
+                    onOpenAttendance = { navController.navigate(Screen.Attendance.route) },
+                    onOpenProba = { navController.navigate(Screen.Proba.route) },
+                )
             }
         }
         composable(Screen.Attendance.route) {
@@ -89,6 +93,9 @@ fun LesovodNavGraph() {
         }
         composable(Screen.Trelevka.route) {
             TrelevkaScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Screen.Proba.route) {
+            ProbaScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Stock.route) { MainScaffold(navController) { StockScreen() } }
         composable(Screen.Kubaturnik.route) { MainScaffold(navController) { KubaturnikScreen() } }
