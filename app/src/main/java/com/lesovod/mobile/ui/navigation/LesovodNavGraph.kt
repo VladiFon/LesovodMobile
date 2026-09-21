@@ -1,17 +1,28 @@
 package com.lesovod.mobile.ui.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -19,6 +30,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.screens.AttendanceScreen
 import com.lesovod.mobile.ui.screens.BreakdownScreen
@@ -29,6 +41,7 @@ import com.lesovod.mobile.ui.screens.RegistrationScreen
 import com.lesovod.mobile.ui.screens.StockScreen
 import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
+import com.lesovod.mobile.ui.theme.ForestAccent
 
 @Composable
 fun LesovodNavGraph() {
@@ -89,6 +102,10 @@ private fun MainScaffold(
     navController: NavHostController,
     content: @Composable () -> Unit,
 ) {
+    val context = LocalContext.current
+    val queueManager = remember { OfflineQueueManager.getInstance(context) }
+    val pending by queueManager.pending.collectAsState()
+
     Scaffold(
         bottomBar = {
             val backStackEntry by navController.currentBackStackEntryAsState()
@@ -117,8 +134,48 @@ private fun MainScaffold(
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
-            content()
+        Column(modifier = Modifier.padding(innerPadding)) {
+            if (pending.isNotEmpty()) {
+                PendingSyncBanner(count = pending.size, onRetryNow = queueManager::retryNow)
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                content()
+            }
         }
+    }
+}
+
+@Composable
+private fun PendingSyncBanner(count: Int, onRetryNow: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
+        shape = RoundedCornerShape(0.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Нет сети: $count " + pluralActionsRu(count) + " ждут отправки",
+                style = MaterialTheme.typography.bodyMedium,
+                color = ForestAccent,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRetryNow) {
+                Text("Повторить")
+            }
+        }
+    }
+}
+
+private fun pluralActionsRu(count: Int): String {
+    val mod100 = count % 100
+    val mod10 = count % 10
+    return when {
+        mod100 in 11..14 -> "действий"
+        mod10 == 1 -> "действие"
+        mod10 in 2..4 -> "действия"
+        else -> "действий"
     }
 }

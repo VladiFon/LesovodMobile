@@ -96,6 +96,21 @@ fun AttendanceScreen(
                 }
             }
 
+            if (state.queuedOffline != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "Нет сети — отметка «${state.queuedOffline.displayName}» сохранена на устройстве и отправится, как только появится связь.",
+                        color = ForestAccent,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+
             Text(
                 "Отметьте, работаете ли вы сегодня — координаты приложатся автоматически, если разрешён доступ к геолокации.",
                 style = MaterialTheme.typography.bodyMedium,

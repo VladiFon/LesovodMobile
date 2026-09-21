@@ -4,8 +4,10 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.repository.BotRepository
+import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,11 +23,13 @@ data class WorkReportUiState(
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val submitted: Boolean = false,
+    val queuedOffline: Boolean = false,
 )
 
 class WorkReportViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager.getInstance(application)
     private val repository = BotRepository(NetworkModule.api, sessionManager)
+    private val queueManager = OfflineQueueManager.getInstance(application)
 
     val session = sessionManager.session
 
@@ -78,6 +82,19 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
             val uri = state.photoUri
             if (uri != null) {
                 val uploadResult = repository.uploadPhoto(getApplication<Application>(), uri)
+                val uploadError = uploadResult.exceptionOrNull()
+                if (uploadError is ConnectivityException) {
+                    queueManager.enqueueReport(
+                        tipRaboty = state.tipRaboty.trim(),
+                        kvartal = state.kvartal,
+                        vydels = state.vydels,
+                        opisanie = state.opisanie,
+                        photoUri = uri,
+                        uploadedPhotoPath = null,
+                    )
+                    _uiState.value = WorkReportUiState(queuedOffline = true)
+                    return@launch
+                }
                 uploadResult.onFailure {
                     _uiState.value = _uiState.value.copy(
                         isSubmitting = false,
@@ -95,6 +112,19 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                 opisanie = state.opisanie,
                 photoPath = photoPath,
             )
+            val error = result.exceptionOrNull()
+            if (error is ConnectivityException) {
+                queueManager.enqueueReport(
+                    tipRaboty = state.tipRaboty.trim(),
+                    kvartal = state.kvartal,
+                    vydels = state.vydels,
+                    opisanie = state.opisanie,
+                    photoUri = null,
+                    uploadedPhotoPath = photoPath,
+                )
+                _uiState.value = WorkReportUiState(queuedOffline = true)
+                return@launch
+            }
             _uiState.value = result.fold(
                 onSuccess = { WorkReportUiState(submitted = true) },
                 onFailure = { _uiState.value.copy(isSubmitting = false, error = it.message ?: "Не удалось отправить отчёт") },

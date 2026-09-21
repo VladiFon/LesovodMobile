@@ -32,6 +32,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.ui.bot.TasksViewModel
 import com.lesovod.mobile.ui.components.ScreenTitle
+import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
 
 @Composable
@@ -115,6 +116,7 @@ fun TasksScreen(
                 TaskCard(
                     task = task,
                     isCompleting = state.completingId == task.id,
+                    isQueued = task.id in state.queuedIds,
                     onComplete = { viewModel.completeTask(task.id) },
                 )
             }
@@ -126,6 +128,7 @@ fun TasksScreen(
 private fun TaskCard(
     task: WorkPlanItemDto,
     isCompleting: Boolean,
+    isQueued: Boolean,
     onComplete: () -> Unit,
 ) {
     Card(
@@ -158,15 +161,24 @@ private fun TaskCard(
                 modifier = Modifier.padding(top = 6.dp),
             )
 
-            OutlinedButton(
-                onClick = onComplete,
-                enabled = !isCompleting,
-                modifier = Modifier.padding(top = 12.dp),
-            ) {
-                if (isCompleting) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("Готово", color = ForestSuccess)
+            if (isQueued) {
+                Text(
+                    "Нет сети — отметка о выполнении сохранена на устройстве и отправится, как только появится связь",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ForestAccent,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            } else {
+                OutlinedButton(
+                    onClick = onComplete,
+                    enabled = !isCompleting,
+                    modifier = Modifier.padding(top = 12.dp),
+                ) {
+                    if (isCompleting) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Готово", color = ForestSuccess)
+                    }
                 }
             }
         }
