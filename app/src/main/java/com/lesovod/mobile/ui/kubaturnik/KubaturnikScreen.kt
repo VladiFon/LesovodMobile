@@ -1,6 +1,7 @@
 package com.lesovod.mobile.ui.kubaturnik
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -373,6 +374,7 @@ private fun DiameterGrid(state: KubaturnikUiState, viewModel: KubaturnikViewMode
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DiameterButton(diameter: Int, count: Int, onTap: () -> Unit, onUndo: () -> Unit) {
     val hasCount = count > 0
