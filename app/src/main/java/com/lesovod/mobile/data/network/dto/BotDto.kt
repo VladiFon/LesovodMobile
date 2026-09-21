@@ -11,6 +11,8 @@ data class RawReportRequest(
     val vydels: List<String>? = null,
     @SerialName("photo_path") val photoPath: String? = null,
     val opisanie: String? = null,
+    val lat: Double? = null,
+    val lon: Double? = null,
 )
 
 @Serializable
@@ -54,25 +56,15 @@ data class RemainingResponseDto(
     @SerialName("egais_imported_at") val egaisImportedAt: String? = null,
 )
 
-/**
- * ВНИМАНИЕ: точные имена полей не были даны в задаче (только путь POST /api/bot/trelevka
- * и смысл формы — делянка необязательна, откуда/куда/объём обязательны). Названы по аналогии
- * с остальными полями бота (kvartal/vydel как в RawReportRequest) — нужно сверить с реальной
- * Pydantic-схемой на бэкенде перед продакшеном.
- */
+/** Подтверждённая схема сервера: { otkuda, kuda, obyom, delyanka_item_id }. */
 @Serializable
 data class TrelevkaRequest(
-    val kvartal: String? = null,
-    val vydel: String? = null,
     val otkuda: String,
     val kuda: String,
     val obyom: Double,
+    @SerialName("delyanka_item_id") val delyankaItemId: Int? = null,
 )
 
-/**
- * ВНИМАНИЕ: поле получателя (`recipient_sotrudnik_id`) названо явно в задаче, остальные —
- * по аналогии с другими DTO бота, сверить с реальной схемой на бэкенде.
- */
 @Serializable
 data class NoteCreateRequest(
     val text: String,

@@ -79,20 +79,12 @@ fun TrelevkaScreen(onBack: () -> Unit, viewModel: TrelevkaViewModel = viewModel(
                 }
             } else {
                 OutlinedTextField(
-                    value = state.kvartal,
-                    onValueChange = viewModel::onKvartalChange,
-                    label = { Text("Квартал (необязательно)") },
+                    value = state.delyankaItemId,
+                    onValueChange = viewModel::onDelyankaItemIdChange,
+                    label = { Text("ID делянки (необязательно)") },
                     singleLine = true,
                     enabled = !state.isSubmitting,
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = state.vydel,
-                    onValueChange = viewModel::onVydelChange,
-                    label = { Text("Выдел (необязательно)") },
-                    singleLine = true,
-                    enabled = !state.isSubmitting,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth(),
                 )

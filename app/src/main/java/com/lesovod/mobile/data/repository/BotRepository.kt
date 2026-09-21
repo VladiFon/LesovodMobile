@@ -63,6 +63,8 @@ class BotRepository(
         vydels: List<String>?,
         opisanie: String?,
         photoPath: String?,
+        lat: Double? = null,
+        lon: Double? = null,
     ): Result<Unit> {
         val telegramId = sessionManager.session.value?.appIdentity
             ?: return Result.failure(Exception("Не удалось определить учётную запись для отправки — переавторизуйтесь"))
@@ -77,6 +79,8 @@ class BotRepository(
                     vydels = vydels?.takeIf { it.isNotEmpty() },
                     photoPath = photoPath,
                     opisanie = opisanie?.takeIf { it.isNotBlank() },
+                    lat = lat,
+                    lon = lon,
                 ),
             )
             Unit
@@ -117,8 +121,8 @@ class BotRepository(
         api.completeWorkPlan(requireToken(), id).done
     }
 
-    suspend fun submitTrelevka(kvartal: String?, vydel: String?, otkuda: String, kuda: String, obyom: Double): Result<Unit> = safeCall {
-        api.createTrelevka(requireToken(), TrelevkaRequest(kvartal, vydel, otkuda, kuda, obyom))
+    suspend fun submitTrelevka(otkuda: String, kuda: String, obyom: Double, delyankaItemId: Int?): Result<Unit> = safeCall {
+        api.createTrelevka(requireToken(), TrelevkaRequest(otkuda, kuda, obyom, delyankaItemId))
         Unit
     }
 

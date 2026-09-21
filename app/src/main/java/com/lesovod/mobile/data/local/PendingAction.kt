@@ -29,6 +29,8 @@ data class PendingReportPayload(
     val vydels: List<String>? = null,
     val opisanie: String? = null,
     val photoPath: String? = null,
+    val lat: Double? = null,
+    val lon: Double? = null,
 )
 
 @Serializable
