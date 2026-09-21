@@ -26,6 +26,15 @@ typealias DiameterCounts = Map<Int, Int>
 
 data class KubaturnikRow(val diameter: Int, val count: Int, val volumePerLog: Double, val totalVolume: Double)
 
+data class DiameterSummaryRow(
+    val sort: String,
+    val destination: KubaturnikDestination,
+    val diameter: Int,
+    val lengthValue: Double,
+    val count: Int,
+    val volume: Double,
+)
+
 data class ThicknessSummaryRow(
     val rangeLabel: String,
     val sort: String,
@@ -87,6 +96,22 @@ data class KubaturnikUiState(
 
     val totalLogCount: Int
         get() = counts.values.sumOf { byDest -> byDest.values.sumOf { byDiam -> byDiam.values.sum() } }
+
+    /** Сводка по диаметрам (как в «Итоги» референса) — по каждому сорту и назначению отдельно. */
+    fun diameterSummary(): List<DiameterSummaryRow> {
+        val block = selectedBlock ?: return emptyList()
+        val rows = mutableListOf<DiameterSummaryRow>()
+        for ((sort, byDest) in counts) {
+            for ((dest, byDiam) in byDest) {
+                for ((diameter, count) in byDiam) {
+                    if (count <= 0) continue
+                    val volume = (block.volumeFor(diameter, selectedLengthIndex) ?: 0.0) * count
+                    rows += DiameterSummaryRow(sort, dest, diameter, selectedLengthValue, count, volume)
+                }
+            }
+        }
+        return rows.sortedWith(compareBy({ it.sort }, { it.destination.ordinal }, { it.diameter }))
+    }
 
     fun thicknessSummary(): List<ThicknessSummaryRow> {
         val block = selectedBlock ?: return emptyList()

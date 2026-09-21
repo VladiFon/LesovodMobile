@@ -47,8 +47,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.ui.components.ScreenTitle
@@ -167,14 +169,15 @@ private fun KubaturnikMain(state: KubaturnikUiState, viewModel: KubaturnikViewMo
     Column(modifier = Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = tab) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Счёт") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Сводка по ступеням") })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Итоги") })
+            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("По ступеням") })
         }
 
         Box(modifier = Modifier.weight(1f)) {
-            if (tab == 0) {
-                KubaturnikCounting(state = state, viewModel = viewModel)
-            } else {
-                KubaturnikSummary(state = state)
+            when (tab) {
+                0 -> KubaturnikCounting(state = state, viewModel = viewModel)
+                1 -> KubaturnikTotals(state = state)
+                else -> KubaturnikThicknessSummary(state = state)
             }
         }
     }
@@ -228,20 +231,25 @@ private fun KubaturnikHeader(state: KubaturnikUiState, viewModel: KubaturnikView
         SortRow(state = state, viewModel = viewModel)
 
         Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+            colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
                 Text(
                     "${state.totalVolume.fmt(3)} м³",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    color = ForestAccent,
                 )
                 Text(
-                    "Итого по партии — машина + прицеп, все сорта (${state.totalLogCount} брёвен)",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "  ${state.totalLogCount} шт.",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = ForestAccent,
+                    modifier = Modifier.padding(bottom = 2.dp),
                 )
             }
         }
@@ -330,14 +338,8 @@ private fun LeftPanel(state: KubaturnikUiState, modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(rows, key = { it.diameter }) { row ->
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Text("⌀${row.diameter}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.3f))
-                        Text("×${row.count}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.3f))
-                        Text(row.totalVolume.fmt(3), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.4f))
-                    }
-                }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(rows, key = { it.diameter }) { row -> DiameterRowCard(row = row, lengthValue = state.selectedLengthValue) }
                 item {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Row(modifier = Modifier.fillMaxWidth()) {
@@ -349,6 +351,42 @@ private fun LeftPanel(state: KubaturnikUiState, modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DiameterRowCard(row: KubaturnikRow, lengthValue: Double) {
+    Card(
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            ) {
+                Text(
+                    "⌀${row.diameter}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                Text("${lengthValue.fmt(1)} м: ${row.count} шт.", style = MaterialTheme.typography.bodyMedium)
+            }
+            Text(
+                row.totalVolume.fmt(3),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = ForestAccent,
+            )
         }
     }
 }
@@ -403,7 +441,105 @@ private fun DiameterButton(diameter: Int, count: Int, onTap: () -> Unit, onUndo:
 }
 
 @Composable
-private fun KubaturnikSummary(state: KubaturnikUiState) {
+private fun KubaturnikTotals(state: KubaturnikUiState) {
+    val rows = state.diameterSummary()
+    if (rows.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Пока нет данных", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
+    val groups = rows.groupBy { it.sort to it.destination }
+
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "${state.totalVolume.fmt(3)} м³",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = ForestAccent,
+                    )
+                    Text(
+                        "Итоговая кубатура · ${state.totalLogCount} брёвен",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        groups.forEach { (key, groupRows) ->
+            val (sort, destination) = key
+            item {
+                Text(
+                    "$sort · ${destination.label}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            item { DiameterTable(rows = groupRows) }
+        }
+    }
+}
+
+@Composable
+private fun DiameterTable(rows: List<DiameterSummaryRow>) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TableCell("Диаметр", 0.28f, header = true)
+                TableCell("Длина", 0.22f, header = true)
+                TableCell("Кол.", 0.18f, header = true)
+                TableCell("Объём", 0.32f, header = true)
+            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+            rows.forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    TableCell("${row.diameter}", 0.28f)
+                    TableCell(row.lengthValue.fmt(1), 0.22f)
+                    TableCell("${row.count}", 0.18f)
+                    TableCell(row.volume.fmt(3), 0.32f)
+                }
+            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TableCell("", 0.28f)
+                TableCell("", 0.22f)
+                TableCell("${rows.sumOf { it.count }}", 0.18f, bold = true)
+                TableCell(rows.sumOf { it.volume }.fmt(3), 0.32f, bold = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.TableCell(text: String, weight: Float, header: Boolean = false, bold: Boolean = false) {
+    Text(
+        text,
+        style = if (header) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
+        fontWeight = if (bold) FontWeight.Bold else null,
+        color = if (header) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.weight(weight),
+    )
+}
+
+@Composable
+private fun KubaturnikThicknessSummary(state: KubaturnikUiState) {
     val rows = state.thicknessSummary()
     if (rows.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
