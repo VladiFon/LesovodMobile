@@ -32,6 +32,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
+import com.lesovod.mobile.ui.kubaturnik.KubaturnikScreen
+import com.lesovod.mobile.ui.notes.NotesScreen
 import com.lesovod.mobile.ui.screens.AttendanceScreen
 import com.lesovod.mobile.ui.screens.BreakdownScreen
 import com.lesovod.mobile.ui.screens.LoginScreen
@@ -42,6 +44,7 @@ import com.lesovod.mobile.ui.screens.StockScreen
 import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
 import com.lesovod.mobile.ui.theme.ForestAccent
+import com.lesovod.mobile.ui.trelevka.TrelevkaScreen
 
 @Composable
 fun LesovodNavGraph() {
@@ -75,14 +78,22 @@ fun LesovodNavGraph() {
         }
         composable(Screen.WorkReport.route) {
             MainScaffold(navController) {
-                WorkReportScreen(onReportBreakdown = { navController.navigate(Screen.Breakdown.route) })
+                WorkReportScreen(
+                    onReportBreakdown = { navController.navigate(Screen.Breakdown.route) },
+                    onReportTrelevka = { navController.navigate(Screen.Trelevka.route) },
+                )
             }
         }
         composable(Screen.Breakdown.route) {
             BreakdownScreen(onBack = { navController.popBackStack() })
         }
+        composable(Screen.Trelevka.route) {
+            TrelevkaScreen(onBack = { navController.popBackStack() })
+        }
         composable(Screen.Stock.route) { MainScaffold(navController) { StockScreen() } }
+        composable(Screen.Kubaturnik.route) { MainScaffold(navController) { KubaturnikScreen() } }
         composable(Screen.Map.route) { MainScaffold(navController) { MapScreen() } }
+        composable(Screen.Notes.route) { MainScaffold(navController) { NotesScreen() } }
         composable(Screen.Profile.route) {
             MainScaffold(navController) {
                 ProfileScreen(
@@ -105,6 +116,8 @@ private fun MainScaffold(
     val context = LocalContext.current
     val queueManager = remember { OfflineQueueManager.getInstance(context) }
     val pending by queueManager.pending.collectAsState()
+    val session by SessionManager.getInstance(context).session.collectAsState()
+    val navItems = bottomNavItemsFor(session?.role)
 
     Scaffold(
         bottomBar = {
@@ -112,7 +125,7 @@ private fun MainScaffold(
             val currentDestination = backStackEntry?.destination
 
             NavigationBar {
-                bottomNavItems.forEach { item ->
+                navItems.forEach { item ->
                     val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
                     NavigationBarItem(
                         selected = selected,

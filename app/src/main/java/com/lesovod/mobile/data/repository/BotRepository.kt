@@ -10,8 +10,12 @@ import com.lesovod.mobile.data.network.dto.AttendanceMarkRequest
 import com.lesovod.mobile.data.network.dto.AttendanceStatus
 import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.DelyankaDto
+import com.lesovod.mobile.data.network.dto.NoteCreateRequest
+import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.RawReportRequest
+import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
+import com.lesovod.mobile.data.network.dto.TrelevkaRequest
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.data.session.SessionManager
@@ -109,6 +113,24 @@ class BotRepository(
 
     suspend fun completeWorkPlanItem(id: Int): Result<Boolean> = safeCall {
         api.completeWorkPlan(requireToken(), id).done
+    }
+
+    suspend fun submitTrelevka(kvartal: String?, vydel: String?, otkuda: String, kuda: String, obyom: Double): Result<Unit> = safeCall {
+        api.createTrelevka(requireToken(), TrelevkaRequest(kvartal, vydel, otkuda, kuda, obyom))
+        Unit
+    }
+
+    suspend fun listRecipients(): Result<List<RecipientDto>> = safeCall {
+        api.listRecipients(requireToken())
+    }
+
+    suspend fun submitNote(text: String, recipientId: Int?): Result<Unit> = safeCall {
+        api.createNote(requireToken(), NoteCreateRequest(text, recipientId))
+        Unit
+    }
+
+    suspend fun listNotes(): Result<List<NoteDto>> = safeCall {
+        api.listNotes(requireToken())
     }
 
     private fun requireToken(): String =

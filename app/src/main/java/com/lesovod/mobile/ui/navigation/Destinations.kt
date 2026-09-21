@@ -2,11 +2,16 @@ package com.lesovod.mobile.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.lesovod.mobile.data.session.WorkerRole
+import com.lesovod.mobile.data.session.canSeeStock
+import com.lesovod.mobile.data.session.canUseKubaturnik
 
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
@@ -18,6 +23,10 @@ sealed class Screen(val route: String) {
     data object Profile : Screen("profile")
     data object Breakdown : Screen("breakdown")
     data object Attendance : Screen("attendance")
+    data object Kubaturnik : Screen("kubaturnik")
+    data object Proba : Screen("proba")
+    data object Trelevka : Screen("trelevka")
+    data object Notes : Screen("notes")
 }
 
 data class BottomNavItem(
@@ -26,10 +35,21 @@ data class BottomNavItem(
     val icon: ImageVector,
 )
 
-val bottomNavItems = listOf(
-    BottomNavItem(Screen.Tasks, "Задачи", Icons.Filled.Assignment),
-    BottomNavItem(Screen.WorkReport, "Отчёт", Icons.Filled.PostAdd),
-    BottomNavItem(Screen.Stock, "Остатки", Icons.Filled.Inventory2),
-    BottomNavItem(Screen.Map, "Карта", Icons.Filled.Map),
-    BottomNavItem(Screen.Profile, "Профиль", Icons.Filled.Person),
-)
+/**
+ * Доступные роли видят разный набор вкладок (см. таблицу прав в задаче):
+ * «Остатки по делянкам» и «Кубатурник» — только мастер / пом. лесничего / лесничий.
+ * Задачи, отчёт, карта, заметки и профиль доступны всем ролям.
+ */
+fun bottomNavItemsFor(role: WorkerRole?): List<BottomNavItem> {
+    val canSeeStock = role?.canSeeStock == true
+    val canUseKubaturnik = role?.canUseKubaturnik == true
+    return listOfNotNull(
+        BottomNavItem(Screen.Tasks, "Задачи", Icons.Filled.Assignment),
+        BottomNavItem(Screen.WorkReport, "Отчёт", Icons.Filled.PostAdd),
+        BottomNavItem(Screen.Stock, "Остатки", Icons.Filled.Inventory2).takeIf { canSeeStock },
+        BottomNavItem(Screen.Kubaturnik, "Кубатурник", Icons.Filled.Calculate).takeIf { canUseKubaturnik },
+        BottomNavItem(Screen.Map, "Карта", Icons.Filled.Map),
+        BottomNavItem(Screen.Notes, "Заметки", Icons.Filled.Notifications),
+        BottomNavItem(Screen.Profile, "Профиль", Icons.Filled.Person),
+    )
+}
