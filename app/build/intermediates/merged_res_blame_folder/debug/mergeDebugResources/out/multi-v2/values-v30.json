@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.lesovod.mobile.app-mergeDebugResources-55:/values-v30/values-v30.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\Влад\\.gradle\\caches\\transforms-4\\b6f4156197a522881c2b4afbe668b63f\\transformed\\material3-release\\res\\values-v30\\values-v30.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "72",
+                        "endOffsets": "123"
+                    }
+                }
+            ]
+        }
+    ]
+}

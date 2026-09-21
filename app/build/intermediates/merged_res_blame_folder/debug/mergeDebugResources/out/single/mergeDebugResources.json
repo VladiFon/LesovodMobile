@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.lesovod.mobile.app-debug-57:/font_manrope.ttf.flat",
+        "source": "com.lesovod.mobile.app-main-59:/font/manrope.ttf"
+    },
+    {
+        "merged": "com.lesovod.mobile.app-debug-57:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.lesovod.mobile.app-main-59:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.lesovod.mobile.app-debug-57:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.lesovod.mobile.app-main-59:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.lesovod.mobile.app-debug-57:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.lesovod.mobile.app-main-59:/drawable/ic_launcher_foreground.xml"
+    }
+]

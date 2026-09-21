@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Lesovod" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#FCF9F2</item>
+        <item name="android:windowBackground">#FCF9F2</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
