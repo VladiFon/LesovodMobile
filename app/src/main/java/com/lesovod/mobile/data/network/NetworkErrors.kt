@@ -16,3 +16,10 @@ fun extractErrorMessage(e: HttpException, notFoundMessage: String = "Ошибк�
     }
     return detail ?: "$notFoundMessage (${e.code()})"
 }
+
+/**
+ * Брошено при сбое соединения (нет сети, DNS, таймаут) — в отличие от [HttpException],
+ * когда сервер ответил, но с ошибкой. По этому типу вызывающая сторона решает,
+ * поставить ли действие в офлайн-очередь вместо показа ошибки.
+ */
+class ConnectivityException(message: String, cause: Throwable? = null) : Exception(message, cause)

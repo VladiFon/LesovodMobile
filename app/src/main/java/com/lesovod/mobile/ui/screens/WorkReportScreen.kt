@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -37,20 +38,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.lesovod.mobile.data.session.WorkerRole
+import com.lesovod.mobile.data.session.canReportBreakdown
+import com.lesovod.mobile.data.session.canTrelevka
 import com.lesovod.mobile.ui.components.PhotoPickerField
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.bot.WorkReportViewModel
+import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
 
 @Composable
 fun WorkReportScreen(
     onReportBreakdown: () -> Unit,
+    onReportTrelevka: () -> Unit = {},
     viewModel: WorkReportViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val session by viewModel.session.collectAsState()
-    val canReportBreakdown = session?.role == WorkerRole.TRAKTORIST || session?.role == WorkerRole.HARVESTERSHIK
+    val canReportBreakdown = session?.role?.canReportBreakdown == true
+    val canTrelevka = session?.role?.canTrelevka == true
 
     Column(
         modifier = Modifier
@@ -76,6 +81,28 @@ fun WorkReportScreen(
                         Text("Отчёт отправлен", color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
                         Text(
                             "Он появится в журнале у лесничего на проверке.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                        OutlinedButton(
+                            onClick = viewModel::resetSubmitted,
+                            modifier = Modifier.padding(top = 12.dp),
+                        ) {
+                            Text("Отправить ещё один")
+                        }
+                    }
+                }
+            } else if (state.queuedOffline) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Нет сети — отчёт сохранён на устройстве", color = ForestAccent, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Он отправится автоматически, как только появится связь.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
@@ -205,10 +232,23 @@ fun WorkReportScreen(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp, bottom = 24.dp),
+                        .padding(top = 8.dp, bottom = if (canTrelevka) 0.dp else 24.dp),
                 ) {
                     Icon(Icons.Filled.Build, contentDescription = null)
                     Text("Сообщить о поломке техники", modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+
+            if (canTrelevka) {
+                OutlinedButton(
+                    onClick = onReportTrelevka,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 24.dp),
+                ) {
+                    Icon(Icons.Filled.LocalShipping, contentDescription = null)
+                    Text("Отметить трелёвку", modifier = Modifier.padding(start = 8.dp))
                 }
             }
         }

@@ -53,3 +53,42 @@ data class RemainingResponseDto(
     @SerialName("last_update") val lastUpdate: String? = null,
     @SerialName("egais_imported_at") val egaisImportedAt: String? = null,
 )
+
+/**
+ * ВНИМАНИЕ: точные имена полей не были даны в задаче (только путь POST /api/bot/trelevka
+ * и смысл формы — делянка необязательна, откуда/куда/объём обязательны). Названы по аналогии
+ * с остальными полями бота (kvartal/vydel как в RawReportRequest) — нужно сверить с реальной
+ * Pydantic-схемой на бэкенде перед продакшеном.
+ */
+@Serializable
+data class TrelevkaRequest(
+    val kvartal: String? = null,
+    val vydel: String? = null,
+    val otkuda: String,
+    val kuda: String,
+    val obyom: Double,
+)
+
+/**
+ * ВНИМАНИЕ: поле получателя (`recipient_sotrudnik_id`) названо явно в задаче, остальные —
+ * по аналогии с другими DTO бота, сверить с реальной схемой на бэкенде.
+ */
+@Serializable
+data class NoteCreateRequest(
+    val text: String,
+    @SerialName("recipient_sotrudnik_id") val recipientSotrudnikId: Int? = null,
+)
+
+@Serializable
+data class RecipientDto(
+    val id: Int,
+    val fio: String,
+)
+
+@Serializable
+data class NoteDto(
+    val id: Int,
+    val text: String,
+    @SerialName("author_fio") val authorFio: String? = null,
+    @SerialName("created_at") val createdAt: String,
+)

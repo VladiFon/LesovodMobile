@@ -3,17 +3,29 @@ package com.lesovod.mobile.data.repository
 import android.content.Context
 import android.net.Uri
 import com.lesovod.mobile.data.network.ApiService
+import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.buildPhotoPart
 import com.lesovod.mobile.data.network.dto.AttendanceMarkDto
 import com.lesovod.mobile.data.network.dto.AttendanceMarkRequest
 import com.lesovod.mobile.data.network.dto.AttendanceStatus
 import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.DelyankaDto
+import com.lesovod.mobile.data.network.dto.NoteCreateRequest
+import com.lesovod.mobile.data.network.dto.NoteDto
+import com.lesovod.mobile.data.network.dto.ProbaResponse
+import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.network.dto.RawReportRequest
+import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
+import com.lesovod.mobile.data.network.dto.TrelevkaRequest
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.data.session.SessionManager
+import java.io.File
+import java.io.IOException
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
 
 class BotRepository(
@@ -33,6 +45,16 @@ class BotRepository(
     suspend fun uploadPhoto(context: Context, uri: Uri): Result<String> = safeCall {
         val part = buildPhotoPart(context, uri)
         api.uploadPhoto(requireToken(), part).photoPath
+    }
+
+    /** Как [uploadPhoto], но для фото, ранее скопированного на диск при постановке действия в офлайн-очередь. */
+    suspend fun uploadPhotoFile(file: File): Result<String> {
+        if (!file.exists()) return Result.failure(Exception("Файл фото не найден"))
+        return safeCall {
+            val requestBody = file.readBytes().toRequestBody("image/jpeg".toMediaTypeOrNull())
+            val part = MultipartBody.Part.createFormData("file", file.name, requestBody)
+            api.uploadPhoto(requireToken(), part).photoPath
+        }
     }
 
     suspend fun submitReport(
@@ -95,6 +117,28 @@ class BotRepository(
         api.completeWorkPlan(requireToken(), id).done
     }
 
+    suspend fun submitTrelevka(kvartal: String?, vydel: String?, otkuda: String, kuda: String, obyom: Double): Result<Unit> = safeCall {
+        api.createTrelevka(requireToken(), TrelevkaRequest(kvartal, vydel, otkuda, kuda, obyom))
+        Unit
+    }
+
+    suspend fun listRecipients(): Result<List<RecipientDto>> = safeCall {
+        api.listRecipients(requireToken())
+    }
+
+    suspend fun submitNote(text: String, recipientId: Int?): Result<Unit> = safeCall {
+        api.createNote(requireToken(), NoteCreateRequest(text, recipientId))
+        Unit
+    }
+
+    suspend fun listNotes(): Result<List<NoteDto>> = safeCall {
+        api.listNotes(requireToken())
+    }
+
+    suspend fun submitProba(request: ProbaSaveRequest): Result<ProbaResponse> = safeCall {
+        api.createProba(requireToken(), request)
+    }
+
     private fun requireToken(): String =
         bearerToken() ?: error("Сессия истекла, войдите заново")
 
@@ -103,6 +147,10 @@ class BotRepository(
             Result.success(block())
         } catch (e: HttpException) {
             Result.failure(Exception(extractErrorMessage(e, "Ошибка сервера")))
+        } catch (e: IOException) {
+            // Сбой на уровне соединения (нет сети, DNS, таймаут), а не ответ сервера с ошибкой —
+            // по этому типу вызывающая сторона решает поставить действие в офлайн-очередь.
+            Result.failure(ConnectivityException("Нет соединения с интернетом", e))
         } catch (e: Exception) {
             Result.failure(Exception(e.message ?: "Не удалось связаться с сервером"))
         }

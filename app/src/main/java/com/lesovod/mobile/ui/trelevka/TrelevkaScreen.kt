@@ -1,4 +1,4 @@
-package com.lesovod.mobile.ui.screens
+package com.lesovod.mobile.ui.trelevka
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -31,18 +32,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.lesovod.mobile.ui.bot.BreakdownViewModel
-import com.lesovod.mobile.ui.components.PhotoPickerField
-import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
 
 @Composable
-fun BreakdownScreen(
-    onBack: () -> Unit,
-    viewModel: BreakdownViewModel = viewModel(),
-) {
+fun TrelevkaScreen(onBack: () -> Unit, viewModel: TrelevkaViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
 
     Column(
@@ -56,7 +52,7 @@ fun BreakdownScreen(
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Назад")
             }
             Text(
-                "Поломка техники",
+                "Трелёвка",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -66,7 +62,7 @@ fun BreakdownScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp),
         ) {
             if (state.submitted) {
                 Card(
@@ -75,49 +71,59 @@ fun BreakdownScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Сообщение отправлено", color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Мастер и лесничий получат уведомление о поломке.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                        OutlinedButton(onClick = onBack, modifier = Modifier.padding(top = 12.dp)) {
-                            Text("Вернуться к отчёту")
-                        }
-                    }
-                }
-            } else if (state.queuedOffline) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Нет сети — сообщение сохранено на устройстве", color = ForestAccent, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Оно отправится автоматически, как только появится связь.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                        OutlinedButton(onClick = onBack, modifier = Modifier.padding(top = 12.dp)) {
-                            Text("Вернуться к отчёту")
+                        Text("Отправлено", color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
+                        OutlinedButton(onClick = viewModel::resetSubmitted, modifier = Modifier.padding(top = 12.dp)) {
+                            Text("Отправить ещё одну")
                         }
                     }
                 }
             } else {
                 OutlinedTextField(
-                    value = state.detailText,
-                    onValueChange = viewModel::onDetailTextChange,
-                    label = { Text("Что случилось") },
+                    value = state.kvartal,
+                    onValueChange = viewModel::onKvartalChange,
+                    label = { Text("Квартал (необязательно)") },
+                    singleLine = true,
                     enabled = !state.isSubmitting,
-                    minLines = 4,
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth(),
                 )
-
-                PhotoPickerField(uri = state.photoUri, onPicked = viewModel::onPhotoPicked)
+                OutlinedTextField(
+                    value = state.vydel,
+                    onValueChange = viewModel::onVydelChange,
+                    label = { Text("Выдел (необязательно)") },
+                    singleLine = true,
+                    enabled = !state.isSubmitting,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = state.otkuda,
+                    onValueChange = viewModel::onOtkudaChange,
+                    label = { Text("Откуда") },
+                    singleLine = true,
+                    enabled = !state.isSubmitting,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = state.kuda,
+                    onValueChange = viewModel::onKudaChange,
+                    label = { Text("Куда") },
+                    singleLine = true,
+                    enabled = !state.isSubmitting,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = state.obyom,
+                    onValueChange = viewModel::onObyomChange,
+                    label = { Text("Объём, м³") },
+                    singleLine = true,
+                    enabled = !state.isSubmitting,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
                 if (state.error != null) {
                     Card(
@@ -138,19 +144,17 @@ fun BreakdownScreen(
                     onClick = viewModel::submit,
                     enabled = !state.isSubmitting,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 24.dp),
                 ) {
                     if (state.isSubmitting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp,
-                        )
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                     } else {
-                        Text("Сообщить о поломке")
+                        Text("Отправить")
                     }
                 }
             }
