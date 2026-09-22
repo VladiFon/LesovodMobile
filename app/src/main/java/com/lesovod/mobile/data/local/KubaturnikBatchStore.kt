@@ -22,25 +22,66 @@ data class KubaturnikSnapshot(
     val counts: List<KubaturnikCountEntry> = emptyList(),
 )
 
-/** Партия — офлайн-инструмент: данные подсчёта живут только на телефоне, на сервер не уходят. */
+/** Сохранённый расчёт партии — попадает сюда при «Новой партии», а не стирается. */
+@Serializable
+data class KubaturnikCalculation(
+    val id: Int,
+    val label: String,
+    val savedAt: Long,
+    val snapshot: KubaturnikSnapshot,
+)
+
+/**
+ * Текущая партия (черновик) переживает перезапуск приложения, как и раньше. «Новая партия» теперь
+ * не стирает подсчитанное, а сохраняет его в список расчётов ("Расчёт #N") и только потом
+ * очищает черновик — расчёт остаётся доступен для просмотра. Всё — офлайн, на сервер не уходит.
+ */
 class KubaturnikBatchStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("kubaturnik_batch", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun load(): KubaturnikSnapshot? {
-        val raw = prefs.getString(KEY, null) ?: return null
+    fun loadDraft(): KubaturnikSnapshot? {
+        val raw = prefs.getString(KEY_DRAFT, null) ?: return null
         return runCatching { json.decodeFromString<KubaturnikSnapshot>(raw) }.getOrNull()
     }
 
-    fun save(snapshot: KubaturnikSnapshot) {
-        prefs.edit { putString(KEY, json.encodeToString(snapshot)) }
+    fun saveDraft(snapshot: KubaturnikSnapshot) {
+        prefs.edit { putString(KEY_DRAFT, json.encodeToString(snapshot)) }
     }
 
-    fun clear() {
-        prefs.edit { remove(KEY) }
+    fun clearDraft() {
+        prefs.edit { remove(KEY_DRAFT) }
+    }
+
+    fun listCalculations(): List<KubaturnikCalculation> {
+        val raw = prefs.getString(KEY_CALCULATIONS, null) ?: return emptyList()
+        return runCatching { json.decodeFromString<List<KubaturnikCalculation>>(raw) }.getOrDefault(emptyList())
+            .sortedByDescending { it.savedAt }
+    }
+
+    /** Сохраняет текущий черновик в историю под следующим номером и возвращает его. */
+    fun archiveDraft(snapshot: KubaturnikSnapshot): KubaturnikCalculation {
+        val id = nextId()
+        val calculation = KubaturnikCalculation(id, "Расчёт #$id", System.currentTimeMillis(), snapshot)
+        val updated = (listCalculations() + calculation)
+        prefs.edit { putString(KEY_CALCULATIONS, json.encodeToString(updated)) }
+        return calculation
+    }
+
+    fun deleteCalculation(id: Int) {
+        val updated = listCalculations().filterNot { it.id == id }
+        prefs.edit { putString(KEY_CALCULATIONS, json.encodeToString(updated)) }
+    }
+
+    private fun nextId(): Int {
+        val next = prefs.getInt(KEY_NEXT_ID, 1)
+        prefs.edit { putInt(KEY_NEXT_ID, next + 1) }
+        return next
     }
 
     private companion object {
-        const val KEY = "snapshot"
+        const val KEY_DRAFT = "draft"
+        const val KEY_CALCULATIONS = "calculations"
+        const val KEY_NEXT_ID = "next_id"
     }
 }
