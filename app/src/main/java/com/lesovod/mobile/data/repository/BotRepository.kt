@@ -25,6 +25,7 @@ import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.notifications.NotificationItem
 import com.lesovod.mobile.ui.notifications.toNotificationItem
+import com.lesovod.mobile.ui.notifications.toUnreadCount
 import com.lesovod.mobile.ui.proba.LesokulturyUchastok
 import com.lesovod.mobile.ui.proba.toLesokulturyUchastok
 import java.io.File
@@ -168,6 +169,15 @@ class BotRepository(
 
     suspend fun markNotificationRead(id: Int): Result<Unit> = safeCall {
         api.markNotificationRead(requireToken(), id)
+        Unit
+    }
+
+    suspend fun getUnreadNotificationsCount(): Result<Int> = safeCall {
+        api.getUnreadNotificationsCount(requireToken()).toUnreadCount()
+    }
+
+    suspend fun markAllNotificationsRead(): Result<Unit> = safeCall {
+        api.markAllNotificationsRead(requireToken())
         Unit
     }
 

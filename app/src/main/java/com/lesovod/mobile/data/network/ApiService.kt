@@ -22,6 +22,7 @@ import com.lesovod.mobile.data.network.dto.TrelevkaRequest
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.dto.WorkerLoginRequest
 import com.lesovod.mobile.ui.proba.LesokulturyUchastokDto
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
@@ -155,6 +156,17 @@ interface ApiService {
     suspend fun markNotificationRead(
         @Header("Authorization") bearerToken: String,
         @Path("id") id: Int,
+        @Body body: JsonObject = JsonObject(emptyMap()),
+    ): ResponseBody
+
+    @GET("api/notifications/unread-count")
+    suspend fun getUnreadNotificationsCount(
+        @Header("Authorization") bearerToken: String,
+    ): JsonElement
+
+    @POST("api/notifications/read-all")
+    suspend fun markAllNotificationsRead(
+        @Header("Authorization") bearerToken: String,
         @Body body: JsonObject = JsonObject(emptyMap()),
     ): ResponseBody
 

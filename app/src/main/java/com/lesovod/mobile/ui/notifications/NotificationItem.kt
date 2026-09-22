@@ -1,6 +1,7 @@
 package com.lesovod.mobile.ui.notifications
 
 import com.lesovod.mobile.ui.map.stringValue
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -39,4 +40,14 @@ fun JsonObject.toNotificationItem(): NotificationItem? {
     val isRead = boolValue("is_read") ?: boolValue("read") ?: boolValue("prochitano") ?: false
     val createdAt = stringValue("created_at")
     return NotificationItem(id, type, text, isRead, createdAt)
+}
+
+/**
+ * GET /api/notifications/unread-count: имя поля в ответе не было дано — сервер мог отдать как
+ * голое число, так и объект вида {"count": N} / {"unread_count": N} / {"unread": N}.
+ */
+fun JsonElement.toUnreadCount(): Int = when (this) {
+    is JsonPrimitive -> intOrNull ?: 0
+    is JsonObject -> intValue("count") ?: intValue("unread_count") ?: intValue("unread") ?: 0
+    else -> 0
 }

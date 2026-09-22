@@ -45,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.ui.auth.AuthViewModel
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.ForestError
@@ -56,6 +58,9 @@ fun ProfileScreen(
     viewModel: AuthViewModel = viewModel(),
 ) {
     val session by viewModel.session.collectAsState()
+    val context = LocalContext.current
+    val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
+    val unreadCount by badgeManager.unreadCount.collectAsState()
 
     Column(
         modifier = Modifier
@@ -121,7 +126,10 @@ fun ProfileScreen(
                     .padding(top = 16.dp),
             ) {
                 Icon(Icons.Filled.Notifications, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("Уведомления", modifier = Modifier.padding(start = 8.dp))
+                Text(
+                    if (unreadCount > 0) "Уведомления ($unreadCount)" else "Уведомления",
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
 
             OutlinedButton(
