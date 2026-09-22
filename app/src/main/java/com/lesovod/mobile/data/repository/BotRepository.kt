@@ -11,7 +11,9 @@ import com.lesovod.mobile.data.network.dto.AttendanceStatus
 import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
+import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
+import com.lesovod.mobile.data.network.dto.PerevodRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
@@ -30,6 +32,7 @@ import com.lesovod.mobile.ui.proba.LesokulturyUchastok
 import com.lesovod.mobile.ui.proba.toLesokulturyUchastok
 import java.io.File
 import java.io.IOException
+import kotlinx.serialization.json.JsonElement
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -161,6 +164,19 @@ class BotRepository(
 
     suspend fun listLesokulturyUchastki(): Result<List<LesokulturyUchastok>> = safeCall {
         api.listLesokulturyUchastki(requireToken()).map { it.toLesokulturyUchastok() }
+    }
+
+    suspend fun submitInventarizatsiya(uchastokId: Int, request: InventarizatsiyaRequest): Result<JsonElement> = safeCall {
+        api.createInventarizatsiya(requireToken(), uchastokId, request)
+    }
+
+    suspend fun submitPerevod(uchastokId: Int, request: PerevodRequest): Result<JsonElement> = safeCall {
+        api.createPerevod(requireToken(), uchastokId, request)
+    }
+
+    /** Справочник пород — публичный, не требует токена. Имена как ключи (по аналогии с listLesnichestva). */
+    suspend fun listPorody(): Result<List<String>> = safeCall {
+        api.listPorody().keys.sorted()
     }
 
     suspend fun listNotifications(): Result<List<NotificationItem>> = safeCall {

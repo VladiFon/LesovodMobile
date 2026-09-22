@@ -13,8 +13,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Forest
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.platform.LocalContext
 import com.lesovod.mobile.data.repository.NotificationsBadgeManager
+import com.lesovod.mobile.data.session.canManageLesokultury
 import com.lesovod.mobile.ui.auth.AuthViewModel
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.ForestError
@@ -55,12 +58,15 @@ import com.lesovod.mobile.ui.theme.ForestError
 fun ProfileScreen(
     onLogout: () -> Unit,
     onOpenNotifications: () -> Unit = {},
+    onOpenInventarizatsiya: () -> Unit = {},
+    onOpenPerevod: () -> Unit = {},
     viewModel: AuthViewModel = viewModel(),
 ) {
     val session by viewModel.session.collectAsState()
     val context = LocalContext.current
     val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
     val unreadCount by badgeManager.unreadCount.collectAsState()
+    val canManageLesokultury = session?.role?.canManageLesokultury == true
 
     Column(
         modifier = Modifier
@@ -130,6 +136,27 @@ fun ProfileScreen(
                     if (unreadCount > 0) "Уведомления ($unreadCount)" else "Уведомления",
                     modifier = Modifier.padding(start = 8.dp),
                 )
+            }
+
+            if (canManageLesokultury) {
+                OutlinedButton(
+                    onClick = onOpenInventarizatsiya,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                ) {
+                    Icon(Icons.Filled.Forest, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("Инвентаризация лесных культур", modifier = Modifier.padding(start = 8.dp))
+                }
+                OutlinedButton(
+                    onClick = onOpenPerevod,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                ) {
+                    Icon(Icons.Filled.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("Перевод лесных культур", modifier = Modifier.padding(start = 8.dp))
+                }
             }
 
             OutlinedButton(

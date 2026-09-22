@@ -28,6 +28,8 @@ sealed class Screen(val route: String) {
     data object Trelevka : Screen("trelevka")
     data object Notes : Screen("notes")
     data object Notifications : Screen("notifications")
+    data object Inventarizatsiya : Screen("lesokultury_inventarizatsiya")
+    data object Perevod : Screen("lesokultury_perevod")
 }
 
 data class BottomNavItem(

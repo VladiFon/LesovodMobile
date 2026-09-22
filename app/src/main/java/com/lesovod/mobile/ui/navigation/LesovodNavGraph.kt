@@ -40,6 +40,8 @@ import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.kubaturnik.KubaturnikScreen
+import com.lesovod.mobile.ui.lesokultury.InventarizatsiyaScreen
+import com.lesovod.mobile.ui.lesokultury.PerevodScreen
 import com.lesovod.mobile.ui.notes.NotesScreen
 import com.lesovod.mobile.ui.notifications.NotificationsScreen
 import com.lesovod.mobile.ui.proba.ProbaScreen
@@ -128,6 +130,8 @@ fun LesovodNavGraph() {
                         }
                     },
                     onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
+                    onOpenInventarizatsiya = { navController.navigate(Screen.Inventarizatsiya.route) },
+                    onOpenPerevod = { navController.navigate(Screen.Perevod.route) },
                 )
             }
         }
@@ -140,6 +144,12 @@ fun LesovodNavGraph() {
                     }
                 },
             )
+        }
+        composable(Screen.Inventarizatsiya.route) {
+            InventarizatsiyaScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Screen.Perevod.route) {
+            PerevodScreen(onBack = { navController.popBackStack() })
         }
     }
     }

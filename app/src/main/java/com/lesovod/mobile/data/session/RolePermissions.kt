@@ -34,3 +34,7 @@ val WorkerRole.canTrelevka: Boolean
 /** Входящие заметки — только мастер / пом. лесничего / лесничий; отправка доступна всем ролям. */
 val WorkerRole.canViewNotesInbox: Boolean
     get() = isMasterGroup
+
+/** Инвентаризация / перевод лесных культур — только мастер / пом. лесничего / лесничий. */
+val WorkerRole.canManageLesokultury: Boolean
+    get() = isMasterGroup

@@ -8,7 +8,9 @@ import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.GeoJsonFeatureCollection
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
+import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.LoginResponseDto
+import com.lesovod.mobile.data.network.dto.PerevodRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.PhotoUploadResponseDto
@@ -146,6 +148,24 @@ interface ApiService {
     suspend fun listLesokulturyUchastki(
         @Header("Authorization") bearerToken: String,
     ): List<LesokulturyUchastokDto>
+
+    @POST("api/lesokultury/{uchastok_id}/inventarizatsiya")
+    suspend fun createInventarizatsiya(
+        @Header("Authorization") bearerToken: String,
+        @Path("uchastok_id") uchastokId: Int,
+        @Body body: InventarizatsiyaRequest,
+    ): JsonElement
+
+    @POST("api/lesokultury/{uchastok_id}/perevod")
+    suspend fun createPerevod(
+        @Header("Authorization") bearerToken: String,
+        @Path("uchastok_id") uchastokId: Int,
+        @Body body: PerevodRequest,
+    ): JsonElement
+
+    // Справочник пород (app/routers/uhody.py) — публичный, как остальные справочники карты.
+    @GET("api/uhody/porody")
+    suspend fun listPorody(): Map<String, Int>
 
     @GET("api/notifications")
     suspend fun listNotifications(
