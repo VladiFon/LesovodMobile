@@ -4,6 +4,8 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lesovod.mobile.data.location.getCurrentLocationOrNull
+import com.lesovod.mobile.data.location.hasLocationPermission
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.repository.BotRepository
@@ -78,10 +80,15 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
 
         _uiState.value = state.copy(isSubmitting = true, error = null)
         viewModelScope.launch {
+            val context = getApplication<Application>()
+            val location = if (hasLocationPermission(context)) getCurrentLocationOrNull(context) else null
+            val lat = location?.latitude
+            val lon = location?.longitude
+
             var photoPath: String? = null
             val uri = state.photoUri
             if (uri != null) {
-                val uploadResult = repository.uploadPhoto(getApplication<Application>(), uri)
+                val uploadResult = repository.uploadPhoto(context, uri)
                 val uploadError = uploadResult.exceptionOrNull()
                 if (uploadError is ConnectivityException) {
                     queueManager.enqueueReport(
@@ -91,6 +98,8 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                         opisanie = state.opisanie,
                         photoUri = uri,
                         uploadedPhotoPath = null,
+                        lat = lat,
+                        lon = lon,
                     )
                     _uiState.value = WorkReportUiState(queuedOffline = true)
                     return@launch
@@ -111,6 +120,8 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                 vydels = state.vydels,
                 opisanie = state.opisanie,
                 photoPath = photoPath,
+                lat = lat,
+                lon = lon,
             )
             val error = result.exceptionOrNull()
             if (error is ConnectivityException) {
@@ -121,6 +132,8 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                     opisanie = state.opisanie,
                     photoUri = null,
                     uploadedPhotoPath = photoPath,
+                    lat = lat,
+                    lon = lon,
                 )
                 _uiState.value = WorkReportUiState(queuedOffline = true)
                 return@launch

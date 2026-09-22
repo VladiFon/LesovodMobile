@@ -156,6 +156,18 @@ private fun SendNoteSection(state: NotesUiState, viewModel: NotesViewModel) {
                 }
             }
 
+            if (state.recipientsError != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Не удалось загрузить получателей: ${state.recipientsError}",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = viewModel::loadRecipients) { Text("Повторить") }
+                }
+            }
+
             if (state.sendError != null) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)),

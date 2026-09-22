@@ -99,5 +99,8 @@ class SessionManager private constructor(context: Context) {
             instance ?: synchronized(this) {
                 instance ?: SessionManager(context).also { instance = it }
             }
+
+        /** Для мест без Context (сетевой interceptor) — null, если ни один экран ещё не создал сессию. */
+        fun peekInstance(): SessionManager? = instance
     }
 }

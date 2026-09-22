@@ -20,6 +20,7 @@ data class NotesUiState(
     val recipients: List<RecipientDto> = emptyList(),
     val selectedRecipient: RecipientDto? = null,
     val isLoadingRecipients: Boolean = false,
+    val recipientsError: String? = null,
     val isSending: Boolean = false,
     val sendError: String? = null,
     val sent: Boolean = false,
@@ -53,12 +54,17 @@ class NotesViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadRecipients() {
-        _uiState.value = _uiState.value.copy(isLoadingRecipients = true)
+        _uiState.value = _uiState.value.copy(isLoadingRecipients = true, recipientsError = null)
         viewModelScope.launch {
             val result = repository.listRecipients()
             _uiState.value = result.fold(
-                onSuccess = { _uiState.value.copy(isLoadingRecipients = false, recipients = it) },
-                onFailure = { _uiState.value.copy(isLoadingRecipients = false) },
+                onSuccess = { _uiState.value.copy(isLoadingRecipients = false, recipients = it, recipientsError = null) },
+                onFailure = {
+                    _uiState.value.copy(
+                        isLoadingRecipients = false,
+                        recipientsError = it.message ?: "Не удалось загрузить список получателей",
+                    )
+                },
             )
         }
     }

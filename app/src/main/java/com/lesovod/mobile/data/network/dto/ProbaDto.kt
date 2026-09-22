@@ -29,14 +29,13 @@ data class ProbaSaveRequest(
     @SerialName("lesokultury_uchastok_ids") val lesokulturyUchastokIds: List<Int> = emptyList(),
 )
 
-/** ВНИМАНИЕ: имя поля объёма по одной укладке в ответе не было дано явно — сверить с /docs. */
 @Serializable
 data class ProbaRowResponse(
     val poroda: String,
     val shirina: Double,
     val vysota: Double,
     val dlina: Double,
-    val obyom: Double? = null,
+    @SerialName("obyom_sklad") val obyom: Double? = null,
 )
 
 @Serializable

@@ -13,9 +13,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -31,6 +34,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lesovod.mobile.data.repository.OfflineQueueManager
+import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.kubaturnik.KubaturnikScreen
 import com.lesovod.mobile.ui.notes.NotesScreen
@@ -54,7 +58,17 @@ fun LesovodNavGraph() {
     val startDestination = remember {
         if (SessionManager.getInstance(context).isLoggedIn) Screen.Tasks.route else Screen.Login.route
     }
+    val snackbarHostState = remember { SnackbarHostState() }
 
+    LaunchedEffect(Unit) {
+        SessionExpiryBus.events.collect {
+            navController.navigate(Screen.Login.route) { popUpTo(0) }
+            snackbarHostState.showSnackbar("Сессия истекла, войдите заново")
+        }
+    }
+
+    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { outerPadding ->
+    Box(modifier = Modifier.padding(outerPadding)) {
     NavHost(navController = navController, startDestination = startDestination) {
         composable(Screen.Login.route) {
             LoginScreen(
@@ -112,6 +126,8 @@ fun LesovodNavGraph() {
                 )
             }
         }
+    }
+    }
     }
 }
 

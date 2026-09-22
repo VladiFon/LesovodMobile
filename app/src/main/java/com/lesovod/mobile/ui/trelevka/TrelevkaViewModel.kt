@@ -11,8 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class TrelevkaUiState(
-    val kvartal: String = "",
-    val vydel: String = "",
+    val delyankaItemId: String = "",
     val otkuda: String = "",
     val kuda: String = "",
     val obyom: String = "",
@@ -28,12 +27,8 @@ class TrelevkaViewModel(application: Application) : AndroidViewModel(application
     private val _uiState = MutableStateFlow(TrelevkaUiState())
     val uiState = _uiState.asStateFlow()
 
-    fun onKvartalChange(value: String) {
-        _uiState.value = _uiState.value.copy(kvartal = value, error = null)
-    }
-
-    fun onVydelChange(value: String) {
-        _uiState.value = _uiState.value.copy(vydel = value, error = null)
+    fun onDelyankaItemIdChange(value: String) {
+        _uiState.value = _uiState.value.copy(delyankaItemId = value, error = null)
     }
 
     fun onOtkudaChange(value: String) {
@@ -59,15 +54,19 @@ class TrelevkaViewModel(application: Application) : AndroidViewModel(application
             _uiState.value = state.copy(error = "Укажите объём числом")
             return
         }
+        val delyankaItemId = state.delyankaItemId.trim().takeIf { it.isNotBlank() }?.toIntOrNull()
+        if (state.delyankaItemId.isNotBlank() && delyankaItemId == null) {
+            _uiState.value = state.copy(error = "ID делянки указывается числом")
+            return
+        }
 
         _uiState.value = state.copy(isSubmitting = true, error = null)
         viewModelScope.launch {
             val result = repository.submitTrelevka(
-                kvartal = state.kvartal.takeIf { it.isNotBlank() },
-                vydel = state.vydel.takeIf { it.isNotBlank() },
                 otkuda = state.otkuda.trim(),
                 kuda = state.kuda.trim(),
                 obyom = volume,
+                delyankaItemId = delyankaItemId,
             )
             _uiState.value = result.fold(
                 onSuccess = { TrelevkaUiState(submitted = true) },
