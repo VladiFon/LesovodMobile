@@ -159,7 +159,7 @@ class BotRepository(
     }
 
     suspend fun listLesokulturyUchastki(): Result<List<LesokulturyUchastok>> = safeCall {
-        api.listLesokulturyUchastki(requireToken()).mapNotNull { it.toLesokulturyUchastok() }
+        api.listLesokulturyUchastki(requireToken()).map { it.toLesokulturyUchastok() }
     }
 
     suspend fun listNotifications(): Result<List<NotificationItem>> = safeCall {

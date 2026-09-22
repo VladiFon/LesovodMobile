@@ -21,6 +21,7 @@ import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.dto.WorkerLoginRequest
+import com.lesovod.mobile.ui.proba.LesokulturyUchastokDto
 import kotlinx.serialization.json.JsonObject
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
@@ -143,7 +144,7 @@ interface ApiService {
     @GET("api/lesokultury/uchastki")
     suspend fun listLesokulturyUchastki(
         @Header("Authorization") bearerToken: String,
-    ): List<JsonObject>
+    ): List<LesokulturyUchastokDto>
 
     @GET("api/notifications")
     suspend fun listNotifications(
