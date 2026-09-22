@@ -231,7 +231,7 @@ fun ForestMapView(
                     // Штатные иконки (человечек/стрелка) скрыты — рисуем свою точку с лучом в MyLocationIndicatorOverlay.
                     val invisibleIcon = android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
                     myLocationOverlay.setPersonIcon(invisibleIcon)
-                    myLocationOverlay.setDirectionArrowIcon(invisibleIcon)
+                    myLocationOverlay.setDirectionIcon(invisibleIcon)
                     if (hasLocationPermission(ctx)) myLocationOverlay.enableMyLocation()
                     overlays.add(MyLocationIndicatorOverlay(myLocationOverlay, density))
                     overlays.add(myLocationOverlay)
