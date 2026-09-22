@@ -8,12 +8,18 @@ import com.lesovod.mobile.data.local.PendingActionStore
 import com.lesovod.mobile.data.local.PendingActionType
 import com.lesovod.mobile.data.local.PendingAttendancePayload
 import com.lesovod.mobile.data.local.PendingBreakdownPayload
+import com.lesovod.mobile.data.local.PendingNotePayload
+import com.lesovod.mobile.data.local.PendingProbaPayload
 import com.lesovod.mobile.data.local.PendingReportPayload
 import com.lesovod.mobile.data.local.PendingTaskCompletePayload
+import com.lesovod.mobile.data.local.PendingTrelevkaPayload
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.ConnectivityObserver
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.AttendanceStatus
+import com.lesovod.mobile.data.network.dto.ProbaFormRequest
+import com.lesovod.mobile.data.network.dto.ProbaRowRequest
+import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.session.SessionManager
 import java.io.File
 import java.util.UUID
@@ -35,9 +41,10 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
- * Офлайн-очередь для действий бота (отчёт, поломка, отметка времени, задачи): пока нет сети,
- * действие сохраняется на устройстве и отправляется автоматически, как только связь появится.
- * Экраны узнают о постановке в очередь и об успешной отправке через [pending] и [completed].
+ * Офлайн-очередь для действий бота (отчёт, поломка, отметка времени, задачи, трелёвка, проба,
+ * заметка): пока нет сети, действие сохраняется на устройстве и отправляется автоматически, как
+ * только связь появится. Экраны узнают о постановке в очередь и об успешной отправке через
+ * [pending] и [completed].
  */
 class OfflineQueueManager private constructor(context: Context) {
     private val appContext = context.applicationContext
@@ -100,7 +107,60 @@ class OfflineQueueManager private constructor(context: Context) {
         enqueue(UUID.randomUUID().toString(), PendingActionType.TASK_COMPLETE, json.encodeToString(payload), null)
     }
 
-    private fun enqueue(id: String, type: PendingActionType, payload: String, photoLocalPath: String?) {
+    fun enqueueTrelevka(otkuda: String, kuda: String, obyom: Double, delyankaItemId: Int?) {
+        val payload = PendingTrelevkaPayload(otkuda, kuda, obyom, delyankaItemId)
+        enqueue(UUID.randomUUID().toString(), PendingActionType.TRELEVKA, json.encodeToString(payload), null)
+    }
+
+    fun enqueueNote(text: String, recipientId: Int?) {
+        val payload = PendingNotePayload(text, recipientId)
+        enqueue(UUID.randomUUID().toString(), PendingActionType.NOTE, json.encodeToString(payload), null)
+    }
+
+    /**
+     * [fotoStolbDelyankiUri]/[fotoStolbProbyUri] — фото, ещё не загруженные на сервер (копируются
+     * на устройство и грузятся при отправке из очереди); если фото уже успело загрузиться до того,
+     * как отвалилась связь, его путь передаётся через uploaded* вместо Uri, а сам Uri — null.
+     */
+    suspend fun enqueueProba(
+        kvartal: String,
+        vydel: String,
+        ploshadVydela: Double?,
+        dataZamera: String,
+        rows: List<ProbaRowRequest>,
+        kolPloshadok: Int,
+        ploshadPloshadki: Double,
+        lesokulturyUchastokIds: List<Int>,
+        fotoStolbDelyankiUri: Uri?,
+        fotoStolbProbyUri: Uri?,
+        uploadedFotoStolbDelyanki: String? = null,
+        uploadedFotoStolbProby: String? = null,
+    ) {
+        val id = UUID.randomUUID().toString()
+        val localPath1 = fotoStolbDelyankiUri?.let { copyUriToLocalFile("${id}_a", it) }
+        val localPath2 = fotoStolbProbyUri?.let { copyUriToLocalFile("${id}_b", it) }
+        val payload = PendingProbaPayload(
+            kvartal = kvartal,
+            vydel = vydel,
+            ploshadVydela = ploshadVydela,
+            dataZamera = dataZamera,
+            rows = rows,
+            kolPloshadok = kolPloshadok,
+            ploshadPloshadki = ploshadPloshadki,
+            lesokulturyUchastokIds = lesokulturyUchastokIds,
+            fotoStolbDelyankiPath = uploadedFotoStolbDelyanki,
+            fotoStolbProbyPath = uploadedFotoStolbProby,
+        )
+        enqueue(id, PendingActionType.PROBA, json.encodeToString(payload), localPath1, localPath2)
+    }
+
+    private fun enqueue(
+        id: String,
+        type: PendingActionType,
+        payload: String,
+        photoLocalPath: String?,
+        photoLocalPath2: String? = null,
+    ) {
         store.add(
             PendingAction(
                 id = id,
@@ -108,6 +168,7 @@ class OfflineQueueManager private constructor(context: Context) {
                 createdAt = System.currentTimeMillis(),
                 payload = payload,
                 photoLocalPath = photoLocalPath,
+                photoLocalPath2 = photoLocalPath2,
             ),
         )
         _pending.value = store.list()
@@ -130,6 +191,7 @@ class OfflineQueueManager private constructor(context: Context) {
                     FlushOutcome.Sent -> {
                         store.remove(action.id)
                         action.photoLocalPath?.let { runCatching { File(it).delete() } }
+                        action.photoLocalPath2?.let { runCatching { File(it).delete() } }
                         _pending.value = store.list()
                         _completed.emit(action)
                     }
@@ -150,6 +212,9 @@ class OfflineQueueManager private constructor(context: Context) {
         PendingActionType.BREAKDOWN -> processBreakdown(action)
         PendingActionType.ATTENDANCE -> processAttendance(action)
         PendingActionType.TASK_COMPLETE -> processTaskComplete(action)
+        PendingActionType.TRELEVKA -> processTrelevka(action)
+        PendingActionType.PROBA -> processProba(action)
+        PendingActionType.NOTE -> processNote(action)
     }
 
     private suspend fun processReport(action: PendingAction): FlushOutcome {
@@ -212,6 +277,70 @@ class OfflineQueueManager private constructor(context: Context) {
             },
             onFailure = { toOutcome(it) },
         )
+    }
+
+    private suspend fun processTrelevka(action: PendingAction): FlushOutcome {
+        val payload = decode<PendingTrelevkaPayload>(action.payload)
+            ?: return FlushOutcome.Failed("Повреждённые данные действия")
+        val result = repository.submitTrelevka(payload.otkuda, payload.kuda, payload.obyom, payload.delyankaItemId)
+        return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
+    }
+
+    private suspend fun processNote(action: PendingAction): FlushOutcome {
+        val payload = decode<PendingNotePayload>(action.payload)
+            ?: return FlushOutcome.Failed("Повреждённые данные действия")
+        val result = repository.submitNote(payload.text, payload.recipientId)
+        return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
+    }
+
+    private suspend fun processProba(action: PendingAction): FlushOutcome {
+        var payload = decode<PendingProbaPayload>(action.payload)
+            ?: return FlushOutcome.Failed("Повреждённые данные действия")
+        var currentAction = action
+
+        if (payload.fotoStolbDelyankiPath == null && currentAction.photoLocalPath != null) {
+            when (val outcome = uploadLocalPhoto(currentAction.photoLocalPath!!)) {
+                is PhotoOutcome.Uploaded -> {
+                    payload = payload.copy(fotoStolbDelyankiPath = outcome.path)
+                    currentAction = currentAction.copy(payload = json.encodeToString(payload))
+                    store.update(currentAction)
+                }
+                PhotoOutcome.StillOffline -> return FlushOutcome.StillOffline
+                is PhotoOutcome.Failed -> return FlushOutcome.Failed(outcome.message)
+            }
+        }
+        if (payload.fotoStolbProbyPath == null && currentAction.photoLocalPath2 != null) {
+            when (val outcome = uploadLocalPhoto(currentAction.photoLocalPath2!!)) {
+                is PhotoOutcome.Uploaded -> {
+                    payload = payload.copy(fotoStolbProbyPath = outcome.path)
+                    currentAction = currentAction.copy(payload = json.encodeToString(payload))
+                    store.update(currentAction)
+                }
+                PhotoOutcome.StillOffline -> return FlushOutcome.StillOffline
+                is PhotoOutcome.Failed -> return FlushOutcome.Failed(outcome.message)
+            }
+        }
+
+        val fotoStolbDelyanki = payload.fotoStolbDelyankiPath
+        val fotoStolbProby = payload.fotoStolbProbyPath
+        if (fotoStolbDelyanki == null || fotoStolbProby == null) {
+            return FlushOutcome.Failed("Не удалось приложить обязательные фото")
+        }
+
+        val result = repository.submitProba(
+            ProbaSaveRequest(
+                kvartal = payload.kvartal,
+                vydel = payload.vydel,
+                ploshadVydela = payload.ploshadVydela,
+                dataZamera = payload.dataZamera,
+                rows = payload.rows,
+                form = ProbaFormRequest(payload.kolPloshadok, payload.ploshadPloshadki),
+                lesokulturyUchastokIds = payload.lesokulturyUchastokIds,
+                fotoStolbDelyanki = fotoStolbDelyanki,
+                fotoStolbProby = fotoStolbProby,
+            ),
+        )
+        return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
     }
 
     private suspend fun uploadLocalPhoto(path: String): PhotoOutcome {

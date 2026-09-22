@@ -4,12 +4,14 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.ProbaFormRequest
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.data.network.dto.ProbaRowRequest
 import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.repository.BotRepository
+import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,6 +46,7 @@ data class ProbaUiState(
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val result: ProbaResponse? = null,
+    val queuedOffline: Boolean = false,
 ) {
     companion object {
         fun todayIso(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
@@ -53,6 +56,7 @@ data class ProbaUiState(
 class ProbaViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager.getInstance(application)
     private val repository = BotRepository(NetworkModule.api, sessionManager)
+    private val queueManager = OfflineQueueManager.getInstance(application)
 
     private val _uiState = MutableStateFlow(ProbaUiState())
     val uiState = _uiState.asStateFlow()
@@ -183,12 +187,41 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val context = getApplication<Application>()
 
+            suspend fun enqueueOffline(uploadedDelyanki: String?, uploadedProby: String?) {
+                queueManager.enqueueProba(
+                    kvartal = state.kvartal.trim(),
+                    vydel = state.vydel.trim(),
+                    ploshadVydela = ploshadVydela,
+                    dataZamera = state.dataZamera.trim(),
+                    rows = rows,
+                    kolPloshadok = kolPloshadok,
+                    ploshadPloshadki = ploshadPloshadki,
+                    lesokulturyUchastokIds = state.selectedLesokulturyIds.toList(),
+                    fotoStolbDelyankiUri = if (uploadedDelyanki == null) fotoStolbDelyankiUri else null,
+                    fotoStolbProbyUri = if (uploadedProby == null) fotoStolbProbyUri else null,
+                    uploadedFotoStolbDelyanki = uploadedDelyanki,
+                    uploadedFotoStolbProby = uploadedProby,
+                )
+                _uiState.value = ProbaUiState(lesokulturyUchastki = state.lesokulturyUchastki, queuedOffline = true)
+            }
+
             val fotoStolbDelyankiResult = repository.uploadPhoto(context, fotoStolbDelyankiUri)
+            val delyankiError = fotoStolbDelyankiResult.exceptionOrNull()
+            if (delyankiError is ConnectivityException) {
+                enqueueOffline(null, null)
+                return@launch
+            }
             fotoStolbDelyankiResult.onFailure {
                 _uiState.value = _uiState.value.copy(isSubmitting = false, error = it.message ?: "Не удалось загрузить фото столба границы делянки")
                 return@launch
             }
+
             val fotoStolbProbyResult = repository.uploadPhoto(context, fotoStolbProbyUri)
+            val probyError = fotoStolbProbyResult.exceptionOrNull()
+            if (probyError is ConnectivityException) {
+                enqueueOffline(fotoStolbDelyankiResult.getOrNull(), null)
+                return@launch
+            }
             fotoStolbProbyResult.onFailure {
                 _uiState.value = _uiState.value.copy(isSubmitting = false, error = it.message ?: "Не удалось загрузить фото столба пробной площадки")
                 return@launch
@@ -207,6 +240,11 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
                     fotoStolbProby = fotoStolbProbyResult.getOrNull(),
                 ),
             )
+            val submitError = result.exceptionOrNull()
+            if (submitError is ConnectivityException) {
+                enqueueOffline(fotoStolbDelyankiResult.getOrNull(), fotoStolbProbyResult.getOrNull())
+                return@launch
+            }
             _uiState.value = result.fold(
                 onSuccess = { _uiState.value.copy(isSubmitting = false, result = it) },
                 onFailure = { _uiState.value.copy(isSubmitting = false, error = it.message ?: "Не удалось отправить пробу") },

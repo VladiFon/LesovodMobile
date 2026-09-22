@@ -3,8 +3,10 @@ package com.lesovod.mobile.ui.trelevka
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.repository.BotRepository
+import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,11 +20,13 @@ data class TrelevkaUiState(
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val submitted: Boolean = false,
+    val queuedOffline: Boolean = false,
 )
 
 class TrelevkaViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager.getInstance(application)
     private val repository = BotRepository(NetworkModule.api, sessionManager)
+    private val queueManager = OfflineQueueManager.getInstance(application)
 
     private val _uiState = MutableStateFlow(TrelevkaUiState())
     val uiState = _uiState.asStateFlow()
@@ -68,6 +72,12 @@ class TrelevkaViewModel(application: Application) : AndroidViewModel(application
                 obyom = volume,
                 delyankaItemId = delyankaItemId,
             )
+            val error = result.exceptionOrNull()
+            if (error is ConnectivityException) {
+                queueManager.enqueueTrelevka(state.otkuda.trim(), state.kuda.trim(), volume, delyankaItemId)
+                _uiState.value = TrelevkaUiState(queuedOffline = true)
+                return@launch
+            }
             _uiState.value = result.fold(
                 onSuccess = { TrelevkaUiState(submitted = true) },
                 onFailure = { _uiState.value.copy(isSubmitting = false, error = it.message ?: "Не удалось отправить") },

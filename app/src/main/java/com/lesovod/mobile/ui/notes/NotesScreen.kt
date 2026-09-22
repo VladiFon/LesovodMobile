@@ -53,6 +53,7 @@ import com.lesovod.mobile.data.local.NoteReminderEntry
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.ui.components.ScreenTitle
+import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -125,6 +126,25 @@ private fun SendNoteSection(state: NotesUiState, viewModel: NotesViewModel) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Заметка отправлена", color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
+                    OutlinedButton(onClick = viewModel::resetSent, modifier = Modifier.padding(top = 12.dp)) {
+                        Text("Написать ещё одну")
+                    }
+                }
+            }
+        } else if (state.queuedOffline) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Нет сети — заметка сохранена на устройстве", color = ForestAccent, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Она отправится автоматически, как только появится связь.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                     OutlinedButton(onClick = viewModel::resetSent, modifier = Modifier.padding(top = 12.dp)) {
                         Text("Написать ещё одну")
                     }

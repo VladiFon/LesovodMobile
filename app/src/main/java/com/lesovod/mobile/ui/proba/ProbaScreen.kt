@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.ui.components.PhotoPickerField
+import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
 import java.util.Calendar
 import java.util.Locale
@@ -75,6 +76,8 @@ fun ProbaScreen(onBack: () -> Unit, viewModel: ProbaViewModel = viewModel()) {
         ) {
             if (state.result != null) {
                 ProbaResultCard(result = state.result, onNewProba = viewModel::newProba)
+            } else if (state.queuedOffline) {
+                ProbaQueuedOfflineCard(onNewProba = viewModel::newProba)
             } else {
                 ProbaForm(state = state, viewModel = viewModel)
             }
@@ -115,6 +118,28 @@ private fun ProbaResultCard(result: ProbaResponse?, onNewProba: () -> Unit) {
                 }
             }
 
+            OutlinedButton(onClick = onNewProba, modifier = Modifier.padding(top = 12.dp)) {
+                Text("Новая проба")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProbaQueuedOfflineCard(onNewProba: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Нет сети — проба сохранена на устройстве", color = ForestAccent, style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Она отправится автоматически, как только появится связь.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
             OutlinedButton(onClick = onNewProba, modifier = Modifier.padding(top = 12.dp)) {
                 Text("Новая проба")
             }
