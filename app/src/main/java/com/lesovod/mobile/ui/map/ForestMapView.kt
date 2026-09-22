@@ -75,7 +75,12 @@ data class MapSelection(val kvartal: String, val vydel: String?, val kind: Shape
 
 private enum class LocateMode { Off, Follow, Heading }
 
-private data class MapHud(val bearing: Float = 0f, val zoom: Double = 13.0, val latitude: Double = 54.5)
+private data class MapHud(
+    val bearing: Float = 0f,
+    val zoom: Double = 13.0,
+    val latitude: Double = 54.5,
+    val accuracyMeters: Float? = null,
+)
 
 private const val VIEWPORT_DEBOUNCE_MS = 600L
 private const val HUD_POLL_MS = 250L
@@ -156,6 +161,7 @@ fun ForestMapView(
                 bearing = (mapView.mapOrientation % 360f).roundToInt().toFloat(),
                 zoom = (mapView.zoomLevelDouble * 10).roundToLong() / 10.0,
                 latitude = (mapView.mapCenter.latitude * 10).roundToLong() / 10.0, // масштаб от широты почти не зависит — не будим Compose на каждый сдвиг
+                accuracyMeters = overlay?.lastFix?.accuracy?.takeIf { it > 0f },
             )
             if (next != hud) hud = next
         }
@@ -222,8 +228,12 @@ fun ForestMapView(
                     scaleBarState.value = scaleBar
 
                     val myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
+                    // Штатные иконки (человечек/стрелка) скрыты — рисуем свою точку с лучом в MyLocationIndicatorOverlay.
+                    val invisibleIcon = android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
+                    myLocationOverlay.setPersonIcon(invisibleIcon)
+                    myLocationOverlay.setDirectionArrowIcon(invisibleIcon)
                     if (hasLocationPermission(ctx)) myLocationOverlay.enableMyLocation()
-                    overlays.add(MyLocationAccuracyOverlay(myLocationOverlay))
+                    overlays.add(MyLocationIndicatorOverlay(myLocationOverlay, density))
                     overlays.add(myLocationOverlay)
                     myLocationOverlayState.value = myLocationOverlay
 
@@ -372,8 +382,9 @@ fun ForestMapView(
                 .align(Alignment.BottomStart)
                 .padding(start = 16.dp, bottom = bottomInset + 12.dp),
         ) {
+            val accuracySuffix = hud.accuracyMeters?.let { "  ·  ±${it.roundToInt()} м" }.orEmpty()
             Text(
-                "1:${formatScale(scaleDenominator(hud.zoom, hud.latitude, context.resources.displayMetrics.xdpi))}  ·  z${"%.1f".format(hud.zoom)}",
+                "1:${formatScale(scaleDenominator(hud.zoom, hud.latitude, context.resources.displayMetrics.xdpi))}  ·  z${"%.1f".format(hud.zoom)}$accuracySuffix",
                 style = MaterialTheme.typography.labelMedium,
                 color = Color.White,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
