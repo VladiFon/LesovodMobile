@@ -90,8 +90,11 @@ fun ForestMapView(
     completed: Set<String>,
     fitToken: Int,
     lesosekiTappable: Boolean,
+    geoNotes: List<GeoNoteMarker>,
     onShapeTap: (MapShape) -> Unit,
     onEmptyTap: () -> Unit,
+    onGeoNoteTap: (GeoNoteMarker) -> Unit,
+    onMapLongPress: (lat: Double, lon: Double) -> Unit,
     onViewportChanged: (bbox: String, zoom: Double, latitude: Double, longitude: Double) -> Unit,
     initialCamera: MapCamera?,
     controlsTopPadding: Dp,
@@ -105,12 +108,15 @@ fun ForestMapView(
     val labelsOverlayState = remember { mutableStateOf<TilesOverlay?>(null) }
     val scaleBarState = remember { mutableStateOf<ScaleBarOverlay?>(null) }
     val featuresOverlay = remember { ForestFeaturesOverlay(density) }
+    val geoNotesOverlay = remember { GeoNotesOverlay(density) }
     // вернулись на вкладку — остаёмся там, где были, а не прыгаем на всё лесничество заново
     val lastFitToken = remember { mutableStateOf(if (initialCamera != null) fitToken else 0) }
     val onViewportChangedState = remember { mutableStateOf(onViewportChanged) }
     onViewportChangedState.value = onViewportChanged
     val onEmptyTapState = remember { mutableStateOf(onEmptyTap) }
     onEmptyTapState.value = onEmptyTap
+    val onMapLongPressState = remember { mutableStateOf(onMapLongPress) }
+    onMapLongPressState.value = onMapLongPress
     val pendingViewportRunnable = remember { mutableStateOf<Runnable?>(null) }
     var hud by remember { mutableStateOf(MapHud()) }
     var locateMode by remember { mutableStateOf(LocateMode.Off) }
@@ -186,7 +192,10 @@ fun ForestMapView(
                             return false
                         }
 
-                        override fun longPressHelper(p: GeoPoint?): Boolean = false
+                        override fun longPressHelper(p: GeoPoint?): Boolean {
+                            p?.let { onMapLongPressState.value(it.latitude, it.longitude) }
+                            return true
+                        }
                     }))
 
                     val labels = TilesOverlay(MapTileProviderBasic(ctx, EsriLabelsTileSource), ctx, true, true)
@@ -196,6 +205,7 @@ fun ForestMapView(
                     overlays.add(RotationGestureOverlay(this).apply { isEnabled = true })
 
                     overlays.add(featuresOverlay)
+                    overlays.add(geoNotesOverlay)
 
                     val scaleBar = ScaleBarOverlay(this).apply {
                         setAlignBottom(true)
@@ -213,6 +223,7 @@ fun ForestMapView(
 
                     val myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
                     if (hasLocationPermission(ctx)) myLocationOverlay.enableMyLocation()
+                    overlays.add(MyLocationAccuracyOverlay(myLocationOverlay))
                     overlays.add(myLocationOverlay)
                     myLocationOverlayState.value = myLocationOverlay
 
@@ -264,6 +275,8 @@ fun ForestMapView(
                 if (featuresOverlay.completed != completed) { featuresOverlay.completed = completed; dirty = true }
                 featuresOverlay.onShapeTap = onShapeTap
                 featuresOverlay.lesosekiTappable = lesosekiTappable
+                if (geoNotesOverlay.notes !== geoNotes) { geoNotesOverlay.notes = geoNotes; dirty = true }
+                geoNotesOverlay.onNoteTap = onGeoNoteTap
 
                 if (fitToken != lastFitToken.value && kvartaly.isNotEmpty()) {
                     lastFitToken.value = fitToken

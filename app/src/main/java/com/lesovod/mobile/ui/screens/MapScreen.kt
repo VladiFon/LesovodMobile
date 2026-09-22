@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +48,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -71,9 +75,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.ui.components.PhotoPickerField
 import com.lesovod.mobile.ui.map.DONE_COLOR
 import com.lesovod.mobile.ui.map.DelyankaCard
 import com.lesovod.mobile.ui.map.ForestMapView
+import com.lesovod.mobile.ui.map.GeoNoteDraft
+import com.lesovod.mobile.ui.map.GeoNoteMarker
 import com.lesovod.mobile.ui.map.MapLayers
 import com.lesovod.mobile.ui.map.MapSelection
 import com.lesovod.mobile.ui.map.ShapeKind
@@ -125,8 +132,12 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    BackHandler(enabled = cardVisible || layersOpen || state.selection != null) {
+    BackHandler(
+        enabled = cardVisible || layersOpen || state.selection != null || state.noteDraft != null || state.selectedGeoNote != null,
+    ) {
         when {
+            state.noteDraft != null -> viewModel.dismissNoteDraft()
+            state.selectedGeoNote != null -> viewModel.dismissGeoNotePopup()
             layersOpen -> layersOpen = false
             cardVisible -> viewModel.closeCard()
             else -> viewModel.clearSelection()
@@ -144,8 +155,11 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
             completed = state.completed,
             fitToken = state.fitToken,
             lesosekiTappable = !state.usedFallbackRectangles,
+            geoNotes = state.geoNotes,
             onShapeTap = { layersOpen = false; viewModel.onShapeTap(it) },
             onEmptyTap = { layersOpen = false; viewModel.clearSelection() },
+            onGeoNoteTap = { layersOpen = false; viewModel.onGeoNoteTap(it) },
+            onMapLongPress = { lat, lon -> layersOpen = false; viewModel.startNoteDraft(lat, lon) },
             onViewportChanged = viewModel::onViewportChanged,
             initialCamera = remember { viewModel.camera },
             controlsTopPadding = topInset + 68.dp,
@@ -224,6 +238,174 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             lastSelection?.let { SelectionHint(it, onOpen = viewModel::openSelected, onClear = viewModel::clearSelection) }
+        }
+
+        var lastNoteDraft by remember { mutableStateOf(state.noteDraft) }
+        if (state.noteDraft != null) lastNoteDraft = state.noteDraft
+        AnimatedVisibility(
+            visible = state.noteDraft != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            (state.noteDraft ?: lastNoteDraft)?.let { draft ->
+                GeoNoteDraftCard(
+                    draft = draft,
+                    onTextChange = viewModel::updateNoteDraftText,
+                    onPhotoChange = viewModel::updateNoteDraftPhoto,
+                    onSubmit = viewModel::submitNoteDraft,
+                    onDismiss = viewModel::dismissNoteDraft,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                )
+            }
+        }
+
+        var lastGeoNote by remember { mutableStateOf(state.selectedGeoNote) }
+        if (state.selectedGeoNote != null) lastGeoNote = state.selectedGeoNote
+        AnimatedVisibility(
+            visible = state.selectedGeoNote != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            (state.selectedGeoNote ?: lastGeoNote)?.let { note ->
+                GeoNotePopup(
+                    note = note,
+                    onDismiss = viewModel::dismissGeoNotePopup,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Форма новой метки — открывается долгим нажатием на карту, отправляет текст и/или фото. */
+@Composable
+private fun GeoNoteDraftCard(
+    draft: GeoNoteDraft,
+    onTextChange: (String) -> Unit,
+    onPhotoChange: (android.net.Uri?) -> Unit,
+    onSubmit: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = ForestSurface.copy(alpha = 0.98f),
+        border = BorderStroke(1.dp, ForestOutline),
+        shadowElevation = 8.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Box {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),
+            ) {
+                Text(
+                    "Новая метка",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = ForestPrimary,
+                    modifier = Modifier.padding(end = 40.dp),
+                )
+
+                OutlinedTextField(
+                    value = draft.text,
+                    onValueChange = onTextChange,
+                    label = { Text("Текст (необязательно)") },
+                    enabled = !draft.isSubmitting,
+                    minLines = 2,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ForestPrimary),
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                )
+
+                Box(modifier = Modifier.padding(top = 12.dp)) {
+                    PhotoPickerField(uri = draft.photoUri, onPicked = onPhotoChange, label = "Добавить фото")
+                }
+
+                if (draft.error != null) {
+                    Text(
+                        draft.error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+
+                Button(
+                    onClick = onSubmit,
+                    enabled = !draft.isSubmitting,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ForestPrimary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                ) {
+                    if (draft.isSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text("Сохранить метку")
+                    }
+                }
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(40.dp),
+            ) {
+                Icon(Icons.Filled.Close, contentDescription = "Отмена", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** Карточка уже существующей метки — текст, "есть фото" (без загрузки самого файла) и автор/дата, если сервер их прислал. */
+@Composable
+private fun GeoNotePopup(note: GeoNoteMarker, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = ForestSurface.copy(alpha = 0.98f),
+        border = BorderStroke(1.dp, ForestOutline),
+        shadowElevation = 8.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Box {
+            Column(modifier = Modifier.padding(start = 18.dp, end = 40.dp, top = 14.dp, bottom = 14.dp)) {
+                Text("Метка", style = MaterialTheme.typography.titleMedium, color = ForestPrimary)
+                note.authorFio?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                if (!note.noteText.isNullOrBlank()) {
+                    Text(note.noteText, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+                }
+                if (!note.photoPath.isNullOrBlank()) {
+                    Text(
+                        "Есть фото",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                note.createdAt?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(40.dp),
+            ) {
+                Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.RecipientDto
+import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.data.notifications.NoteReminderScheduler
 import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.session.SessionManager
@@ -29,6 +30,9 @@ data class NotesUiState(
     val isLoadingInbox: Boolean = false,
     val inboxError: String? = null,
     val reminderNoteId: Int? = null,
+    val sentNotes: List<SentNoteDto> = emptyList(),
+    val isLoadingSent: Boolean = false,
+    val sentError: String? = null,
 )
 
 class NotesViewModel(application: Application) : AndroidViewModel(application) {
@@ -42,7 +46,19 @@ class NotesViewModel(application: Application) : AndroidViewModel(application) {
         val canViewInbox = sessionManager.session.value?.role?.canViewNotesInbox == true
         _uiState.value = _uiState.value.copy(canViewInbox = canViewInbox)
         loadRecipients()
+        loadSentNotes()
         if (canViewInbox) loadInbox()
+    }
+
+    fun loadSentNotes() {
+        _uiState.value = _uiState.value.copy(isLoadingSent = true, sentError = null)
+        viewModelScope.launch {
+            val result = repository.listMyNotes()
+            _uiState.value = result.fold(
+                onSuccess = { _uiState.value.copy(isLoadingSent = false, sentNotes = it) },
+                onFailure = { _uiState.value.copy(isLoadingSent = false, sentError = it.message ?: "Не удалось загрузить отправленные заметки") },
+            )
+        }
     }
 
     fun onNoteTextChange(value: String) {
@@ -83,7 +99,10 @@ class NotesViewModel(application: Application) : AndroidViewModel(application) {
                 onSuccess = { NotesUiState(canViewInbox = state.canViewInbox, recipients = state.recipients, sent = true) },
                 onFailure = { _uiState.value.copy(isSending = false, sendError = it.message ?: "Не удалось отправить") },
             )
-            if (result.isSuccess && state.canViewInbox) loadInbox()
+            if (result.isSuccess) {
+                loadSentNotes()
+                if (state.canViewInbox) loadInbox()
+            }
         }
     }
 

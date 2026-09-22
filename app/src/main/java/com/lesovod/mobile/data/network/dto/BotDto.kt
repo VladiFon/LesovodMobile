@@ -84,3 +84,21 @@ data class NoteDto(
     @SerialName("author_fio") val authorFio: String? = null,
     @SerialName("created_at") val createdAt: String,
 )
+
+/** "Мои отправленные" (GET /api/bot/notes/mine) — тот же журнал заметок, что и входящие у мастера. */
+@Serializable
+data class SentNoteDto(
+    val id: Int,
+    val text: String,
+    @SerialName("recipient_fio") val recipientFio: String? = null,
+    @SerialName("created_at") val createdAt: String,
+)
+
+/** Тело POST /api/bot/geo-notes — поля названы явно в задаче (раздел 11 промпта). */
+@Serializable
+data class GeoNoteCreateRequest(
+    val lat: Double,
+    val lon: Double,
+    @SerialName("note_text") val noteText: String? = null,
+    @SerialName("photo_path") val photoPath: String? = null,
+)

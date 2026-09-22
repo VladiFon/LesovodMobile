@@ -2,6 +2,7 @@ package com.lesovod.mobile.ui.proba
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +22,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.network.dto.ProbaResponse
+import com.lesovod.mobile.ui.components.PhotoPickerField
 import com.lesovod.mobile.ui.theme.ForestSuccess
 import java.util.Calendar
 import java.util.Locale
@@ -243,6 +246,44 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
         modifier = Modifier.fillMaxWidth(),
     )
 
+    Text(
+        "Обязательные фото",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    PhotoPickerField(
+        uri = state.fotoStolbDelyankiUri,
+        onPicked = viewModel::onFotoStolbDelyankiChange,
+        label = "Фото столба границы делянки",
+    )
+    PhotoPickerField(
+        uri = state.fotoStolbProbyUri,
+        onPicked = viewModel::onFotoStolbProbyChange,
+        label = "Фото столба пробной площадки",
+    )
+
+    if (state.lesokulturyUchastki.isNotEmpty()) {
+        Text(
+            "Участок лесных культур (если работа велась на нём)",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+        ) {
+            state.lesokulturyUchastki.forEach { uchastok ->
+                FilterChip(
+                    selected = uchastok.id in state.selectedLesokulturyIds,
+                    onClick = { viewModel.toggleLesokulturyUchastok(uchastok.id) },
+                    label = { Text(uchastok.label) },
+                )
+            }
+        }
+    }
+
     if (state.error != null) {
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)),
@@ -258,9 +299,10 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
         }
     }
 
+    val canSubmit = !state.isSubmitting && state.fotoStolbDelyankiUri != null && state.fotoStolbProbyUri != null
     Button(
         onClick = viewModel::submit,
-        enabled = !state.isSubmitting,
+        enabled = canSubmit,
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,

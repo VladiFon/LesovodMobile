@@ -1,6 +1,7 @@
 package com.lesovod.mobile.ui.proba
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.network.NetworkModule
@@ -34,6 +35,12 @@ data class ProbaUiState(
     val rows: List<ProbaRowInput> = listOf(ProbaRowInput()),
     val kolPloshadok: String = "",
     val ploshadPloshadki: String = "",
+    /** Фото столба границы делянки — обязательно перед отправкой. */
+    val fotoStolbDelyankiUri: Uri? = null,
+    /** Фото столба пробной площадки — обязательно перед отправкой. */
+    val fotoStolbProbyUri: Uri? = null,
+    val lesokulturyUchastki: List<LesokulturyUchastok> = emptyList(),
+    val selectedLesokulturyIds: Set<Int> = emptySet(),
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val result: ProbaResponse? = null,
@@ -49,6 +56,33 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(ProbaUiState())
     val uiState = _uiState.asStateFlow()
+
+    init {
+        loadLesokulturyUchastki()
+    }
+
+    private fun loadLesokulturyUchastki() {
+        viewModelScope.launch {
+            repository.listLesokulturyUchastki().onSuccess {
+                _uiState.value = _uiState.value.copy(lesokulturyUchastki = it)
+            }
+        }
+    }
+
+    fun toggleLesokulturyUchastok(id: Int) {
+        val selected = _uiState.value.selectedLesokulturyIds
+        _uiState.value = _uiState.value.copy(
+            selectedLesokulturyIds = if (id in selected) selected - id else selected + id,
+        )
+    }
+
+    fun onFotoStolbDelyankiChange(uri: Uri?) {
+        _uiState.value = _uiState.value.copy(fotoStolbDelyankiUri = uri, error = null)
+    }
+
+    fun onFotoStolbProbyChange(uri: Uri?) {
+        _uiState.value = _uiState.value.copy(fotoStolbProbyUri = uri, error = null)
+    }
 
     fun onKvartalChange(value: String) {
         _uiState.value = _uiState.value.copy(kvartal = value, error = null)
@@ -122,6 +156,12 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = state.copy(error = "Площадь выдела указана неверно")
             return
         }
+        val fotoStolbDelyankiUri = state.fotoStolbDelyankiUri
+        val fotoStolbProbyUri = state.fotoStolbProbyUri
+        if (fotoStolbDelyankiUri == null || fotoStolbProbyUri == null) {
+            _uiState.value = state.copy(error = "Приложите оба фото: столба границы делянки и столба пробной площадки")
+            return
+        }
 
         val rows = mutableListOf<ProbaRowRequest>()
         for (row in state.rows) {
@@ -141,6 +181,19 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
 
         _uiState.value = state.copy(isSubmitting = true, error = null)
         viewModelScope.launch {
+            val context = getApplication<Application>()
+
+            val fotoStolbDelyankiResult = repository.uploadPhoto(context, fotoStolbDelyankiUri)
+            fotoStolbDelyankiResult.onFailure {
+                _uiState.value = _uiState.value.copy(isSubmitting = false, error = it.message ?: "Не удалось загрузить фото столба границы делянки")
+                return@launch
+            }
+            val fotoStolbProbyResult = repository.uploadPhoto(context, fotoStolbProbyUri)
+            fotoStolbProbyResult.onFailure {
+                _uiState.value = _uiState.value.copy(isSubmitting = false, error = it.message ?: "Не удалось загрузить фото столба пробной площадки")
+                return@launch
+            }
+
             val result = repository.submitProba(
                 ProbaSaveRequest(
                     kvartal = state.kvartal.trim(),
@@ -149,6 +202,9 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
                     dataZamera = state.dataZamera.trim(),
                     rows = rows,
                     form = ProbaFormRequest(kolPloshadok, ploshadPloshadki),
+                    lesokulturyUchastokIds = state.selectedLesokulturyIds.toList(),
+                    fotoStolbDelyanki = fotoStolbDelyankiResult.getOrNull(),
+                    fotoStolbProby = fotoStolbProbyResult.getOrNull(),
                 ),
             )
             _uiState.value = result.fold(
@@ -159,6 +215,6 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun newProba() {
-        _uiState.value = ProbaUiState()
+        _uiState.value = ProbaUiState(lesokulturyUchastki = _uiState.value.lesokulturyUchastki)
     }
 }

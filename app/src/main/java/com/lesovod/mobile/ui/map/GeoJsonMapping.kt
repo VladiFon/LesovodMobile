@@ -1,5 +1,6 @@
 package com.lesovod.mobile.ui.map
 
+import com.lesovod.mobile.data.network.dto.GeoJsonFeature
 import com.lesovod.mobile.data.network.dto.GeoJsonGeometry
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -35,6 +36,27 @@ private fun JsonArray.toGeoPoints(): List<GeoPoint> = map { point ->
 }
 
 fun JsonObject.stringValue(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+
+/**
+ * Метка рабочего (GET /api/map/geo-notes.geojson) — точка. Имена полей properties не были даны
+ * явно для чтения (только для записи: note_text/photo_path в POST /api/bot/geo-notes) — читаем и их,
+ * и разумные синонимы; если сервер назвал иначе, просто останутся null, а не упадёт разбор.
+ */
+fun GeoJsonFeature.toGeoNoteMarker(): GeoNoteMarker? {
+    if (geometry.type != "Point") return null
+    val coords = geometry.coordinates.jsonArray
+    if (coords.size < 2) return null
+    val lon = coords[0].jsonPrimitive.double
+    val lat = coords[1].jsonPrimitive.double
+    return GeoNoteMarker(
+        lat = lat,
+        lon = lon,
+        noteText = properties.stringValue("note_text") ?: properties.stringValue("text"),
+        photoPath = properties.stringValue("photo_path") ?: properties.stringValue("photo"),
+        authorFio = properties.stringValue("author_fio") ?: properties.stringValue("fio"),
+        createdAt = properties.stringValue("created_at"),
+    )
+}
 
 /** Ограничивающий прямоугольник контура — временная замена настоящей лесосеки, пока мост её не прислал. */
 fun List<List<GeoPoint>>.boundingBoxOrNull(): BoundingBox? {

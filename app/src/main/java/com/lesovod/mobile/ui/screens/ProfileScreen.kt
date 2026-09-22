@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -51,6 +52,7 @@ import com.lesovod.mobile.ui.theme.ForestError
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
+    onOpenNotifications: () -> Unit = {},
     viewModel: AuthViewModel = viewModel(),
 ) {
     val session by viewModel.session.collectAsState()
@@ -111,6 +113,16 @@ fun ProfileScreen(
             }
 
             MapSettingsCard()
+
+            OutlinedButton(
+                onClick = onOpenNotifications,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+            ) {
+                Icon(Icons.Filled.Notifications, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("Уведомления", modifier = Modifier.padding(start = 8.dp))
+            }
 
             OutlinedButton(
                 onClick = {

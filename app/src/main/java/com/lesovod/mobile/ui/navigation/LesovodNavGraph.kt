@@ -38,6 +38,7 @@ import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.kubaturnik.KubaturnikScreen
 import com.lesovod.mobile.ui.notes.NotesScreen
+import com.lesovod.mobile.ui.notifications.NotificationsScreen
 import com.lesovod.mobile.ui.proba.ProbaScreen
 import com.lesovod.mobile.ui.screens.AttendanceScreen
 import com.lesovod.mobile.ui.screens.BreakdownScreen
@@ -122,9 +123,20 @@ fun LesovodNavGraph() {
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0)
                         }
-                    }
+                    },
+                    onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
                 )
             }
+        }
+        composable(Screen.Notifications.route) {
+            NotificationsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenNote = {
+                    navController.navigate(Screen.Notes.route) {
+                        popUpTo(Screen.Notifications.route) { inclusive = true }
+                    }
+                },
+            )
         }
     }
     }

@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.network.dto.NoteDto
+import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.ForestSuccess
 import java.util.Calendar
@@ -84,6 +85,9 @@ fun NotesScreen(viewModel: NotesViewModel = viewModel()) {
                 .padding(horizontal = 20.dp),
         ) {
             SendNoteSection(state = state, viewModel = viewModel)
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            SentNotesSection(state = state)
 
             if (state.canViewInbox) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
@@ -198,6 +202,43 @@ private fun SendNoteSection(state: NotesUiState, viewModel: NotesViewModel) {
                     Text("Отправить")
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SentNotesSection(state: NotesUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Мои заметки", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+
+        if (state.isLoadingSent) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+        } else if (state.sentError != null) {
+            Text(state.sentError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        } else if (state.sentNotes.isEmpty()) {
+            Text("Вы ещё не отправляли заметок", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            state.sentNotes.forEach { note -> SentNoteCard(note) }
+        }
+    }
+}
+
+@Composable
+private fun SentNoteCard(note: SentNoteDto) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(note.text, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                listOfNotNull(note.recipientFio ?: "Всем", note.createdAt).joinToString(" · "),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
     }
 }

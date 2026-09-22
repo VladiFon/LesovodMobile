@@ -10,6 +10,7 @@ import com.lesovod.mobile.data.network.dto.AttendanceMarkRequest
 import com.lesovod.mobile.data.network.dto.AttendanceStatus
 import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.DelyankaDto
+import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.ProbaResponse
@@ -17,10 +18,15 @@ import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
+import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.data.session.SessionManager
+import com.lesovod.mobile.ui.notifications.NotificationItem
+import com.lesovod.mobile.ui.notifications.toNotificationItem
+import com.lesovod.mobile.ui.proba.LesokulturyUchastok
+import com.lesovod.mobile.ui.proba.toLesokulturyUchastok
 import java.io.File
 import java.io.IOException
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -139,8 +145,30 @@ class BotRepository(
         api.listNotes(requireToken())
     }
 
+    suspend fun listMyNotes(): Result<List<SentNoteDto>> = safeCall {
+        api.listMyNotes(requireToken())
+    }
+
+    suspend fun submitGeoNote(lat: Double, lon: Double, noteText: String?, photoPath: String?): Result<Unit> = safeCall {
+        api.createGeoNote(requireToken(), GeoNoteCreateRequest(lat, lon, noteText, photoPath))
+        Unit
+    }
+
     suspend fun submitProba(request: ProbaSaveRequest): Result<ProbaResponse> = safeCall {
         api.createProba(requireToken(), request)
+    }
+
+    suspend fun listLesokulturyUchastki(): Result<List<LesokulturyUchastok>> = safeCall {
+        api.listLesokulturyUchastki(requireToken()).mapNotNull { it.toLesokulturyUchastok() }
+    }
+
+    suspend fun listNotifications(): Result<List<NotificationItem>> = safeCall {
+        api.listNotifications(requireToken()).mapNotNull { it.toNotificationItem() }
+    }
+
+    suspend fun markNotificationRead(id: Int): Result<Unit> = safeCall {
+        api.markNotificationRead(requireToken(), id)
+        Unit
     }
 
     private fun requireToken(): String =
