@@ -3,6 +3,8 @@ package com.lesovod.mobile.ui.notes
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lesovod.mobile.data.local.NoteReminderEntry
+import com.lesovod.mobile.data.local.NoteReminderStore
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.RecipientDto
@@ -33,18 +35,20 @@ data class NotesUiState(
     val sentNotes: List<SentNoteDto> = emptyList(),
     val isLoadingSent: Boolean = false,
     val sentError: String? = null,
+    val reminders: List<NoteReminderEntry> = emptyList(),
 )
 
 class NotesViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager.getInstance(application)
     private val repository = BotRepository(NetworkModule.api, sessionManager)
+    private val reminderStore = NoteReminderStore(application)
 
     private val _uiState = MutableStateFlow(NotesUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
         val canViewInbox = sessionManager.session.value?.role?.canViewNotesInbox == true
-        _uiState.value = _uiState.value.copy(canViewInbox = canViewInbox)
+        _uiState.value = _uiState.value.copy(canViewInbox = canViewInbox, reminders = reminderStore.list())
         loadRecipients()
         loadSentNotes()
         if (canViewInbox) loadInbox()
@@ -159,6 +163,11 @@ class NotesViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun scheduleAt(noteId: Int, text: String, triggerAtMillis: Long) {
         NoteReminderScheduler.schedule(getApplication(), noteId, text, triggerAtMillis)
-        _uiState.value = _uiState.value.copy(reminderNoteId = null)
+        _uiState.value = _uiState.value.copy(reminderNoteId = null, reminders = reminderStore.list())
+    }
+
+    fun cancelReminder(noteId: Int) {
+        NoteReminderScheduler.cancel(getApplication(), noteId)
+        _uiState.value = _uiState.value.copy(reminders = reminderStore.list())
     }
 }

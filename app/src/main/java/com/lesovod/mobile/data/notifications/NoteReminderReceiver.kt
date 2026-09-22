@@ -10,12 +10,14 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.lesovod.mobile.R
+import com.lesovod.mobile.data.local.NoteReminderStore
 
 /** Срабатывает по будильнику от [NoteReminderScheduler] и показывает уведомление с текстом заметки. */
 class NoteReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val text = intent.getStringExtra(NoteReminderScheduler.EXTRA_NOTE_TEXT) ?: return
         val noteId = intent.getIntExtra(NoteReminderScheduler.EXTRA_NOTE_ID, 0)
+        NoteReminderStore(context).remove(noteId)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==

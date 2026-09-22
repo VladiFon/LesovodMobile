@@ -49,11 +49,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.data.local.NoteReminderEntry
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.ForestSuccess
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,6 +96,11 @@ fun NotesScreen(viewModel: NotesViewModel = viewModel()) {
             if (state.canViewInbox) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                 InboxSection(state = state, viewModel = viewModel)
+
+                if (state.reminders.isNotEmpty()) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                    RemindersSection(state = state, viewModel = viewModel)
+                }
             } else {
                 Spacer24()
             }
@@ -295,6 +304,48 @@ private fun NoteCard(note: NoteDto, onRemind: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun RemindersSection(state: NotesUiState, viewModel: NotesViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Напоминания", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+
+        state.reminders.forEach { reminder ->
+            ReminderEntryCard(reminder = reminder, onCancel = { viewModel.cancelReminder(reminder.noteId) })
+        }
+
+        Spacer24()
+    }
+}
+
+@Composable
+private fun ReminderEntryCard(reminder: NoteReminderEntry, onCancel: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(reminder.noteText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                Text(
+                    formatReminderTime(reminder.triggerAtMillis),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            TextButton(onClick = onCancel) { Text("Отменить") }
+        }
+    }
+}
+
+private fun formatReminderTime(millis: Long): String =
+    SimpleDateFormat("d MMM, HH:mm", Locale("ru")).format(Date(millis))
 
 @Composable
 private fun ReminderPicker(
