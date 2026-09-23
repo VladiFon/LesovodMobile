@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import com.lesovod.mobile.data.local.KubaturnikBatchStore
 import com.lesovod.mobile.data.local.KubaturnikBlock
+import com.lesovod.mobile.data.local.KubaturnikCalculation
 import com.lesovod.mobile.data.local.KubaturnikCountEntry
 import com.lesovod.mobile.data.local.KubaturnikSnapshot
 import com.lesovod.mobile.data.local.KubaturnikTable
@@ -51,6 +52,8 @@ data class KubaturnikUiState(
     val showAddSortDialog: Boolean = false,
     val showResetConfirm: Boolean = false,
     val outOfRangeLengthMessage: String? = null,
+    /** Ранее сохранённые расчёты («Новая партия» архивирует сюда текущий, а не стирает его). */
+    val calculations: List<KubaturnikCalculation> = emptyList(),
 ) {
     val lengthChosen: Boolean get() = selectedBlockId != null && selectedLengthIndex >= 0
 
@@ -133,12 +136,12 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.value = _uiState.value.copy(loading = false, error = it.message ?: "Не удалось загрузить таблицу ГОСТ 2708-75")
         }
         table.onSuccess { loaded ->
-            val snapshot = store.load()
-            _uiState.value = restoreFromSnapshot(loaded, snapshot)
+            val snapshot = store.loadDraft()
+            _uiState.value = buildState(loaded, snapshot).copy(calculations = store.listCalculations())
         }
     }
 
-    private fun restoreFromSnapshot(table: KubaturnikTable, snapshot: KubaturnikSnapshot?): KubaturnikUiState {
+    private fun buildState(table: KubaturnikTable, snapshot: KubaturnikSnapshot?): KubaturnikUiState {
         if (snapshot == null || snapshot.blockId == null || snapshot.lengthIndex < 0) {
             return KubaturnikUiState(loading = false, table = table)
         }
@@ -160,6 +163,12 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
             activeSort = snapshot.activeSort,
             counts = counts,
         )
+    }
+
+    /** Только для чтения — карточка сохранённого расчёта в истории, тем же способом, что и черновик. */
+    fun uiStateFor(calculation: KubaturnikCalculation): KubaturnikUiState {
+        val table = _uiState.value.table ?: return KubaturnikUiState(loading = false)
+        return buildState(table, calculation.snapshot)
     }
 
     fun selectLength(blockId: String, lengthIndex: Int, lengthValue: Double) {
@@ -253,30 +262,44 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.value = _uiState.value.copy(showResetConfirm = false)
     }
 
+    /** «Новая партия»: текущий расчёт (если в нём есть хоть одно бревно) уходит в историю, а не стирается. */
     fun confirmReset() {
-        store.clear()
-        _uiState.value = KubaturnikUiState(loading = false, table = _uiState.value.table)
+        val state = _uiState.value
+        var calculations = state.calculations
+        if (state.lengthChosen && state.totalLogCount > 0) {
+            store.archiveDraft(currentSnapshot(state))
+            calculations = store.listCalculations()
+        }
+        store.clearDraft()
+        _uiState.value = KubaturnikUiState(loading = false, table = state.table, calculations = calculations)
     }
 
-    private fun persist() {
-        val state = _uiState.value
-        if (!state.lengthChosen) return
+    fun deleteCalculation(id: Int) {
+        store.deleteCalculation(id)
+        _uiState.value = _uiState.value.copy(calculations = store.listCalculations())
+    }
+
+    private fun currentSnapshot(state: KubaturnikUiState): KubaturnikSnapshot {
         val entries = state.counts.flatMap { (sort, byDest) ->
             byDest.flatMap { (dest, byDiam) ->
                 byDiam.map { (diameter, count) -> KubaturnikCountEntry(sort, dest.name, diameter, count) }
             }
         }
-        store.save(
-            KubaturnikSnapshot(
-                blockId = state.selectedBlockId,
-                lengthIndex = state.selectedLengthIndex,
-                lengthValue = state.selectedLengthValue,
-                stepCm = state.stepCm,
-                destination = state.destination.name,
-                sorts = state.sorts,
-                activeSort = state.activeSort,
-                counts = entries,
-            ),
+        return KubaturnikSnapshot(
+            blockId = state.selectedBlockId,
+            lengthIndex = state.selectedLengthIndex,
+            lengthValue = state.selectedLengthValue,
+            stepCm = state.stepCm,
+            destination = state.destination.name,
+            sorts = state.sorts,
+            activeSort = state.activeSort,
+            counts = entries,
         )
+    }
+
+    private fun persist() {
+        val state = _uiState.value
+        if (!state.lengthChosen) return
+        store.saveDraft(currentSnapshot(state))
     }
 }

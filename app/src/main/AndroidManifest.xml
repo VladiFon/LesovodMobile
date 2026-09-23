@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Напоминания по заметкам — обычные локальные уведомления, будильник не точечный (setAndAllowWhileIdle),
          поэтому SCHEDULE_EXACT_ALARM не требуется. -->
 
@@ -30,6 +31,14 @@
         <receiver
             android:name=".data.notifications.NoteReminderReceiver"
             android:exported="false" />
+
+        <receiver
+            android:name=".data.notifications.BootCompletedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

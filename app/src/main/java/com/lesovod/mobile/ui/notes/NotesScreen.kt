@@ -49,10 +49,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.data.local.NoteReminderEntry
 import com.lesovod.mobile.data.network.dto.NoteDto
+import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.ui.components.ScreenTitle
+import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,9 +91,17 @@ fun NotesScreen(viewModel: NotesViewModel = viewModel()) {
         ) {
             SendNoteSection(state = state, viewModel = viewModel)
 
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            SentNotesSection(state = state)
+
             if (state.canViewInbox) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                 InboxSection(state = state, viewModel = viewModel)
+
+                if (state.reminders.isNotEmpty()) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                    RemindersSection(state = state, viewModel = viewModel)
+                }
             } else {
                 Spacer24()
             }
@@ -112,6 +126,25 @@ private fun SendNoteSection(state: NotesUiState, viewModel: NotesViewModel) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Заметка отправлена", color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
+                    OutlinedButton(onClick = viewModel::resetSent, modifier = Modifier.padding(top = 12.dp)) {
+                        Text("Написать ещё одну")
+                    }
+                }
+            }
+        } else if (state.queuedOffline) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Нет сети — заметка сохранена на устройстве", color = ForestAccent, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Она отправится автоматически, как только появится связь.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                     OutlinedButton(onClick = viewModel::resetSent, modifier = Modifier.padding(top = 12.dp)) {
                         Text("Написать ещё одну")
                     }
@@ -203,6 +236,43 @@ private fun SendNoteSection(state: NotesUiState, viewModel: NotesViewModel) {
 }
 
 @Composable
+private fun SentNotesSection(state: NotesUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Мои заметки", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+
+        if (state.isLoadingSent) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+        } else if (state.sentError != null) {
+            Text(state.sentError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        } else if (state.sentNotes.isEmpty()) {
+            Text("Вы ещё не отправляли заметок", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            state.sentNotes.forEach { note -> SentNoteCard(note) }
+        }
+    }
+}
+
+@Composable
+private fun SentNoteCard(note: SentNoteDto) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(note.text, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                listOfNotNull(note.recipientFio ?: "Всем", note.createdAt).joinToString(" · "),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
 private fun InboxSection(state: NotesUiState, viewModel: NotesViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Входящие", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
@@ -254,6 +324,48 @@ private fun NoteCard(note: NoteDto, onRemind: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun RemindersSection(state: NotesUiState, viewModel: NotesViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Напоминания", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+
+        state.reminders.forEach { reminder ->
+            ReminderEntryCard(reminder = reminder, onCancel = { viewModel.cancelReminder(reminder.noteId) })
+        }
+
+        Spacer24()
+    }
+}
+
+@Composable
+private fun ReminderEntryCard(reminder: NoteReminderEntry, onCancel: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(reminder.noteText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                Text(
+                    formatReminderTime(reminder.triggerAtMillis),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            TextButton(onClick = onCancel) { Text("Отменить") }
+        }
+    }
+}
+
+private fun formatReminderTime(millis: Long): String =
+    SimpleDateFormat("d MMM, HH:mm", Locale("ru")).format(Date(millis))
 
 @Composable
 private fun ReminderPicker(

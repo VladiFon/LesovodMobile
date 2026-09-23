@@ -27,6 +27,8 @@ data class ProbaSaveRequest(
     val rows: List<ProbaRowRequest>,
     val form: ProbaFormRequest,
     @SerialName("lesokultury_uchastok_ids") val lesokulturyUchastokIds: List<Int> = emptyList(),
+    @SerialName("foto_stolb_delyanki") val fotoStolbDelyanki: String? = null,
+    @SerialName("foto_stolb_proby") val fotoStolbProby: String? = null,
 )
 
 @Serializable

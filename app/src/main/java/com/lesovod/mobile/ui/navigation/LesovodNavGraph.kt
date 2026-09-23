@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -33,11 +35,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.kubaturnik.KubaturnikScreen
+import com.lesovod.mobile.ui.lesokultury.InventarizatsiyaScreen
+import com.lesovod.mobile.ui.lesokultury.PerevodScreen
 import com.lesovod.mobile.ui.notes.NotesScreen
+import com.lesovod.mobile.ui.notifications.NotificationsScreen
 import com.lesovod.mobile.ui.proba.ProbaScreen
 import com.lesovod.mobile.ui.screens.AttendanceScreen
 import com.lesovod.mobile.ui.screens.BreakdownScreen
@@ -122,9 +128,28 @@ fun LesovodNavGraph() {
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0)
                         }
-                    }
+                    },
+                    onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
+                    onOpenInventarizatsiya = { navController.navigate(Screen.Inventarizatsiya.route) },
+                    onOpenPerevod = { navController.navigate(Screen.Perevod.route) },
                 )
             }
+        }
+        composable(Screen.Notifications.route) {
+            NotificationsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenNote = {
+                    navController.navigate(Screen.Notes.route) {
+                        popUpTo(Screen.Notifications.route) { inclusive = true }
+                    }
+                },
+            )
+        }
+        composable(Screen.Inventarizatsiya.route) {
+            InventarizatsiyaScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Screen.Perevod.route) {
+            PerevodScreen(onBack = { navController.popBackStack() })
         }
     }
     }
@@ -141,6 +166,9 @@ private fun MainScaffold(
     val pending by queueManager.pending.collectAsState()
     val session by SessionManager.getInstance(context).session.collectAsState()
     val navItems = bottomNavItemsFor(session?.role)
+    val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
+    val unreadCount by badgeManager.unreadCount.collectAsState()
+    LaunchedEffect(Unit) { badgeManager.refresh() }
 
     Scaffold(
         bottomBar = {
@@ -163,7 +191,15 @@ private fun MainScaffold(
                                 }
                             }
                         },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
+                        icon = {
+                            if (item.screen == Screen.Profile && unreadCount > 0) {
+                                BadgedBox(badge = { Badge { Text(unreadCount.coerceAtMost(99).toString()) } }) {
+                                    Icon(item.icon, contentDescription = item.label)
+                                }
+                            } else {
+                                Icon(item.icon, contentDescription = item.label)
+                            }
+                        },
                         label = { Text(item.label) },
                     )
                 }

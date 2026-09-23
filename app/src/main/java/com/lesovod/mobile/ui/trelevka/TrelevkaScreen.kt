@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
 
 @Composable
@@ -72,6 +73,25 @@ fun TrelevkaScreen(onBack: () -> Unit, viewModel: TrelevkaViewModel = viewModel(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Отправлено", color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
+                        OutlinedButton(onClick = viewModel::resetSubmitted, modifier = Modifier.padding(top = 12.dp)) {
+                            Text("Отправить ещё одну")
+                        }
+                    }
+                }
+            } else if (state.queuedOffline) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Нет сети — трелёвка сохранена на устройстве", color = ForestAccent, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Она отправится автоматически, как только появится связь.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
                         OutlinedButton(onClick = viewModel::resetSubmitted, modifier = Modifier.padding(top = 12.dp)) {
                             Text("Отправить ещё одну")
                         }

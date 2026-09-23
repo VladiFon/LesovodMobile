@@ -5,9 +5,11 @@ import com.lesovod.mobile.data.network.ApiService
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.ui.map.GeoJsonStreamParser
+import com.lesovod.mobile.ui.map.GeoNoteMarker
 import com.lesovod.mobile.ui.map.MapShape
 import com.lesovod.mobile.ui.map.ShapeCodec
 import com.lesovod.mobile.ui.map.ShapeKind
+import com.lesovod.mobile.ui.map.toGeoNoteMarker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -113,6 +115,16 @@ class MapRepository(private val api: ApiService, private val cache: MapCache) {
         encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
     )
 
+    /** Метки рабочих на карте — короткий TTL: список должен обновляться часто, не как лесной слой. */
+    suspend fun getGeoNotes(force: Boolean = false): Result<List<GeoNoteMarker>> = cached(
+        key = "geo_notes",
+        ttlMs = GEO_NOTES_TTL_MS,
+        force = force,
+        fetch = { api.getGeoNotesGeoJson().features.mapNotNull { it.toGeoNoteMarker() } },
+        decode = { json.decodeFromString<List<GeoNoteMarker>>(it.readBytes().decodeToString()) },
+        encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
+    )
+
     /** Данные конкретной делянки: {delyanka, items[]}. */
     suspend fun getDelyanka(id: Int): Result<JsonObject> = cached(
         key = "delyanka_$id",
@@ -174,5 +186,6 @@ class MapRepository(private val api: ApiService, private val cache: MapCache) {
         const val LAYER_TTL_MS = 12 * HOUR_MS
         const val LESOSEKI_TTL_MS = 3 * HOUR_MS
         const val DELYANKI_TTL_MS = HOUR_MS / 2
+        const val GEO_NOTES_TTL_MS = 5 * 60 * 1000L
     }
 }

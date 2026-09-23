@@ -3,11 +3,16 @@ package com.lesovod.mobile.ui.notes
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lesovod.mobile.data.local.NoteReminderEntry
+import com.lesovod.mobile.data.local.NoteReminderStore
+import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.RecipientDto
+import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.data.notifications.NoteReminderScheduler
 import com.lesovod.mobile.data.repository.BotRepository
+import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.data.session.canViewNotesInbox
 import java.util.Calendar
@@ -29,20 +34,39 @@ data class NotesUiState(
     val isLoadingInbox: Boolean = false,
     val inboxError: String? = null,
     val reminderNoteId: Int? = null,
+    val sentNotes: List<SentNoteDto> = emptyList(),
+    val isLoadingSent: Boolean = false,
+    val sentError: String? = null,
+    val reminders: List<NoteReminderEntry> = emptyList(),
+    val queuedOffline: Boolean = false,
 )
 
 class NotesViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager.getInstance(application)
     private val repository = BotRepository(NetworkModule.api, sessionManager)
+    private val reminderStore = NoteReminderStore(application)
+    private val queueManager = OfflineQueueManager.getInstance(application)
 
     private val _uiState = MutableStateFlow(NotesUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
         val canViewInbox = sessionManager.session.value?.role?.canViewNotesInbox == true
-        _uiState.value = _uiState.value.copy(canViewInbox = canViewInbox)
+        _uiState.value = _uiState.value.copy(canViewInbox = canViewInbox, reminders = reminderStore.list())
         loadRecipients()
+        loadSentNotes()
         if (canViewInbox) loadInbox()
+    }
+
+    fun loadSentNotes() {
+        _uiState.value = _uiState.value.copy(isLoadingSent = true, sentError = null)
+        viewModelScope.launch {
+            val result = repository.listMyNotes()
+            _uiState.value = result.fold(
+                onSuccess = { _uiState.value.copy(isLoadingSent = false, sentNotes = it) },
+                onFailure = { _uiState.value.copy(isLoadingSent = false, sentError = it.message ?: "Не удалось загрузить отправленные заметки") },
+            )
+        }
     }
 
     fun onNoteTextChange(value: String) {
@@ -79,16 +103,37 @@ class NotesViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = state.copy(isSending = true, sendError = null)
         viewModelScope.launch {
             val result = repository.submitNote(state.noteText.trim(), state.selectedRecipient?.id)
+            val error = result.exceptionOrNull()
+            if (error is ConnectivityException) {
+                queueManager.enqueueNote(state.noteText.trim(), state.selectedRecipient?.id)
+                _uiState.value = NotesUiState(
+                    canViewInbox = state.canViewInbox,
+                    recipients = state.recipients,
+                    reminders = state.reminders,
+                    queuedOffline = true,
+                )
+                return@launch
+            }
             _uiState.value = result.fold(
-                onSuccess = { NotesUiState(canViewInbox = state.canViewInbox, recipients = state.recipients, sent = true) },
+                onSuccess = {
+                    NotesUiState(
+                        canViewInbox = state.canViewInbox,
+                        recipients = state.recipients,
+                        reminders = state.reminders,
+                        sent = true,
+                    )
+                },
                 onFailure = { _uiState.value.copy(isSending = false, sendError = it.message ?: "Не удалось отправить") },
             )
-            if (result.isSuccess && state.canViewInbox) loadInbox()
+            if (result.isSuccess) {
+                loadSentNotes()
+                if (state.canViewInbox) loadInbox()
+            }
         }
     }
 
     fun resetSent() {
-        _uiState.value = _uiState.value.copy(sent = false)
+        _uiState.value = _uiState.value.copy(sent = false, queuedOffline = false)
     }
 
     fun loadInbox() {
@@ -140,6 +185,11 @@ class NotesViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun scheduleAt(noteId: Int, text: String, triggerAtMillis: Long) {
         NoteReminderScheduler.schedule(getApplication(), noteId, text, triggerAtMillis)
-        _uiState.value = _uiState.value.copy(reminderNoteId = null)
+        _uiState.value = _uiState.value.copy(reminderNoteId = null, reminders = reminderStore.list())
+    }
+
+    fun cancelReminder(noteId: Int) {
+        NoteReminderScheduler.cancel(getApplication(), noteId)
+        _uiState.value = _uiState.value.copy(reminders = reminderStore.list())
     }
 }

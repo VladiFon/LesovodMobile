@@ -10,19 +10,29 @@ import com.lesovod.mobile.data.network.dto.AttendanceMarkRequest
 import com.lesovod.mobile.data.network.dto.AttendanceStatus
 import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.DelyankaDto
+import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
+import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
+import com.lesovod.mobile.data.network.dto.PerevodRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
+import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.data.session.SessionManager
+import com.lesovod.mobile.ui.notifications.NotificationItem
+import com.lesovod.mobile.ui.notifications.toNotificationItem
+import com.lesovod.mobile.ui.notifications.toUnreadCount
+import com.lesovod.mobile.ui.proba.LesokulturyUchastok
+import com.lesovod.mobile.ui.proba.toLesokulturyUchastok
 import java.io.File
 import java.io.IOException
+import kotlinx.serialization.json.JsonElement
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -139,8 +149,52 @@ class BotRepository(
         api.listNotes(requireToken())
     }
 
+    suspend fun listMyNotes(): Result<List<SentNoteDto>> = safeCall {
+        api.listMyNotes(requireToken())
+    }
+
+    suspend fun submitGeoNote(lat: Double, lon: Double, noteText: String?, photoPath: String?): Result<Unit> = safeCall {
+        api.createGeoNote(requireToken(), GeoNoteCreateRequest(lat, lon, noteText, photoPath))
+        Unit
+    }
+
     suspend fun submitProba(request: ProbaSaveRequest): Result<ProbaResponse> = safeCall {
         api.createProba(requireToken(), request)
+    }
+
+    suspend fun listLesokulturyUchastki(): Result<List<LesokulturyUchastok>> = safeCall {
+        api.listLesokulturyUchastki(requireToken()).map { it.toLesokulturyUchastok() }
+    }
+
+    suspend fun submitInventarizatsiya(uchastokId: Int, request: InventarizatsiyaRequest): Result<JsonElement> = safeCall {
+        api.createInventarizatsiya(requireToken(), uchastokId, request)
+    }
+
+    suspend fun submitPerevod(uchastokId: Int, request: PerevodRequest): Result<JsonElement> = safeCall {
+        api.createPerevod(requireToken(), uchastokId, request)
+    }
+
+    /** Справочник пород — публичный, не требует токена. */
+    suspend fun listPorody(): Result<List<String>> = safeCall {
+        api.listPorody().porody.sorted()
+    }
+
+    suspend fun listNotifications(): Result<List<NotificationItem>> = safeCall {
+        api.listNotifications(requireToken()).mapNotNull { it.toNotificationItem() }
+    }
+
+    suspend fun markNotificationRead(id: Int): Result<Unit> = safeCall {
+        api.markNotificationRead(requireToken(), id)
+        Unit
+    }
+
+    suspend fun getUnreadNotificationsCount(): Result<Int> = safeCall {
+        api.getUnreadNotificationsCount(requireToken()).toUnreadCount()
+    }
+
+    suspend fun markAllNotificationsRead(): Result<Unit> = safeCall {
+        api.markAllNotificationsRead(requireToken())
+        Unit
     }
 
     private fun requireToken(): String =

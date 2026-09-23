@@ -3,6 +3,7 @@ package com.lesovod.mobile.ui.kubaturnik
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,9 +52,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.data.local.KubaturnikCalculation
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 private fun Double.fmt(decimals: Int = 3): String = String.format(Locale.US, "%.${decimals}f", this)
@@ -168,13 +172,14 @@ private fun KubaturnikMain(state: KubaturnikUiState, viewModel: KubaturnikViewMo
         TabRow(selectedTabIndex = tab) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Счёт") })
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Сводка по ступеням") })
+            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("История") })
         }
 
         Box(modifier = Modifier.weight(1f)) {
-            if (tab == 0) {
-                KubaturnikCounting(state = state, viewModel = viewModel)
-            } else {
-                KubaturnikSummary(state = state)
+            when (tab) {
+                0 -> KubaturnikCounting(state = state, viewModel = viewModel)
+                1 -> KubaturnikSummary(state = state)
+                else -> KubaturnikHistory(state = state, viewModel = viewModel)
             }
         }
     }
@@ -441,6 +446,132 @@ private fun KubaturnikSummary(state: KubaturnikUiState) {
     }
 }
 
+@Composable
+private fun KubaturnikHistory(state: KubaturnikUiState, viewModel: KubaturnikViewModel) {
+    var selected by remember { mutableStateOf<KubaturnikCalculation?>(null) }
+    var pendingDelete by remember { mutableStateOf<KubaturnikCalculation?>(null) }
+
+    val current = selected
+    when {
+        current != null -> KubaturnikCalculationDetail(
+            calculation = current,
+            detailState = viewModel.uiStateFor(current),
+            onBack = { selected = null },
+            onDelete = { pendingDelete = current },
+        )
+        state.calculations.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Пока нет сохранённых расчётов", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        else -> LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            items(state.calculations, key = { it.id }) { calculation ->
+                val calcState = viewModel.uiStateFor(calculation)
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selected = calculation },
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(calculation.label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    formatCalculationDate(calculation.savedAt),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            TextButton(onClick = { pendingDelete = calculation }) { Text("Удалить") }
+                        }
+                        Text(
+                            "${calcState.totalVolume.fmt(3)} м³ · ${calcState.totalLogCount} брёвен",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                        Text(
+                            "Длина ${calcState.selectedLengthValue.fmt(2)} м",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    pendingDelete?.let { calculation ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Удалить расчёт?") },
+            text = { Text("«${calculation.label}» будет удалён без возможности восстановить.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteCalculation(calculation.id)
+                    if (selected?.id == calculation.id) selected = null
+                    pendingDelete = null
+                }) { Text("Удалить", color = ForestAccent) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Отмена") } },
+        )
+    }
+}
+
+@Composable
+private fun KubaturnikCalculationDetail(
+    calculation: KubaturnikCalculation,
+    detailState: KubaturnikUiState,
+    onBack: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            TextButton(onClick = onBack) { Text("← Назад") }
+            Box(Modifier.weight(1f))
+            TextButton(onClick = onDelete) { Text("Удалить") }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(calculation.label, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    formatCalculationDate(calculation.savedAt),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "${detailState.totalVolume.fmt(3)} м³ · ${detailState.totalLogCount} брёвен · длина ${detailState.selectedLengthValue.fmt(2)} м",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+
+        Box(modifier = Modifier.weight(1f)) {
+            KubaturnikSummary(state = detailState)
+        }
+    }
+}
+
+private fun formatCalculationDate(millis: Long): String =
+    SimpleDateFormat("d MMM yyyy, HH:mm", Locale("ru")).format(Date(millis))
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddSortDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
@@ -466,9 +597,9 @@ private fun ResetConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Новая партия?") },
-        text = { Text("Все текущие подсчёты по этой партии будут удалены с телефона. Отменить нельзя.") },
+        text = { Text("Текущий расчёт сохранится в «Истории», а счётчики на экране очистятся для новой партии.") },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Очистить", color = ForestAccent) }
+            TextButton(onClick = onConfirm) { Text("Сохранить и начать новую", color = ForestAccent) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )

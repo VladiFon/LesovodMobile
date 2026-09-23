@@ -1,13 +1,17 @@
 package com.lesovod.mobile.ui.map
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.local.CompletedWorkStore
+import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
+import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.repository.CellTier
 import com.lesovod.mobile.data.repository.DownloadState
 import com.lesovod.mobile.data.repository.MapDataHub
+import com.lesovod.mobile.data.session.SessionManager
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -28,6 +32,16 @@ data class MapLayers(
 
 /** Где была карта — чтобы при возврате на вкладку не прыгать заново на всё лесничество. */
 data class MapCamera(val latitude: Double, val longitude: Double, val zoom: Double)
+
+/** Незаконченная метка: долгое нажатие на карту уже задало точку, дальше — текст/фото и отправка. */
+data class GeoNoteDraft(
+    val lat: Double,
+    val lon: Double,
+    val text: String = "",
+    val photoUri: Uri? = null,
+    val isSubmitting: Boolean = false,
+    val error: String? = null,
+)
 
 data class MapUiState(
     val layers: MapLayers = MapLayers(),
@@ -56,6 +70,12 @@ data class MapUiState(
     val cardNotice: String? = null,
     val isLoadingCard: Boolean = false,
     val cardError: String? = null,
+    /** Метки рабочих на карте (текст/фото). */
+    val geoNotes: List<GeoNoteMarker> = emptyList(),
+    /** Форма новой метки — открыта после долгого нажатия на карту. */
+    val noteDraft: GeoNoteDraft? = null,
+    /** Метка, по которой тапнули — маленькая карточка с текстом. */
+    val selectedGeoNote: GeoNoteMarker? = null,
 )
 
 /** Выделы показываем только с масштаба, где их можно разглядеть: на общем плане хватает кварталов. */
@@ -70,6 +90,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val hub = MapDataHub.getInstance(application)
     private val repository = hub.repository
     private val completedStore = CompletedWorkStore(application)
+    private val botRepository = BotRepository(NetworkModule.api, SessionManager.getInstance(application))
 
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState = _uiState.asStateFlow()
@@ -95,6 +116,78 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch { hub.download.collect { _uiState.value = _uiState.value.copy(download = it) } }
         loadLesnichestva()
+        loadGeoNotes()
+    }
+
+    fun loadGeoNotes() {
+        viewModelScope.launch {
+            repository.getGeoNotes().onSuccess { _uiState.value = _uiState.value.copy(geoNotes = it) }
+        }
+    }
+
+    /** Долгое нажатие на карту — открываем форму новой метки в этой точке. */
+    fun startNoteDraft(lat: Double, lon: Double) {
+        _uiState.value = _uiState.value.copy(noteDraft = GeoNoteDraft(lat = lat, lon = lon), selectedGeoNote = null)
+    }
+
+    fun updateNoteDraftText(text: String) {
+        val draft = _uiState.value.noteDraft ?: return
+        _uiState.value = _uiState.value.copy(noteDraft = draft.copy(text = text, error = null))
+    }
+
+    fun updateNoteDraftPhoto(uri: Uri?) {
+        val draft = _uiState.value.noteDraft ?: return
+        _uiState.value = _uiState.value.copy(noteDraft = draft.copy(photoUri = uri))
+    }
+
+    fun dismissNoteDraft() {
+        _uiState.value = _uiState.value.copy(noteDraft = null)
+    }
+
+    fun submitNoteDraft() {
+        val draft = _uiState.value.noteDraft ?: return
+        if (draft.text.isBlank() && draft.photoUri == null) {
+            _uiState.value = _uiState.value.copy(noteDraft = draft.copy(error = "Добавьте текст или фото"))
+            return
+        }
+        _uiState.value = _uiState.value.copy(noteDraft = draft.copy(isSubmitting = true, error = null))
+        viewModelScope.launch {
+            var photoPath: String? = null
+            if (draft.photoUri != null) {
+                val uploadResult = botRepository.uploadPhoto(getApplication<Application>(), draft.photoUri)
+                uploadResult.onFailure { err ->
+                    _uiState.value.noteDraft?.let {
+                        _uiState.value = _uiState.value.copy(
+                            noteDraft = it.copy(isSubmitting = false, error = err.message ?: "Не удалось загрузить фото"),
+                        )
+                    }
+                    return@launch
+                }
+                photoPath = uploadResult.getOrNull()
+            }
+            val result = botRepository.submitGeoNote(draft.lat, draft.lon, draft.text.trim().takeIf { it.isNotBlank() }, photoPath)
+            result.fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(noteDraft = null)
+                    loadGeoNotes()
+                },
+                onFailure = { err ->
+                    _uiState.value.noteDraft?.let {
+                        _uiState.value = _uiState.value.copy(
+                            noteDraft = it.copy(isSubmitting = false, error = err.message ?: "Не удалось сохранить метку"),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun onGeoNoteTap(note: GeoNoteMarker) {
+        _uiState.value = _uiState.value.copy(selectedGeoNote = note, noteDraft = null)
+    }
+
+    fun dismissGeoNotePopup() {
+        _uiState.value = _uiState.value.copy(selectedGeoNote = null)
     }
 
     fun loadLesnichestva() {
