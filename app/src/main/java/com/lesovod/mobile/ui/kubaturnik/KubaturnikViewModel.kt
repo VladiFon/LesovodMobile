@@ -143,10 +143,10 @@ data class KubaturnikUiState(
                 tables += SortDestinationTable(sort, dest, groups, totalCount, totalVolume)
 
                 val sortAcc = bySortAcc.getOrPut(sort) { DoubleArray(2) }
-                sortAcc[0] += totalCount
+                sortAcc[0] += totalCount.toDouble()
                 sortAcc[1] += totalVolume
                 val destAcc = byDestAcc.getOrPut(dest) { DoubleArray(2) }
-                destAcc[0] += totalCount
+                destAcc[0] += totalCount.toDouble()
                 destAcc[1] += totalVolume
                 grandCount += totalCount
                 grandVolume += totalVolume
