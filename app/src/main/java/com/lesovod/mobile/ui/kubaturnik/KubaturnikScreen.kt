@@ -1,5 +1,6 @@
 package com.lesovod.mobile.ui.kubaturnik
 
+import android.view.SoundEffectConstants
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -8,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -50,6 +52,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.local.KubaturnikCalculation
@@ -383,6 +387,7 @@ private fun DiameterGrid(state: KubaturnikUiState, viewModel: KubaturnikViewMode
 @Composable
 private fun DiameterButton(diameter: Int, count: Int, onTap: () -> Unit, onUndo: () -> Unit) {
     val hasCount = count > 0
+    val view = LocalView.current
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = if (hasCount) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface,
@@ -392,7 +397,14 @@ private fun DiameterButton(diameter: Int, count: Int, onTap: () -> Unit, onUndo:
         ),
         modifier = Modifier
             .aspectRatio(1.3f)
-            .combinedClickable(onClick = onTap, onLongClick = onUndo),
+            .combinedClickable(
+                onClick = {
+                    // Звук подтверждает счёт брёвен, не глядя на экран — как штатный клик кнопки.
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    onTap()
+                },
+                onLongClick = onUndo,
+            ),
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -409,8 +421,8 @@ private fun DiameterButton(diameter: Int, count: Int, onTap: () -> Unit, onUndo:
 
 @Composable
 private fun KubaturnikSummary(state: KubaturnikUiState) {
-    val rows = state.thicknessSummary()
-    if (rows.isEmpty()) {
+    val summary = state.fullSummary()
+    if (summary.tables.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Пока нет данных", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -419,29 +431,139 @@ private fun KubaturnikSummary(state: KubaturnikUiState) {
 
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(rows) { row ->
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Ступень ${row.rangeLabel} см", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                    Text(
-                        "${row.sort} · ${row.destination.label}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "${row.count} брёвен · ${row.volume.fmt(3)} м³",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+        items(summary.tables, key = { "${it.sort}|${it.destination}" }) { table ->
+            SortDestinationSummaryCard(table)
+        }
+        item { TotalsBySortCard(summary.bySort) }
+        item { TotalsByDestinationCard(summary.byDestination) }
+        item { GrandTotalCard(count = summary.grandCount, volume = summary.grandVolume) }
+    }
+}
+
+@Composable
+private fun SortDestinationSummaryCard(table: SortDestinationTable) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                "${table.sort} · ${table.destination.label}",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+            SummaryTableHeader()
+            table.groups.forEach { group ->
+                group.diameters.forEach { row ->
+                    SummaryTableRow(label = "⌀${row.diameter}", count = row.count, volume = row.volume)
                 }
+                SummaryTableRow(
+                    label = group.rangeLabel,
+                    count = group.count,
+                    volume = group.volume,
+                    emphasize = true,
+                )
             }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+            SummaryTableRow(label = "Итого", count = table.totalCount, volume = table.totalVolume, emphasize = true)
+        }
+    }
+}
+
+@Composable
+private fun SummaryTableHeader() {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text("Диаметр", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.3f))
+        Text("Кол-во", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.3f))
+        Text("Объём, м³", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.4f))
+    }
+}
+
+@Composable
+private fun SummaryTableRow(label: String, count: Int, volume: Double, emphasize: Boolean = false) {
+    val color = if (emphasize) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+    val weight = if (emphasize) FontWeight.SemiBold else FontWeight.Normal
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = weight, modifier = Modifier.weight(0.3f))
+        Text("$count", style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = weight, modifier = Modifier.weight(0.3f))
+        Text(volume.fmt(3), style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = weight, modifier = Modifier.weight(0.4f))
+    }
+}
+
+@Composable
+private fun TotalsBySortCard(rows: List<TotalsRow<String>>) {
+    TotalsCard(title = "Итого по сортам") {
+        rows.forEach { row -> TotalsCardRow(label = row.key, count = row.count, volume = row.volume) }
+    }
+}
+
+@Composable
+private fun TotalsByDestinationCard(rows: List<TotalsRow<KubaturnikDestination>>) {
+    TotalsCard(title = "Итого по машине/прицепу") {
+        rows.forEach { row -> TotalsCardRow(label = row.key.label, count = row.count, volume = row.volume) }
+    }
+}
+
+@Composable
+private fun TotalsCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(4.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun TotalsCardRow(label: String, count: Int, volume: Double) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text("$count шт", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.6f))
+        Text("${volume.fmt(3)} м³", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(0.7f))
+    }
+}
+
+@Composable
+private fun GrandTotalCard(count: Int, volume: Double) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Общий итог", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text(
+                "${volume.fmt(3)} м³",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                "$count брёвен — все сорта, машина + прицеп",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

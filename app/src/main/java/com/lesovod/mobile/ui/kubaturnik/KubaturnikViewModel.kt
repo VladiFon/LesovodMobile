@@ -27,12 +27,30 @@ typealias DiameterCounts = Map<Int, Int>
 
 data class KubaturnikRow(val diameter: Int, val count: Int, val volumePerLog: Double, val totalVolume: Double)
 
-data class ThicknessSummaryRow(
-    val rangeLabel: String,
+/** Одна строка диаметра в сводке по ступеням: «⌀12 · 6 шт · 1,234 м³». */
+data class DiameterVolumeRow(val diameter: Int, val count: Int, val volume: Double)
+
+/** Подытог по ступени толщины (до 13 / 14–24 / 26 и больше) внутри одной таблицы сорт×назначение. */
+data class ThicknessGroupRow(val rangeLabel: String, val diameters: List<DiameterVolumeRow>, val count: Int, val volume: Double)
+
+/** Одна таблица сводки — конкретный сорт + назначение (машина/прицеп), с разбивкой по ступеням. */
+data class SortDestinationTable(
     val sort: String,
     val destination: KubaturnikDestination,
-    val count: Int,
-    val volume: Double,
+    val groups: List<ThicknessGroupRow>,
+    val totalCount: Int,
+    val totalVolume: Double,
+)
+
+data class TotalsRow<T>(val key: T, val count: Int, val volume: Double)
+
+/** Полная сводка по ступеням: таблицы по сорту×назначению + три уровня итогов. */
+data class KubaturnikSummaryData(
+    val tables: List<SortDestinationTable>,
+    val bySort: List<TotalsRow<String>>,
+    val byDestination: List<TotalsRow<KubaturnikDestination>>,
+    val grandCount: Int,
+    val grandVolume: Double,
 )
 
 data class KubaturnikUiState(
@@ -91,24 +109,59 @@ data class KubaturnikUiState(
     val totalLogCount: Int
         get() = counts.values.sumOf { byDest -> byDest.values.sumOf { byDiam -> byDiam.values.sum() } }
 
-    fun thicknessSummary(): List<ThicknessSummaryRow> {
-        val block = selectedBlock ?: return emptyList()
-        val rows = mutableMapOf<Triple<String, String, KubaturnikDestination>, Pair<Int, Double>>()
-        for ((sort, byDest) in counts) {
-            for ((dest, byDiam) in byDest) {
-                for ((diameter, count) in byDiam) {
-                    if (count <= 0) continue
-                    val range = thicknessRangeLabel(diameter)
-                    val volume = (block.volumeFor(diameter, selectedLengthIndex) ?: 0.0) * count
-                    val key = Triple(range, sort, dest)
-                    val prev = rows[key] ?: (0 to 0.0)
-                    rows[key] = (prev.first + count) to (prev.second + volume)
+    /**
+     * Сводка по ступеням: для каждого сорта×назначения — таблица диаметров, сгруппированная по
+     * ступеням толщины с подытогом на ступень, плюс три уровня итогов (по сорту, по машине/
+     * прицепу, общий) — так удобнее визуально понять, где сколько и в целом, и по разрезам.
+     */
+    fun fullSummary(): KubaturnikSummaryData {
+        val block = selectedBlock ?: return KubaturnikSummaryData(emptyList(), emptyList(), emptyList(), 0, 0.0)
+
+        val tables = mutableListOf<SortDestinationTable>()
+        val bySortAcc = linkedMapOf<String, DoubleArray>()
+        val byDestAcc = linkedMapOf<KubaturnikDestination, DoubleArray>()
+        var grandCount = 0
+        var grandVolume = 0.0
+
+        for (sort in sorts) {
+            val byDest = counts[sort] ?: continue
+            for (dest in KubaturnikDestination.entries) {
+                val byDiam = byDest[dest]?.filterValues { it > 0 } ?: continue
+                if (byDiam.isEmpty()) continue
+
+                val diameterRows = byDiam.entries.sortedBy { it.key }
+                    .map { (d, c) -> DiameterVolumeRow(d, c, (block.volumeFor(d, selectedLengthIndex) ?: 0.0) * c) }
+
+                val groups = THICKNESS_ORDER.mapNotNull { range ->
+                    val inRange = diameterRows.filter { thicknessRangeLabel(it.diameter) == range }
+                    if (inRange.isEmpty()) null
+                    else ThicknessGroupRow(range, inRange, inRange.sumOf { it.count }, inRange.sumOf { it.volume })
                 }
+
+                val totalCount = groups.sumOf { it.count }
+                val totalVolume = groups.sumOf { it.volume }
+                tables += SortDestinationTable(sort, dest, groups, totalCount, totalVolume)
+
+                val sortAcc = bySortAcc.getOrPut(sort) { DoubleArray(2) }
+                sortAcc[0] += totalCount
+                sortAcc[1] += totalVolume
+                val destAcc = byDestAcc.getOrPut(dest) { DoubleArray(2) }
+                destAcc[0] += totalCount
+                destAcc[1] += totalVolume
+                grandCount += totalCount
+                grandVolume += totalVolume
             }
         }
-        return rows.entries
-            .map { (key, value) -> ThicknessSummaryRow(key.first, key.second, key.third, value.first, value.second) }
-            .sortedWith(compareBy({ THICKNESS_ORDER.indexOf(it.rangeLabel) }, { it.sort }, { it.destination.ordinal }))
+
+        return KubaturnikSummaryData(
+            tables = tables,
+            bySort = bySortAcc.map { (sort, acc) -> TotalsRow(sort, acc[0].toInt(), acc[1]) },
+            byDestination = byDestAcc.entries
+                .sortedBy { it.key.ordinal }
+                .map { (dest, acc) -> TotalsRow(dest, acc[0].toInt(), acc[1]) },
+            grandCount = grandCount,
+            grandVolume = grandVolume,
+        )
     }
 
     companion object {
