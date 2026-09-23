@@ -51,9 +51,9 @@ import com.lesovod.mobile.ui.screens.LoginScreen
 import com.lesovod.mobile.ui.screens.MapScreen
 import com.lesovod.mobile.ui.screens.ProfileScreen
 import com.lesovod.mobile.ui.screens.RegistrationScreen
-import com.lesovod.mobile.ui.screens.StockScreen
 import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
+import com.lesovod.mobile.ui.stock.StockScreen
 import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.trelevka.TrelevkaScreen
 
