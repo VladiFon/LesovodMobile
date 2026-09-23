@@ -48,7 +48,7 @@ class StockCalculationsTest {
     }
 
     @Test
-    fun `used больше лимита - доли зажаты в [0, 1], остаток может быть отрицательным`() {
+    fun `used больше лимита - доли зажаты в диапазоне 0-1, остаток может быть отрицательным`() {
         val stock = VolumeBreakdownDto(limit = 10.0, faktNaryad = 15.0, faktEgais = 12.0, ostatokSafe = -5.0).toWoodStock()
 
         assertEquals(1f, stock.naryadFraction)
