@@ -14,6 +14,7 @@ import com.lesovod.mobile.data.network.dto.PerevodRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.PhotoUploadResponseDto
+import com.lesovod.mobile.data.network.dto.PorodySpravochnikDto
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.network.dto.RawReportRequest
@@ -165,7 +166,7 @@ interface ApiService {
 
     // Справочник пород (app/routers/uhody.py) — публичный, как остальные справочники карты.
     @GET("api/uhody/porody")
-    suspend fun listPorody(): Map<String, Int>
+    suspend fun listPorody(): PorodySpravochnikDto
 
     @GET("api/notifications")
     suspend fun listNotifications(

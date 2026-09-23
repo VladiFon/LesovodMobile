@@ -43,3 +43,13 @@ data class PerevodRequest(
     val god: Int? = null,
     val reshenie: String,
 )
+
+/**
+ * Ответ GET /api/uhody/porody — объект с двумя справочниками, а не плоская карта имя→id
+ * (как listLesnichestva): {"porody": [...], "vidy_rubki": [...]}.
+ */
+@Serializable
+data class PorodySpravochnikDto(
+    val porody: List<String> = emptyList(),
+    @SerialName("vidy_rubki") val vidyRubki: List<String> = emptyList(),
+)

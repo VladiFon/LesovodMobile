@@ -174,9 +174,9 @@ class BotRepository(
         api.createPerevod(requireToken(), uchastokId, request)
     }
 
-    /** Справочник пород — публичный, не требует токена. Имена как ключи (по аналогии с listLesnichestva). */
+    /** Справочник пород — публичный, не требует токена. */
     suspend fun listPorody(): Result<List<String>> = safeCall {
-        api.listPorody().keys.sorted()
+        api.listPorody().porody.sorted()
     }
 
     suspend fun listNotifications(): Result<List<NotificationItem>> = safeCall {
