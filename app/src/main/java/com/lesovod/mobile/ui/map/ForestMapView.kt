@@ -173,11 +173,13 @@ fun ForestMapView(
             factory = { ctx ->
                 Configuration.getInstance().apply {
                     userAgentValue = ctx.packageName
-                    // тайлы лежат в filesDir: скачанные участки остаются на устройстве и работают без интернета
+                    // тайлы лежат в filesDir: уже просмотренные (не докачанные заранее — см. FLAG_NO_BULK
+                    // в EsriTileSources.kt) участки остаются на устройстве и работают без интернета.
+                    // Кэш увеличен, чтобы то, что уже открывали, не вытеснялось так быстро.
                     osmdroidBasePath = File(ctx.filesDir, "osmdroid")
                     osmdroidTileCache = File(osmdroidBasePath, "tiles")
-                    tileFileSystemCacheMaxBytes = 600L * 1024 * 1024
-                    tileFileSystemCacheTrimBytes = 500L * 1024 * 1024
+                    tileFileSystemCacheMaxBytes = 1200L * 1024 * 1024
+                    tileFileSystemCacheTrimBytes = 1000L * 1024 * 1024
                     tileDownloadThreads = 4
                     tileFileSystemThreads = 4
                     cacheMapTileCount = 12
@@ -190,7 +192,11 @@ fun ForestMapView(
                     isHorizontalMapRepetitionEnabled = false
                     isVerticalMapRepetitionEnabled = false
                     minZoomLevel = 5.0
-                    maxZoomLevel = 19.0
+                    // Снимок Esri нативно тянется до z19 (см. EsriTileSources.kt) — выше карта сама
+                    // растягивает уже скачанный тайл ("overzoom", без новых запросов к серверу), а
+                    // свои векторные слои (границы кварталов/выделов, точка "моё местоположение")
+                    // остаются чёткими на любом зуме — это и даёт точность при обходе границ.
+                    maxZoomLevel = 22.0
 
                     overlays.add(MapEventsOverlay(object : MapEventsReceiver {
                         override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
