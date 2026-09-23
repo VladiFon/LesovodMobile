@@ -153,9 +153,14 @@ class BotRepository(
         api.listMyNotes(requireToken())
     }
 
-    suspend fun submitGeoNote(lat: Double, lon: Double, noteText: String?, photoPath: String?): Result<Unit> = safeCall {
-        api.createGeoNote(requireToken(), GeoNoteCreateRequest(lat, lon, noteText, photoPath))
-        Unit
+    suspend fun submitGeoNote(lat: Double, lon: Double, noteText: String?, photoPath: String?): Result<Unit> {
+        val telegramId = sessionManager.session.value?.appIdentity
+            ?: return Result.failure(Exception("Не удалось определить учётную запись для отправки — переавторизуйтесь"))
+
+        return safeCall {
+            api.createGeoNote(requireToken(), GeoNoteCreateRequest(telegramId, lat, lon, noteText, photoPath))
+            Unit
+        }
     }
 
     suspend fun submitProba(request: ProbaSaveRequest): Result<ProbaResponse> = safeCall {

@@ -94,9 +94,10 @@ data class SentNoteDto(
     @SerialName("created_at") val createdAt: String,
 )
 
-/** Тело POST /api/bot/geo-notes — поля названы явно в задаче (раздел 11 промпта). */
+/** Подтверждённая схема сервера: { telegram_id, lat, lon, note_text, photo_path }. */
 @Serializable
 data class GeoNoteCreateRequest(
+    @SerialName("telegram_id") val telegramId: String,
     val lat: Double,
     val lon: Double,
     @SerialName("note_text") val noteText: String? = null,
