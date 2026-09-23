@@ -1,6 +1,7 @@
 package com.lesovod.mobile.ui.kubaturnik
 
-import android.view.SoundEffectConstants
+import android.media.AudioManager
+import android.media.ToneGenerator
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -45,6 +46,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,7 +54,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -365,6 +366,15 @@ private fun LeftPanel(state: KubaturnikUiState, modifier: Modifier = Modifier) {
 @Composable
 private fun DiameterGrid(state: KubaturnikUiState, viewModel: KubaturnikViewModel, modifier: Modifier = Modifier) {
     val buttons = state.diameterButtonValues
+
+    // View.playSoundEffect зависит от системной настройки «Звук касаний» (у многих выключена
+    // по умолчанию — тогда его вообще не слышно). ToneGenerator не зависит от неё: играет
+    // короткий гудок сам, через поток уведомлений, всегда.
+    val toneGenerator = remember { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90) }
+    DisposableEffect(Unit) {
+        onDispose { toneGenerator.release() }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         contentPadding = PaddingValues(8.dp),
@@ -376,7 +386,10 @@ private fun DiameterGrid(state: KubaturnikUiState, viewModel: KubaturnikViewMode
             DiameterButton(
                 diameter = diameter,
                 count = state.currentCombo[diameter] ?: 0,
-                onTap = { viewModel.tapDiameter(diameter) },
+                onTap = {
+                    toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 90)
+                    viewModel.tapDiameter(diameter)
+                },
                 onUndo = { viewModel.undoDiameter(diameter) },
             )
         }
@@ -387,7 +400,6 @@ private fun DiameterGrid(state: KubaturnikUiState, viewModel: KubaturnikViewMode
 @Composable
 private fun DiameterButton(diameter: Int, count: Int, onTap: () -> Unit, onUndo: () -> Unit) {
     val hasCount = count > 0
-    val view = LocalView.current
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = if (hasCount) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface,
@@ -397,14 +409,7 @@ private fun DiameterButton(diameter: Int, count: Int, onTap: () -> Unit, onUndo:
         ),
         modifier = Modifier
             .aspectRatio(1.3f)
-            .combinedClickable(
-                onClick = {
-                    // Звук подтверждает счёт брёвен, не глядя на экран — как штатный клик кнопки.
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    onTap()
-                },
-                onLongClick = onUndo,
-            ),
+            .combinedClickable(onClick = onTap, onLongClick = onUndo),
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
