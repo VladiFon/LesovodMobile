@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Напоминания по заметкам — обычные локальные уведомления, будильник не точечный (setAndAllowWhileIdle),
          поэтому SCHEDULE_EXACT_ALARM не требуется. -->
+    <!-- Проверка обновлений (сайдлоуд, не Google Play): без этого разрешения Android откажется
+         открывать экран установки скачанного APK на API 26+. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -39,6 +42,18 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Скачанный APK обновления лежит во внешней папке приложения (см. file_paths.xml) —
+             FileProvider выдаёт на него content://-ссылку для системного экрана установки. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

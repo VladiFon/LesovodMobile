@@ -37,6 +37,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.data.repository.OfflineQueueManager
+import com.lesovod.mobile.data.repository.UpdateChecker
 import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.kubaturnik.KubaturnikScreen
@@ -55,6 +56,7 @@ import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
 import com.lesovod.mobile.ui.stock.StockScreen
 import com.lesovod.mobile.ui.theme.ForestAccent
+import com.lesovod.mobile.ui.theme.ForestSuccess
 import com.lesovod.mobile.ui.trelevka.TrelevkaScreen
 
 @Composable
@@ -65,6 +67,9 @@ fun LesovodNavGraph() {
         if (SessionManager.getInstance(context).isLoggedIn) Screen.Tasks.route else Screen.Login.route
     }
     val snackbarHostState = remember { SnackbarHostState() }
+    // Тихая проверка обновлений при старте приложения — сама решает, есть ли что показывать
+    // (см. UpdateChecker), баннер собирается ниже, в MainScaffold.
+    remember { UpdateChecker.getInstance(context) }
 
     LaunchedEffect(Unit) {
         SessionExpiryBus.events.collect {
@@ -169,6 +174,9 @@ private fun MainScaffold(
     val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
     val unreadCount by badgeManager.unreadCount.collectAsState()
     LaunchedEffect(Unit) { badgeManager.refresh() }
+    val updateChecker = remember { UpdateChecker.getInstance(context) }
+    val availableUpdate by updateChecker.update.collectAsState()
+    val updateDownloadState by updateChecker.downloadState.collectAsState()
 
     Scaffold(
         bottomBar = {
@@ -207,11 +215,41 @@ private fun MainScaffold(
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
+            availableUpdate?.let {
+                UpdateAvailableBanner(
+                    downloading = updateDownloadState == UpdateChecker.DownloadState.Downloading,
+                    onUpdateClick = updateChecker::startUpdate,
+                )
+            }
             if (pending.isNotEmpty()) {
                 PendingSyncBanner(count = pending.size, onRetryNow = queueManager::retryNow)
             }
             Box(modifier = Modifier.weight(1f)) {
                 content()
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateAvailableBanner(downloading: Boolean, onUpdateClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = ForestSuccess.copy(alpha = 0.15f)),
+        shape = RoundedCornerShape(0.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Доступна новая версия приложения",
+                style = MaterialTheme.typography.bodyMedium,
+                color = ForestSuccess,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onUpdateClick, enabled = !downloading) {
+                Text(if (downloading) "Скачивается…" else "Обновить")
             }
         }
     }

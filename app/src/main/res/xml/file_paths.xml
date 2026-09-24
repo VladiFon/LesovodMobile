@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Пути, которые FileProvider разрешает раздавать через content://.
+  DownloadManager кладёт скачанный APK обновления в getExternalFilesDir(DIRECTORY_DOWNLOADS)
+  (папка приложения, без разрешений на хранилище) — отсюда и единственный путь ниже.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path name="update_downloads" path="Download/" />
+</paths>
