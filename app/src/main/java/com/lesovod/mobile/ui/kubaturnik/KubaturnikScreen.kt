@@ -559,6 +559,10 @@ private fun DiameterTile(
     // засчитывать не нужно, иначе одно удержание давало бы -1 и сразу же +1.
     var consumedByLongPress by remember(diameter) { mutableStateOf(false) }
 
+    // HapticFeedbackType.LongPress — единственная разновидность, гарантированно доступная в этой
+    // версии Compose (VirtualKey/Reject и параметр hapticFeedbackEnabled — из более новых версий,
+    // которых нет в зафиксированном BOM проекта, компилятор CI это подтвердил).
+
     val shape = RoundedCornerShape(14.dp)
     // Последняя нажатая плитка: белая внутренняя обводка 3dp вплотную к внешней 2dp цветом primary.
     val ringModifier = if (isLast) {
@@ -585,10 +589,9 @@ private fun DiameterTile(
                 interactionSource = interactionSource,
                 indication = null,
                 role = Role.Button,
-                hapticFeedbackEnabled = false,
                 onLongClick = {
                     consumedByLongPress = true
-                    haptics.performHapticFeedback(HapticFeedbackType.Reject)
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     onUndo()
                 },
                 onClick = {
@@ -596,7 +599,6 @@ private fun DiameterTile(
                         consumedByLongPress = false
                         return@combinedClickable
                     }
-                    haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
                     onTap()
                 },
             ),
