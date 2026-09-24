@@ -64,6 +64,8 @@ fun WoodSection(title: String, stock: WoodStock, modifier: Modifier = Modifier) 
         RemainderPanel(
             remainderText = formatVolume(stock.remainder),
             percent = stock.percent,
+            minus10Text = formatVolume(stock.remainderMinus10),
+            plus10Text = formatVolume(stock.remainderPlus10),
             remainderColor = if (stock.remainder < 0) ForestError else ForestPrimary,
         )
 
@@ -121,49 +123,66 @@ fun SpeciesCard(species: SpeciesStock, modifier: Modifier = Modifier) {
 
             species.drova?.let { WoodSection(title = "Дрова", stock = it) }
 
-            SpeciesTotalFooter(total = species.totalRemainder)
+            SpeciesTotalFooter(species = species)
         }
     }
 }
 
-/** Тёмный подвал карточки — суммарный остаток по породе (деловая + дрова). */
+/** Тёмный подвал карточки — суммарный остаток по породе (деловая + дрова) и его допуск ±10% лимита. */
 @Composable
-fun SpeciesTotalFooter(total: Double, modifier: Modifier = Modifier) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+fun SpeciesTotalFooter(species: SpeciesStock, modifier: Modifier = Modifier) {
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .background(ForestPrimary)
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
-        Column {
-            Text(
-                "Итого остаток",
-                style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.SemiBold, fontSize = 17.sp),
-                color = ForestOnPrimary,
-            )
-            Text(
-                "деловая + дрова",
-                style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.Normal, fontSize = 14.sp),
-                color = ForestOnPrimaryMuted,
-            )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column {
+                Text(
+                    "Итого остаток",
+                    style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.SemiBold, fontSize = 17.sp),
+                    color = ForestOnPrimary,
+                )
+                Text(
+                    speciesBreakdownText(species),
+                    style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.Normal, fontSize = 14.sp, fontFeatureSettings = "tnum"),
+                    color = ForestOnPrimaryMuted,
+                )
+            }
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    formatVolume(species.totalRemainder),
+                    style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.Bold, fontSize = 34.sp, fontFeatureSettings = "tnum"),
+                    color = ForestOnPrimary,
+                )
+                Text(
+                    "м³",
+                    style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.SemiBold, fontSize = 18.sp),
+                    color = ForestOnPrimaryMuted,
+                    modifier = Modifier.padding(start = 6.dp, bottom = 3.dp),
+                )
+            }
         }
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                formatVolume(total),
-                style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.Bold, fontSize = 34.sp, fontFeatureSettings = "tnum"),
-                color = ForestOnPrimary,
-            )
-            Text(
-                "м³",
-                style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.SemiBold, fontSize = 18.sp),
-                color = ForestOnPrimaryMuted,
-                modifier = Modifier.padding(start = 6.dp, bottom = 3.dp),
-            )
-        }
+        Text(
+            "−10%: ${formatVolume(species.totalRemainderMinus10)}  ·  +10%: ${formatVolume(species.totalRemainderPlus10)} м³",
+            style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, fontFeatureSettings = "tnum"),
+            color = ForestOnPrimaryMuted,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
+
+/** «Деловая 45,5 + Дрова 14,6» — только те категории, что реально есть у породы. */
+private fun speciesBreakdownText(species: SpeciesStock): String =
+    buildList {
+        species.delovaya?.let { add("Деловая ${formatVolume(it.remainder)}") }
+        species.drova?.let { add("Дрова ${formatVolume(it.remainder)}") }
+    }.joinToString(" + ")
 
 // Пример данных из ТЗ — используются и в превью, и совпадение чисел проверяется юнит-тестами.
 internal val previewSosna = SpeciesStock(
@@ -214,6 +233,6 @@ private fun SpeciesCardBerezaPreview() {
 @Composable
 private fun SpeciesTotalFooterPreview() {
     LesovodTheme {
-        SpeciesTotalFooter(total = previewSosna.totalRemainder)
+        SpeciesTotalFooter(species = previewSosna)
     }
 }

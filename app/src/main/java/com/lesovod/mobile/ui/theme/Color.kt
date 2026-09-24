@@ -30,3 +30,6 @@ val ForestTonalButton = Color(0xFFE4ECE3)
 val ForestEmptyIconBg = Color(0xFFF1ECDD)
 val ForestSkeleton = Color(0xFFEAE5D6)
 val ForestOnPrimaryMuted = Color(0xFFC9D6CB)
+
+// Добавлено для допуска ±10% к лимиту (макет «остаток ±10%, строка под остатком»).
+val ForestTolerance = Color(0xFF7C9284)

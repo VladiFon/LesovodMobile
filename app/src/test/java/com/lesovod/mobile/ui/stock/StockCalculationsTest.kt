@@ -76,6 +76,14 @@ class StockCalculationsTest {
     }
 
     @Test
+    fun `допуск лимита ±10% процента - остаток при лимите минус и плюс 10 процентов от расхода`() {
+        val stock = VolumeBreakdownDto(limit = 120.0, faktNaryad = 74.5, faktEgais = 74.5, ostatokSafe = 45.5).toWoodStock()
+
+        assertEquals(33.5, stock.remainderMinus10, 0.0001)
+        assertEquals(57.5, stock.remainderPlus10, 0.0001)
+    }
+
+    @Test
     fun `итого по породе - сумма остатков деловой древесины и дров`() {
         val species = toSpeciesStock(
             "Сосна",
@@ -86,6 +94,8 @@ class StockCalculationsTest {
         )
 
         assertEquals(60.1, species.totalRemainder, 0.0001)
+        assertEquals(44.1, species.totalRemainderMinus10, 0.0001)
+        assertEquals(76.1, species.totalRemainderPlus10, 0.0001)
     }
 
     @Test

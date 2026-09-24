@@ -18,6 +18,9 @@ data class WoodStock(
     val naryad: Double,
     val egais: Double,
     val remainder: Double,
+    /** Остаток при допуске лимита −10% / +10% (договорной допуск по объёму заготовки). */
+    val remainderMinus10: Double,
+    val remainderPlus10: Double,
     /** Доля лимита, "занятая" наибольшим из наряда/ЕГАИС — на неё рисуется кольцо. */
     val usedFraction: Float,
     val percent: Int,
@@ -33,6 +36,8 @@ fun VolumeBreakdownDto.toWoodStock(): WoodStock {
     val egais = (faktEgais ?: 0.0).coerceAtLeast(0.0)
     val used = maxOf(naryad, egais)
     val remainder = ostatokSafe ?: (limit - used)
+    val remainderMinus10 = limit * 0.9 - used
+    val remainderPlus10 = limit * 1.1 - used
 
     val usedFraction = fractionOf(used, limit)
     val percent = if (limit <= 0.0) 0 else (used / limit * 100).roundToInt().coerceIn(0, 100)
@@ -44,6 +49,8 @@ fun VolumeBreakdownDto.toWoodStock(): WoodStock {
         naryad = naryad,
         egais = egais,
         remainder = remainder,
+        remainderMinus10 = remainderMinus10,
+        remainderPlus10 = remainderPlus10,
         usedFraction = usedFraction,
         percent = percent,
         naryadFraction = naryadFraction,
@@ -63,6 +70,8 @@ data class SpeciesStock(
     val drova: WoodStock?,
 ) {
     val totalRemainder: Double get() = (delovaya?.remainder ?: 0.0) + (drova?.remainder ?: 0.0)
+    val totalRemainderMinus10: Double get() = (delovaya?.remainderMinus10 ?: 0.0) + (drova?.remainderMinus10 ?: 0.0)
+    val totalRemainderPlus10: Double get() = (delovaya?.remainderPlus10 ?: 0.0) + (drova?.remainderPlus10 ?: 0.0)
 }
 
 fun toSpeciesStock(poroda: String, dto: PorodaRemainingDto): SpeciesStock =

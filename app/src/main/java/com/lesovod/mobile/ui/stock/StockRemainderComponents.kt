@@ -50,6 +50,7 @@ import com.lesovod.mobile.ui.theme.ForestRemainderPanel
 import com.lesovod.mobile.ui.theme.ForestRingTrack
 import com.lesovod.mobile.ui.theme.ForestSuccess
 import com.lesovod.mobile.ui.theme.ForestTextMuted
+import com.lesovod.mobile.ui.theme.ForestTolerance
 import com.lesovod.mobile.ui.theme.LesovodTheme
 import com.lesovod.mobile.ui.theme.Manrope
 
@@ -100,9 +101,16 @@ fun RemainderRing(percent: Int, modifier: Modifier = Modifier) {
     }
 }
 
-/** Главная панель категории: крупное число остатка слева, кольцо доли — справа. */
+/** Главная панель категории: крупное число остатка слева (+ строка допуска ±10% лимита), кольцо доли — справа. */
 @Composable
-fun RemainderPanel(remainderText: String, percent: Int, modifier: Modifier = Modifier, remainderColor: Color = ForestPrimary) {
+fun RemainderPanel(
+    remainderText: String,
+    percent: Int,
+    minus10Text: String,
+    plus10Text: String,
+    modifier: Modifier = Modifier,
+    remainderColor: Color = ForestPrimary,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -139,6 +147,12 @@ fun RemainderPanel(remainderText: String, percent: Int, modifier: Modifier = Mod
                         .padding(start = 6.dp),
                 )
             }
+            Text(
+                "−10%: $minus10Text  ·  +10%: $plus10Text м³",
+                style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, fontFeatureSettings = "tnum"),
+                color = ForestTolerance,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
         RemainderRing(percent = percent)
     }
@@ -235,7 +249,7 @@ private fun RemainderRingPreview() {
 @Composable
 private fun RemainderPanelPreview() {
     LesovodTheme {
-        RemainderPanel(remainderText = "45,5", percent = 62, modifier = Modifier.padding(16.dp))
+        RemainderPanel(remainderText = "45,5", percent = 62, minus10Text = "33,5", plus10Text = "57,5", modifier = Modifier.padding(16.dp))
     }
 }
 
