@@ -21,7 +21,14 @@ import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
+import com.lesovod.mobile.data.network.dto.DelyankaByLocationDto
+import com.lesovod.mobile.data.network.dto.TabelDayEntryDto
+import com.lesovod.mobile.data.network.dto.TabelDaySaveRequest
+import com.lesovod.mobile.data.network.dto.TabelEntryRequest
+import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
+import com.lesovod.mobile.data.network.dto.VidRabotyCreateRequest
+import com.lesovod.mobile.data.network.dto.VidRabotyDto
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.data.session.SessionManager
@@ -200,6 +207,31 @@ class BotRepository(
     suspend fun markAllNotificationsRead(): Result<Unit> = safeCall {
         api.markAllNotificationsRead(requireToken())
         Unit
+    }
+
+    suspend fun getTabelDay(date: String): Result<List<TabelDayEntryDto>> = safeCall {
+        api.getTabelDay(requireToken(), date)
+    }
+
+    suspend fun saveTabelDay(date: String, entries: List<TabelEntryRequest>): Result<List<TabelDayEntryDto>> = safeCall {
+        api.saveTabelDay(requireToken(), TabelDaySaveRequest(date, entries))
+    }
+
+    suspend fun listVidyRaboty(): Result<List<VidRabotyDto>> = safeCall {
+        api.listVidyRaboty(requireToken())
+    }
+
+    suspend fun createVidRaboty(nazvanie: String): Result<VidRabotyDto> = safeCall {
+        api.createVidRaboty(requireToken(), VidRabotyCreateRequest(nazvanie))
+    }
+
+    suspend fun searchTabelLesokulturyUchastki(search: String?): Result<List<TabelLesokulturyUchastokDto>> = safeCall {
+        api.searchTabelLesokulturyUchastki(requireToken(), search)
+    }
+
+    /** Публичный эндпоинт (см. ApiService) — токен не нужен, но requireToken() тут ни к чему. */
+    suspend fun getDelyankiByLocation(kvartal: String, vydel: String): Result<List<DelyankaByLocationDto>> = safeCall {
+        api.getDelyankiByLocation(kvartal, vydel)
     }
 
     private fun requireToken(): String =

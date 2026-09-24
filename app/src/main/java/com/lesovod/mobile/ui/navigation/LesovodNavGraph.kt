@@ -55,6 +55,7 @@ import com.lesovod.mobile.ui.screens.RegistrationScreen
 import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
 import com.lesovod.mobile.ui.stock.StockScreen
+import com.lesovod.mobile.ui.tabel.TabelScreen
 import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
 import com.lesovod.mobile.ui.trelevka.TrelevkaScreen
@@ -137,8 +138,12 @@ fun LesovodNavGraph() {
                     onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
                     onOpenInventarizatsiya = { navController.navigate(Screen.Inventarizatsiya.route) },
                     onOpenPerevod = { navController.navigate(Screen.Perevod.route) },
+                    onOpenTabel = { navController.navigate(Screen.Tabel.route) },
                 )
             }
+        }
+        composable(Screen.Tabel.route) {
+            TabelScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Notifications.route) {
             NotificationsScreen(

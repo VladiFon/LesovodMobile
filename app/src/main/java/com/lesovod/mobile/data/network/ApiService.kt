@@ -21,7 +21,13 @@ import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
+import com.lesovod.mobile.data.network.dto.DelyankaByLocationDto
+import com.lesovod.mobile.data.network.dto.TabelDayEntryDto
+import com.lesovod.mobile.data.network.dto.TabelDaySaveRequest
+import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
+import com.lesovod.mobile.data.network.dto.VidRabotyCreateRequest
+import com.lesovod.mobile.data.network.dto.VidRabotyDto
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.dto.WorkerLoginRequest
 import com.lesovod.mobile.ui.proba.LesokulturyUchastokDto
@@ -247,4 +253,42 @@ interface ApiService {
         @Query("vydel") vydel: String,
         @Query("lesnichestvo") lesnichestvo: String? = null,
     ): JsonObject
+
+    // Табель — ручной ввод (доступ: admin/lesovod либо мастер/пом. лесничего/лесничий, см. backend).
+    @GET("api/tabel/day")
+    suspend fun getTabelDay(
+        @Header("Authorization") bearerToken: String,
+        @Query("data") data: String,
+    ): List<TabelDayEntryDto>
+
+    @POST("api/tabel/day")
+    suspend fun saveTabelDay(
+        @Header("Authorization") bearerToken: String,
+        @Body body: TabelDaySaveRequest,
+    ): List<TabelDayEntryDto>
+
+    @GET("api/tabel/vidy-rabot")
+    suspend fun listVidyRaboty(
+        @Header("Authorization") bearerToken: String,
+    ): List<VidRabotyDto>
+
+    @POST("api/tabel/vidy-rabot")
+    suspend fun createVidRaboty(
+        @Header("Authorization") bearerToken: String,
+        @Body body: VidRabotyCreateRequest,
+    ): VidRabotyDto
+
+    @GET("api/tabel/lesokultury-uchastki")
+    suspend fun searchTabelLesokulturyUchastki(
+        @Header("Authorization") bearerToken: String,
+        @Query("search") search: String?,
+    ): List<TabelLesokulturyUchastokDto>
+
+    // Общий эндпоинт всего приложения (не специфичен для табеля) — без Depends(get_current_user*),
+    // публичный, как остальные карточные/картовые эндпоинты выше.
+    @GET("api/delyanki/by-location")
+    suspend fun getDelyankiByLocation(
+        @Query("kvartal") kvartal: String,
+        @Query("vydel") vydel: String,
+    ): List<DelyankaByLocationDto>
 }
