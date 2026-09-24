@@ -6,9 +6,11 @@ import com.lesovod.mobile.data.local.KubaturnikBatchStore
 import com.lesovod.mobile.data.local.KubaturnikBlock
 import com.lesovod.mobile.data.local.KubaturnikCalculation
 import com.lesovod.mobile.data.local.KubaturnikCountEntry
+import com.lesovod.mobile.data.local.KubaturnikPrefs
 import com.lesovod.mobile.data.local.KubaturnikSnapshot
 import com.lesovod.mobile.data.local.KubaturnikTable
 import com.lesovod.mobile.data.local.KubaturnikTableLoader
+import com.lesovod.mobile.data.local.TilesSide
 import com.lesovod.mobile.data.local.diameterButtons
 import com.lesovod.mobile.data.local.volumeFor
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +74,8 @@ data class KubaturnikUiState(
     val outOfRangeLengthMessage: String? = null,
     /** Ранее сохранённые расчёты («Новая партия» архивирует сюда текущий, а не стирает его). */
     val calculations: List<KubaturnikCalculation> = emptyList(),
+    /** Где сетка плиток диаметра на вкладке «Счёт» — настройка приложения, не часть партии. */
+    val tilesSide: TilesSide = TilesSide.LEFT,
 ) {
     val lengthChosen: Boolean get() = selectedBlockId != null && selectedLengthIndex >= 0
 
@@ -179,6 +183,7 @@ data class KubaturnikUiState(
 
 class KubaturnikViewModel(application: Application) : AndroidViewModel(application) {
     private val store = KubaturnikBatchStore(application)
+    private val prefs = KubaturnikPrefs(application)
 
     private val _uiState = MutableStateFlow(KubaturnikUiState())
     val uiState = _uiState.asStateFlow()
@@ -186,12 +191,23 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
     init {
         val table = runCatching { KubaturnikTableLoader.load(application) }
         table.onFailure {
-            _uiState.value = _uiState.value.copy(loading = false, error = it.message ?: "Не удалось загрузить таблицу ГОСТ 2708-75")
+            _uiState.value = _uiState.value.copy(
+                loading = false,
+                error = it.message ?: "Не удалось загрузить таблицу ГОСТ 2708-75",
+                tilesSide = prefs.tilesSide,
+            )
         }
         table.onSuccess { loaded ->
             val snapshot = store.loadDraft()
-            _uiState.value = buildState(loaded, snapshot).copy(calculations = store.listCalculations())
+            _uiState.value = buildState(loaded, snapshot).copy(calculations = store.listCalculations(), tilesSide = prefs.tilesSide)
         }
+    }
+
+    /** Переключатель «плитки слева/справа»: настройка приложения, счётчики партии не трогает. */
+    fun toggleTilesSide() {
+        val newSide = if (_uiState.value.tilesSide == TilesSide.LEFT) TilesSide.RIGHT else TilesSide.LEFT
+        _uiState.value = _uiState.value.copy(tilesSide = newSide)
+        prefs.tilesSide = newSide
     }
 
     private fun buildState(table: KubaturnikTable, snapshot: KubaturnikSnapshot?): KubaturnikUiState {
@@ -324,7 +340,7 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
             calculations = store.listCalculations()
         }
         store.clearDraft()
-        _uiState.value = KubaturnikUiState(loading = false, table = state.table, calculations = calculations)
+        _uiState.value = KubaturnikUiState(loading = false, table = state.table, calculations = calculations, tilesSide = state.tilesSide)
     }
 
     fun deleteCalculation(id: Int) {

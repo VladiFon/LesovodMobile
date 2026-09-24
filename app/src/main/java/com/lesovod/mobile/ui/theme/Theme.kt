@@ -7,8 +7,12 @@ import androidx.compose.runtime.Composable
 private val LesovodColorScheme = lightColorScheme(
     primary = ForestPrimary,
     onPrimary = ForestOnPrimary,
+    primaryContainer = ForestPrimaryContainer,
+    onPrimaryContainer = ForestPrimary,
     secondary = ForestAccent,
     onSecondary = ForestOnPrimary,
+    secondaryContainer = ForestSecondaryContainer,
+    onSecondaryContainer = ForestPrimary,
     tertiary = ForestSuccess,
     onTertiary = ForestOnPrimary,
     error = ForestError,
@@ -19,7 +23,11 @@ private val LesovodColorScheme = lightColorScheme(
     onSurface = ForestOnSurface,
     surfaceVariant = ForestBackground,
     onSurfaceVariant = ForestOnBackground,
+    surfaceContainer = ForestSurfaceContainer,
+    surfaceContainerLow = ForestSurfaceContainerLow,
+    surfaceContainerHigh = ForestBarTrack,
     outline = ForestOutline,
+    outlineVariant = ForestOutlineVariant,
 )
 
 @Composable

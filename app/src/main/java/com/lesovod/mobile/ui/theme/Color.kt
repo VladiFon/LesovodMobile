@@ -33,3 +33,12 @@ val ForestOnPrimaryMuted = Color(0xFFC9D6CB)
 
 // Добавлено для допуска ±10% к лимиту (макет «остаток ±10%, строка под остатком»).
 val ForestTolerance = Color(0xFF7C9284)
+
+// Добавлено для редизайна «Кубатурник → Счёт»: до этого MaterialTheme.colorScheme использовала
+// дефолтные (не зелёные) Material3-значения для этих ролей, т.к. LesovodColorScheme их не задавала.
+// surfaceContainerHigh переиспользует ForestBarTrack выше — отдельный токен не нужен.
+val ForestPrimaryContainer = Color(0xFFB9E4C4)
+val ForestSecondaryContainer = Color(0xFFDCEBD6)
+val ForestSurfaceContainer = Color(0xFFECE7D8)
+val ForestSurfaceContainerLow = Color(0xFFF1EDDD)
+val ForestOutlineVariant = Color(0xFFE7E1D2)
