@@ -1,20 +1,26 @@
 package com.lesovod.mobile.ui.screens
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -25,9 +31,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
+import kotlin.math.roundToInt
 import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.PorodaRemainingDto
 import com.lesovod.mobile.data.network.dto.VolumeBreakdownDto
@@ -135,11 +148,22 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    remaining.grouped?.forEach { (poroda, group) ->
-                        PorodaCard(poroda, group)
+                    val delyankaLabel = buildString {
+                        if (state.vydel.isNotBlank()) append("выд. ${state.vydel}")
+                        if (state.lesoseka.isNotBlank()) {
+                            if (isNotEmpty()) append(" / ")
+                            append("лес. ${state.lesoseka}")
+                        }
                     }
 
-                    Column(modifier = Modifier.padding(bottom = Spacing.xl)) {
+                    remaining.grouped?.forEach { (poroda, group) ->
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                            PorodaCard(poroda, group, delyankaLabel)
+                            SpeciesTotalFooter(group)
+                        }
+                    }
+
+                    Column(modifier = Modifier.padding(bottom = Spacing.xl, top = Spacing.s)) {
                         remaining.lastUpdate?.let {
                             Text(
                                 "Наряды обновлены: $it",
@@ -163,47 +187,241 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
 
 private fun Double?.fmt(): String = if (this == null) "—" else String.format(Locale.US, "%.2f", this)
 
+/** Карточка породы: заголовок + секции «Деловая древесина» / «Дрова» (мокап variant-A). */
 @Composable
-private fun PorodaCard(poroda: String, group: PorodaRemainingDto) {
-    val totalLimit = (group.delovaya?.limit ?: 0.0) + (group.drova?.limit ?: 0.0)
-    val totalOstatok = (group.delovaya?.ostatokSafe ?: 0.0) + (group.drova?.ostatokSafe ?: 0.0)
+private fun PorodaCard(poroda: String, group: PorodaRemainingDto, delyankaLabel: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
+            .softCard(MaterialTheme.shapes.medium)
+            .padding(Spacing.l),
+        verticalArrangement = Arrangement.spacedBy(Spacing.l),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(poroda, style = MaterialTheme.typography.titleMedium)
+            if (delyankaLabel.isNotBlank()) {
+                Text(
+                    delyankaLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
-    Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.l)) {
-        Text(poroda, style = MaterialTheme.typography.titleSmall)
-        group.delovaya?.let { VolumeRow("Деловая древесина", it) }
-        group.drova?.let { VolumeRow("Дрова", it) }
+        group.delovaya?.let { WoodSection("Деловая древесина", it) }
+        if (group.delovaya != null && group.drova != null) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+        group.drova?.let { WoodSection("Дрова", it) }
+    }
+}
 
+/** Секция объёма (Деловая древесина / Дрова): остаток + кольцо, полосы Наряд/ЕГАИС, баннер расхождения. */
+@Composable
+private fun WoodSection(label: String, volume: VolumeBreakdownDto) {
+    val limit = volume.limit ?: 0.0
+    val ostatok = volume.ostatokSafe ?: 0.0
+    val naryad = volume.faktNaryad ?: 0.0
+    val egais = volume.faktEgais ?: 0.0
+    val egaisExceedsNaryad = egais > naryad
+    val remainderPercent = if (limit > 0) ((ostatok / limit) * 100).roundToInt().coerceIn(0, 100) else null
+
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
         Text(
-            "Итого лимит: ${totalLimit.fmt()} м³ · Итого остаток: ${totalOstatok.fmt()} м³",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = Spacing.s),
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.m),
+        ) {
+            RemainderPanel(ostatok = ostatok, modifier = Modifier.weight(1f))
+            if (remainderPercent != null) {
+                RemainderRing(percent = remainderPercent)
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            ProgressBarRow("Наряд", current = naryad, limit = limit, fillColor = MaterialTheme.colorScheme.primary)
+            ProgressBarRow("ЕГАИС", current = egais, limit = limit, fillColor = MaterialTheme.colorScheme.tertiary)
+        }
+
+        if (egaisExceedsNaryad) {
+            DiscrepancyBanner(diff = egais - naryad)
+        }
+    }
+}
+
+/** RemainderPanel: остаток + строка допуска ±10%. */
+@Composable
+private fun RemainderPanel(ostatok: Double, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.shapes.small)
+            .padding(horizontal = Spacing.l, vertical = Spacing.m),
+    ) {
+        Text(
+            "Остаток",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+        )
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Text(
+                ostatok.fmt(),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                "м³",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            )
+        }
+        Text(
+            "−10%: ${(ostatok * 0.9).fmt()}  ·  +10%: ${(ostatok * 1.1).fmt()} м³",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+            modifier = Modifier.padding(top = Spacing.xs),
         )
     }
 }
 
+/** Кольцевая диаграмма доли остатка от лимита (ostatokSafe / limit). Чисто демонстративный акцент из мокапа. */
 @Composable
-private fun VolumeRow(label: String, volume: VolumeBreakdownDto) {
-    val egaisExceedsNaryad = (volume.faktEgais ?: 0.0) > (volume.faktNaryad ?: 0.0)
+private fun RemainderRing(percent: Int, modifier: Modifier = Modifier) {
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+    val progressColor = MaterialTheme.colorScheme.primary
+    val textColor = MaterialTheme.colorScheme.primary
 
-    Column(modifier = Modifier.padding(top = Spacing.s)) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        Text(
-            "Лимит: ${volume.limit.fmt()} м³ · Наряд: ${volume.faktNaryad.fmt()} м³ · " +
-                "ЕГАИС: ${volume.faktEgais.fmt()} м³ · Остаток: ${volume.ostatokSafe.fmt()} м³",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (egaisExceedsNaryad) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = Spacing.xs)) {
-                Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                Text(
-                    "ЕГАИС показывает больше, чем наряд",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(start = Spacing.xs),
-                )
-            }
+    Box(modifier = modifier.size(64.dp), contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidthPx = 7.dp.toPx()
+            val diameter = size.minDimension - strokeWidthPx
+            val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+            val arcSize = Size(diameter, diameter)
+            drawArc(
+                color = trackColor,
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round),
+            )
+            drawArc(
+                color = progressColor,
+                startAngle = -90f,
+                sweepAngle = 360f * (percent.coerceIn(0, 100) / 100f),
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round),
+            )
         }
+        Text("$percent%", style = MaterialTheme.typography.labelLarge, color = textColor)
+    }
+}
+
+/** Строка прогресс-бара «Наряд» / «ЕГАИС»: текущее/цель м³ + цветная полоса. */
+@Composable
+private fun ProgressBarRow(label: String, current: Double, limit: Double, fillColor: Color) {
+    val fraction = if (limit > 0) (current / limit).toFloat().coerceIn(0f, 1f) else 0f
+
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "${current.fmt()} / ${limit.fmt()} м³",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .background(fillColor, RoundedCornerShape(3.dp)),
+            )
+        }
+    }
+}
+
+/** Баннер расхождения ЕГАИС/Наряда — та же логика (egaisExceedsNaryad), стиль под мокап variant-A. */
+@Composable
+private fun DiscrepancyBanner(diff: Double) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.errorContainer, MaterialTheme.shapes.extraSmall)
+            .padding(horizontal = Spacing.m, vertical = Spacing.s),
+    ) {
+        Icon(
+            Icons.Filled.Warning,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            "ЕГАИС превышает наряд на ${diff.fmt()} м³",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+/** SpeciesTotalFooter: тёмная (primary) карточка с итогом по породе + допуск ±10%. */
+@Composable
+private fun SpeciesTotalFooter(group: PorodaRemainingDto) {
+    val delovayaOstatok = group.delovaya?.ostatokSafe ?: 0.0
+    val drovaOstatok = group.drova?.ostatokSafe ?: 0.0
+    val total = delovayaOstatok + drovaOstatok
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.medium)
+            .padding(horizontal = Spacing.l, vertical = Spacing.m),
+    ) {
+        Text("Итого остаток", style = MaterialTheme.typography.labelSmall, color = onPrimary.copy(alpha = 0.75f))
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Text(total.fmt(), style = MaterialTheme.typography.titleLarge, color = onPrimary)
+            Text("м³", style = MaterialTheme.typography.labelLarge, color = onPrimary.copy(alpha = 0.85f))
+        }
+
+        val breakdown = buildList {
+            if (group.delovaya != null) add("Деловая ${delovayaOstatok.fmt()}")
+            if (group.drova != null) add("Дрова ${drovaOstatok.fmt()}")
+        }
+        if (breakdown.isNotEmpty()) {
+            Text(
+                breakdown.joinToString(" + "),
+                style = MaterialTheme.typography.labelSmall,
+                color = onPrimary.copy(alpha = 0.75f),
+            )
+        }
+
+        Text(
+            "−10%: ${(total * 0.9).fmt()}  ·  +10%: ${(total * 1.1).fmt()} м³",
+            style = MaterialTheme.typography.labelSmall,
+            color = onPrimary.copy(alpha = 0.75f),
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
     }
 }
