@@ -1,20 +1,17 @@
 package com.lesovod.mobile.ui.lesokultury
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -24,9 +21,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,11 +43,27 @@ import com.lesovod.mobile.ui.theme.softCard
 import kotlinx.serialization.json.JsonElement
 import java.util.Locale
 
+/** Живой фильтр списка участков по подписи (в неё уже входят квартал/выдел/порода/делянка) — регистронезависимо. */
+fun filterUchastki(uchastki: List<LesokulturyUchastok>, query: String): List<LesokulturyUchastok> {
+    val trimmed = query.trim()
+    if (trimmed.isEmpty()) return uchastki
+    return uchastki.filter { it.label.contains(trimmed, ignoreCase = true) }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UchastokPicker(uchastki: List<LesokulturyUchastok>, selected: LesokulturyUchastok?, onSelect: (LesokulturyUchastok) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(uchastki, query) { filterUchastki(uchastki, query) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = {
+            expanded = it
+            if (!it) query = ""
+        },
+    ) {
         OutlinedTextField(
             value = selected?.label ?: "Выберите участок",
             onValueChange = {},
@@ -62,11 +75,30 @@ fun UchastokPicker(uchastki: List<LesokulturyUchastok>, selected: LesokulturyUch
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth(),
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            uchastki.forEach { uchastok ->
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false; query = "" },
+        ) {
+            if (uchastki.size > 1) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Поиск: квартал, выдел, порода…") },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.m, vertical = Spacing.xs),
+                )
+            }
+            if (filtered.isEmpty()) {
+                DropdownMenuItem(text = { Text("Ничего не найдено") }, onClick = {}, enabled = false)
+            }
+            filtered.forEach { uchastok ->
                 DropdownMenuItem(
                     text = { Text(uchastok.label) },
-                    onClick = { onSelect(uchastok); expanded = false },
+                    onClick = { onSelect(uchastok); expanded = false; query = "" },
                 )
             }
         }
@@ -129,8 +161,79 @@ fun ProbyList(
     }
 }
 
+/** Вкладки «Ввод» / «Итог» — только переключение отображения, считает всё та же ViewModel-логика. */
+private enum class PorodyTab(val label: String) { VVOD("Ввод"), ITOG("Итог") }
+
+/** Компактный вид числа — без «.0» для целых, один знак после запятой иначе. */
+private fun formatCompact(value: Double): String =
+    if (value == Math.floor(value) && !value.isInfinite()) {
+        value.toLong().toString()
+    } else {
+        "%.1f".format(Locale.US, value)
+    }
+
 @Composable
 fun RezultatySection(
+    porody: List<String>,
+    rezultaty: List<RezultatEntry>,
+    proby: List<ProbaEntry>,
+    enabled: Boolean,
+    onTap: (String) -> Unit,
+    onUndo: (String) -> Unit,
+    onVysazhenoChange: (poroda: String, value: String) -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    var tab by remember { mutableStateOf(PorodyTab.VVOD) }
+    val totalRazmer = remember(proby) { totalRazmerM2(proby) }
+    val multiplier = remember(proby) { perHectareMultiplier(proby) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Результаты обследования",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                if (multiplier != null) {
+                    Text(
+                        "Считаем на ${formatCompact(totalRazmer)} м² (×${formatCompact(multiplier)} = шт/га)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PorodyTab.entries.forEach { option ->
+                    FilterChip(
+                        selected = tab == option,
+                        onClick = { tab = option },
+                        label = { Text(option.label) },
+                    )
+                }
+            }
+        }
+
+        when (tab) {
+            PorodyTab.VVOD -> PorodyVvodTab(
+                porody = porody,
+                rezultaty = rezultaty,
+                enabled = enabled,
+                onTap = onTap,
+                onUndo = onUndo,
+                onVysazhenoChange = onVysazhenoChange,
+                onRemove = onRemove,
+            )
+            PorodyTab.ITOG -> PorodyItogTab(rezultaty = rezultaty, multiplier = multiplier)
+        }
+    }
+}
+
+@Composable
+private fun PorodyVvodTab(
     porody: List<String>,
     rezultaty: List<RezultatEntry>,
     enabled: Boolean,
@@ -139,93 +242,121 @@ fun RezultatySection(
     onVysazhenoChange: (poroda: String, value: String) -> Unit,
     onRemove: (String) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         Text(
-            "Результаты обследования",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            "Тап по породе — «прижилось» +1, долгое нажатие — отменить последний тап",
-            style = MaterialTheme.typography.labelMedium,
+            "«+» — прижилось ещё одно, «−» — отменить последнее",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-        ) {
-            porody.forEach { poroda ->
-                PorodaChip(
-                    poroda = poroda,
-                    count = rezultaty.firstOrNull { it.poroda == poroda }?.prizhilos ?: 0,
-                    enabled = enabled,
-                    onTap = { onTap(poroda) },
-                    onUndo = { onUndo(poroda) },
-                )
-            }
-        }
-
-        if (rezultaty.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
-                rezultaty.forEach { rezultat ->
-                    RezultatRow(
-                        rezultat = rezultat,
-                        enabled = enabled,
-                        onVysazhenoChange = { onVysazhenoChange(rezultat.poroda, it) },
-                        onRemove = { onRemove(rezultat.poroda) },
-                    )
-                }
-            }
+        porody.forEach { poroda ->
+            val rezultat = rezultaty.firstOrNull { it.poroda == poroda }
+            PorodaInputRow(
+                poroda = poroda,
+                rezultat = rezultat,
+                enabled = enabled,
+                onIncrement = { onTap(poroda) },
+                onDecrement = { onUndo(poroda) },
+                onVysazhenoChange = { onVysazhenoChange(poroda, it) },
+                onRemove = { onRemove(poroda) },
+            )
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PorodaChip(poroda: String, count: Int, enabled: Boolean, onTap: () -> Unit, onUndo: () -> Unit) {
-    val hasCount = count > 0
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = if (hasCount) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, if (hasCount) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.combinedClickable(enabled = enabled, onClick = onTap, onLongClick = onUndo),
+private fun PorodaInputRow(
+    poroda: String,
+    rezultat: RezultatEntry?,
+    enabled: Boolean,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit,
+    onVysazhenoChange: (String) -> Unit,
+    onRemove: () -> Unit,
+) {
+    val count = rezultat?.prizhilos ?: 0
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .softCard()
+            .padding(horizontal = Spacing.m, vertical = Spacing.s),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text(poroda, style = MaterialTheme.typography.bodyMedium)
-            if (hasCount) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(poroda, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+
+            OutlinedIconButton(onClick = onDecrement, enabled = enabled && count > 0, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Filled.Remove, contentDescription = "Уменьшить «прижилось», $poroda")
+            }
+            Text(
+                "$count",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = Spacing.s),
+            )
+            OutlinedIconButton(onClick = onIncrement, enabled = enabled, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Filled.Add, contentDescription = "Увеличить «прижилось», $poroda")
+            }
+            if (rezultat != null) {
+                IconButton(onClick = onRemove, enabled = enabled) {
+                    Icon(Icons.Filled.Close, contentDescription = "Убрать породу «$poroda»")
+                }
+            }
+        }
+        if (rezultat != null) {
+            OutlinedTextField(
+                value = rezultat.vysazheno,
+                onValueChange = onVysazhenoChange,
+                label = { Text("Высажено") },
+                singleLine = true,
+                enabled = enabled,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PorodyItogTab(rezultaty: List<RezultatEntry>, multiplier: Double?) {
+    if (rezultaty.isEmpty()) {
+        Text(
+            "Пока нет отмеченных пород — переключитесь на «Ввод»",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        rezultaty.forEach { rezultat ->
+            val shtNaGa = multiplier?.let { rezultat.prizhilos * it }
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(rezultat.poroda, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    " ×$count",
-                    style = MaterialTheme.typography.labelLarge,
+                    shtNaGa?.let { "${formatCompact(it)} шт/га" } ?: "—",
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun RezultatRow(rezultat: RezultatEntry, enabled: Boolean, onVysazhenoChange: (String) -> Unit, onRemove: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(rezultat.poroda, style = MaterialTheme.typography.bodyLarge)
+        val totalPrizhilos = rezultaty.sumOf { it.prizhilos }
+        val totalShtNaGa = multiplier?.let { totalPrizhilos * it }
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Spacing.xs),
+        ) {
+            Text("Всего", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Прижилось: ${rezultat.prizhilos}",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                totalShtNaGa?.let { "${formatCompact(it)} шт/га" } ?: "—",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
             )
-        }
-        OutlinedTextField(
-            value = rezultat.vysazheno,
-            onValueChange = onVysazhenoChange,
-            label = { Text("Высажено") },
-            singleLine = true,
-            enabled = enabled,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier.weight(1f),
-        )
-        IconButton(onClick = onRemove, enabled = enabled) {
-            Icon(Icons.Filled.Close, contentDescription = "Убрать породу")
         }
     }
 }

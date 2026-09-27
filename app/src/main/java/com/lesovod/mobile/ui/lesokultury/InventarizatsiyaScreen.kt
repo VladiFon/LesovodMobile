@@ -28,6 +28,7 @@ import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.StatusChip
 import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.softCard
 
 @Composable
 fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewModel = viewModel()) {
@@ -63,23 +64,29 @@ fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewMo
                 return@Column
             }
 
-            UchastokPicker(uchastki = state.uchastki, selected = state.selectedUchastok, onSelect = viewModel::selectUchastok)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Spacing.m),
+                modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
+            ) {
+                UchastokPicker(uchastki = state.uchastki, selected = state.selectedUchastok, onSelect = viewModel::selectUchastok)
 
-            Text("Год обследования", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            GodPicker(god = state.god, onSelect = viewModel::selectGod)
+                Text("Год обследования", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                GodPicker(god = state.god, onSelect = viewModel::selectGod)
 
-            ProbyList(
-                proby = state.proby,
-                enabled = !state.isSubmitting,
-                onNomerChange = viewModel::onProbaNomerChange,
-                onRazmerChange = viewModel::onProbaRazmerChange,
-                onRemove = viewModel::removeProba,
-                onAdd = viewModel::addProba,
-            )
+                ProbyList(
+                    proby = state.proby,
+                    enabled = !state.isSubmitting,
+                    onNomerChange = viewModel::onProbaNomerChange,
+                    onRazmerChange = viewModel::onProbaRazmerChange,
+                    onRemove = viewModel::removeProba,
+                    onAdd = viewModel::addProba,
+                )
+            }
 
             RezultatySection(
                 porody = state.porody,
                 rezultaty = state.rezultaty,
+                proby = state.proby,
                 enabled = !state.isSubmitting,
                 onTap = viewModel::tapPoroda,
                 onUndo = viewModel::undoPoroda,

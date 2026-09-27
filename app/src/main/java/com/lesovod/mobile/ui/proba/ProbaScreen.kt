@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -27,6 +28,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +43,7 @@ import com.lesovod.mobile.ui.components.PhotoPickerField
 import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.SecondaryButton
 import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.lesokultury.filterUchastki
 import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 import java.util.Calendar
@@ -257,22 +262,46 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
     )
 
     if (state.lesokulturyUchastki.isNotEmpty()) {
+        var uchastokQuery by remember { mutableStateOf("") }
+        val filteredUchastki = remember(state.lesokulturyUchastki, uchastokQuery) {
+            filterUchastki(state.lesokulturyUchastki, uchastokQuery)
+        }
+
         Text(
             "Участок лесных культур (если работа велась на нём)",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 8.dp),
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-        ) {
-            state.lesokulturyUchastki.forEach { uchastok ->
-                FilterChip(
-                    selected = uchastok.id in state.selectedLesokulturyIds,
-                    onClick = { viewModel.toggleLesokulturyUchastok(uchastok.id) },
-                    label = { Text(uchastok.label) },
-                )
+        if (state.lesokulturyUchastki.size > 1) {
+            OutlinedTextField(
+                value = uchastokQuery,
+                onValueChange = { uchastokQuery = it },
+                placeholder = { Text("Поиск: квартал, выдел, порода…") },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (filteredUchastki.isEmpty()) {
+            Text(
+                "Ничего не найдено",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            ) {
+                filteredUchastki.forEach { uchastok ->
+                    FilterChip(
+                        selected = uchastok.id in state.selectedLesokulturyIds,
+                        onClick = { viewModel.toggleLesokulturyUchastok(uchastok.id) },
+                        label = { Text(uchastok.label) },
+                    )
+                }
             }
         }
     }

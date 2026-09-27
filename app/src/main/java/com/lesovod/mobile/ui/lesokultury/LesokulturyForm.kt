@@ -28,11 +28,20 @@ private const val M2_PER_HA = 10_000.0
 /** Предварительный локальный расчёт для экрана — сервер при отправке считает приживаемость сам. */
 data class LesokulturyPreview(val shtNaGa: Double?, val naPloshad: Double?)
 
+/** Сумма размеров всех проб, м² — общий знаменатель для пересчёта на 1 га. */
+fun totalRazmerM2(proby: List<ProbaEntry>): Double =
+    proby.sumOf { it.razmer.trim().replace(',', '.').toDoubleOrNull() ?: 0.0 }
+
+/** Множитель для перевода «штук на пробах» в «штук на 1 га» — null, пока размер проб не заполнен. */
+fun perHectareMultiplier(proby: List<ProbaEntry>): Double? {
+    val total = totalRazmerM2(proby)
+    return if (total > 0.0) M2_PER_HA / total else null
+}
+
 fun computePreview(proby: List<ProbaEntry>, rezultaty: List<RezultatEntry>, ploshadUchastka: Double?): LesokulturyPreview {
-    val totalRazmerM2 = proby.sumOf { it.razmer.trim().replace(',', '.').toDoubleOrNull() ?: 0.0 }
     val totalPrizhilos = rezultaty.sumOf { it.prizhilos }
-    if (totalRazmerM2 <= 0.0) return LesokulturyPreview(null, null)
-    val shtNaGa = totalPrizhilos / (totalRazmerM2 / M2_PER_HA)
+    val multiplier = perHectareMultiplier(proby) ?: return LesokulturyPreview(null, null)
+    val shtNaGa = totalPrizhilos * multiplier
     val naPloshad = ploshadUchastka?.let { shtNaGa * it }
     return LesokulturyPreview(shtNaGa, naPloshad)
 }
