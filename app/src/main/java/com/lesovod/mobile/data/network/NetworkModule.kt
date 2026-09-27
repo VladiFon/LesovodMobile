@@ -38,7 +38,15 @@ object NetworkModule {
         response
     }
 
+    // OkHttp по умолчанию даёт 10 с на каждую фазу — маловато для мобильной связи в
+    // лесничествах (медленная/нестабильная сеть), и SocketTimeoutException попадает в тот же
+    // catch (IOException), что и настоящее отсутствие сети, поэтому "Нет соединения с
+    // интернетом" мог показываться там, где сеть на самом деле есть, просто сервер не успел
+    // ответить за 10 с.
     private val okHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .addInterceptor(authExpiryInterceptor)
         .addInterceptor(loggingInterceptor)
         .build()
