@@ -10,6 +10,7 @@ import com.lesovod.mobile.data.network.dto.AttendanceMarkRequest
 import com.lesovod.mobile.data.network.dto.AttendanceStatus
 import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.DelyankaDto
+import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
@@ -21,7 +22,13 @@ import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
+import com.lesovod.mobile.data.network.dto.TabelDayEntryDto
+import com.lesovod.mobile.data.network.dto.TabelDaySaveRequest
+import com.lesovod.mobile.data.network.dto.TabelEntrySaveDto
+import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
+import com.lesovod.mobile.data.network.dto.VidRabotyCreateRequest
+import com.lesovod.mobile.data.network.dto.VidRabotyDto
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.data.session.SessionManager
@@ -46,6 +53,14 @@ class BotRepository(
 
     suspend fun listDelyanki(kvartal: String): Result<List<DelyankaDto>> = safeCall {
         api.listDelyanki(requireToken(), kvartal)
+    }
+
+    /**
+     * Полный список заведённых делянок (для поиска/выбора в форме отчёта) — тот же публичный
+     * эндпоинт, что использует карта, без привязки к уже известному кварталу.
+     */
+    suspend fun getDelyankiForMap(): Result<List<DelyankaMapRefDto>> = safeCall {
+        api.getDelyankiForMap()
     }
 
     suspend fun getRemaining(kvartal: String, vydel: String, lesoseka: String?): Result<RemainingResponseDto> = safeCall {
@@ -153,9 +168,17 @@ class BotRepository(
         api.listMyNotes(requireToken())
     }
 
-    suspend fun submitGeoNote(lat: Double, lon: Double, noteText: String?, photoPath: String?): Result<Unit> = safeCall {
-        api.createGeoNote(requireToken(), GeoNoteCreateRequest(lat, lon, noteText, photoPath))
-        Unit
+    suspend fun submitGeoNote(lat: Double, lon: Double, noteText: String?, photoPath: String?): Result<Unit> {
+        val telegramId = sessionManager.session.value?.appIdentity
+            ?: return Result.failure(Exception("Не удалось определить учётную запись для отправки — переавторизуйтесь"))
+
+        return safeCall {
+            api.createGeoNote(
+                requireToken(),
+                GeoNoteCreateRequest(telegramId = telegramId, lat = lat, lon = lon, noteText = noteText, photoPath = photoPath),
+            )
+            Unit
+        }
     }
 
     suspend fun submitProba(request: ProbaSaveRequest): Result<ProbaResponse> = safeCall {
@@ -195,6 +218,29 @@ class BotRepository(
     suspend fun markAllNotificationsRead(): Result<Unit> = safeCall {
         api.markAllNotificationsRead(requireToken())
         Unit
+    }
+
+    /** Табель — ручной ввод: строки на день (одна на каждого активного сотрудника). */
+    suspend fun getTabelDay(data: String): Result<List<TabelDayEntryDto>> = safeCall {
+        api.getTabelDay(requireToken(), data)
+    }
+
+    /** Пакетное сохранение табеля на один день (upsert) — возвращает обновлённый список дня. */
+    suspend fun saveTabelDay(data: String, entries: List<TabelEntrySaveDto>): Result<List<TabelDayEntryDto>> = safeCall {
+        api.saveTabelDay(requireToken(), TabelDaySaveRequest(data, entries))
+    }
+
+    suspend fun listVidyRabot(): Result<List<VidRabotyDto>> = safeCall {
+        api.listVidyRabot(requireToken())
+    }
+
+    /** Создаёт новый вид работы (или возвращает уже существующий с таким названием). */
+    suspend fun createVidRaboty(nazvanie: String): Result<VidRabotyDto> = safeCall {
+        api.createVidRaboty(requireToken(), VidRabotyCreateRequest(nazvanie))
+    }
+
+    suspend fun listTabelLesokulturyUchastki(search: String? = null): Result<List<TabelLesokulturyUchastokDto>> = safeCall {
+        api.listTabelLesokulturyUchastki(requireToken(), search?.takeIf { it.isNotBlank() })
     }
 
     private fun requireToken(): String =

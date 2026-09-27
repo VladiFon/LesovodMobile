@@ -38,3 +38,7 @@ val WorkerRole.canViewNotesInbox: Boolean
 /** Инвентаризация / перевод лесных культур — только мастер / пом. лесничего / лесничий. */
 val WorkerRole.canManageLesokultury: Boolean
     get() = isMasterGroup
+
+/** Табель — ручной ввод — только мастер / пом. лесничего / лесничий (см. require_office_or_master в app/routers/tabel.py). */
+val WorkerRole.canManageTabel: Boolean
+    get() = isMasterGroup

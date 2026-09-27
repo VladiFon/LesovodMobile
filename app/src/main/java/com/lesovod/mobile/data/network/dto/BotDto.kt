@@ -94,9 +94,11 @@ data class SentNoteDto(
     @SerialName("created_at") val createdAt: String,
 )
 
-/** Тело POST /api/bot/geo-notes — поля названы явно в задаче (раздел 11 промпта). */
+/** Тело POST /api/bot/geo-notes. telegram_id обязателен на бэкенде (GeoNoteIn в
+ * app/routers/bot.py) — без него FastAPI отвечает 422 ещё до вызова обработчика. */
 @Serializable
 data class GeoNoteCreateRequest(
+    @SerialName("telegram_id") val telegramId: String,
     val lat: Double,
     val lon: Double,
     @SerialName("note_text") val noteText: String? = null,

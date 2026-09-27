@@ -14,15 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Forest
-import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -39,8 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.data.session.canManageLesokultury
-import com.lesovod.mobile.data.session.canSeeStock
-import com.lesovod.mobile.data.session.canUseKubaturnik
+import com.lesovod.mobile.data.session.canManageTabel
 import com.lesovod.mobile.data.session.canViewProba
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.Dimens
@@ -48,9 +46,11 @@ import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 
 /**
- * Экран «Ещё» (docs/SCREENS.md, раздел «Навигация»): четвёртая вкладка нижней навигации —
+ * Экран «Ещё» (docs/SCREENS.md, раздел «Навигация»): вкладка нижней навигации —
  * профиль, уведомления и разделы, доступные не всем ролям (Проба рубок ухода, Лесные
- * культуры, Остатки, Кубатурник), плюс отчёт, у которого больше нет отдельной вкладки.
+ * культуры), плюс отчёт, у которого больше нет отдельной вкладки. Остатки и Кубатурник
+ * теперь свои вкладки нижней навигации (см. [com.lesovod.mobile.ui.navigation.bottomNavItems])
+ * и здесь не дублируются.
  */
 @Composable
 fun MoreScreen(
@@ -60,8 +60,7 @@ fun MoreScreen(
     onOpenProba: () -> Unit,
     onOpenInventarizatsiya: () -> Unit,
     onOpenPerevod: () -> Unit,
-    onOpenStock: () -> Unit,
-    onOpenKubaturnik: () -> Unit,
+    onOpenTabel: () -> Unit,
 ) {
     val context = LocalContext.current
     val session by SessionManager.getInstance(context).session.collectAsState()
@@ -95,11 +94,8 @@ fun MoreScreen(
                 MoreRow(icon = Icons.Filled.Forest, label = "Инвентаризация лесных культур", onClick = onOpenInventarizatsiya)
                 MoreRow(icon = Icons.Filled.SwapHoriz, label = "Перевод лесных культур", onClick = onOpenPerevod)
             }
-            if (role?.canSeeStock == true) {
-                MoreRow(icon = Icons.Filled.Inventory2, label = "Остатки по делянкам", onClick = onOpenStock)
-            }
-            if (role?.canUseKubaturnik == true) {
-                MoreRow(icon = Icons.Filled.Calculate, label = "Кубатурник", onClick = onOpenKubaturnik)
+            if (role?.canManageTabel == true) {
+                MoreRow(icon = Icons.Filled.EventNote, label = "Табель — ручной ввод", onClick = onOpenTabel)
             }
 
             Spacer(Modifier.height(Spacing.xl))

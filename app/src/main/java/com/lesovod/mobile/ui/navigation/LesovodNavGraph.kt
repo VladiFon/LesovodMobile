@@ -68,6 +68,7 @@ import com.lesovod.mobile.ui.screens.RegistrationScreen
 import com.lesovod.mobile.ui.screens.StockScreen
 import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
+import com.lesovod.mobile.ui.tabel.TabelScreen
 import com.lesovod.mobile.ui.trelevka.TrelevkaScreen
 
 @Composable
@@ -155,10 +156,12 @@ fun LesovodNavGraph() {
                     onOpenProba = { navController.navigate(Screen.Proba.route) },
                     onOpenInventarizatsiya = { navController.navigate(Screen.Inventarizatsiya.route) },
                     onOpenPerevod = { navController.navigate(Screen.Perevod.route) },
-                    onOpenStock = { navController.navigate(Screen.Stock.route) },
-                    onOpenKubaturnik = { navController.navigate(Screen.Kubaturnik.route) },
+                    onOpenTabel = { navController.navigate(Screen.Tabel.route) },
                 )
             }
+        }
+        composable(Screen.Tabel.route) {
+            TabelScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Notifications.route) {
             NotificationsScreen(
@@ -191,7 +194,7 @@ private fun MainScaffold(
     val pending by queueManager.pending.collectAsState()
     val session by SessionManager.getInstance(context).session.collectAsState()
     val role = session?.role
-    val navItems = remember { bottomNavItems() }
+    val navItems = remember(role) { bottomNavItems(role) }
     val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
     val unreadCount by badgeManager.unreadCount.collectAsState()
     LaunchedEffect(Unit) { badgeManager.refresh() }

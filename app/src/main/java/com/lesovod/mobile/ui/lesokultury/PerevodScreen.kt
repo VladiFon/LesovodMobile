@@ -29,6 +29,7 @@ import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.StatusChip
 import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.softCard
 
 @Composable
 fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel()) {
@@ -64,23 +65,29 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
                 return@Column
             }
 
-            UchastokPicker(uchastki = state.uchastki, selected = state.selectedUchastok, onSelect = viewModel::selectUchastok)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Spacing.m),
+                modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
+            ) {
+                UchastokPicker(uchastki = state.uchastki, selected = state.selectedUchastok, onSelect = viewModel::selectUchastok)
 
-            Text("Год обследования", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            GodPicker(god = state.god, onSelect = viewModel::selectGod)
+                Text("Год обследования", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                GodPicker(god = state.god, onSelect = viewModel::selectGod)
 
-            ProbyList(
-                proby = state.proby,
-                enabled = !state.isSubmitting,
-                onNomerChange = viewModel::onProbaNomerChange,
-                onRazmerChange = viewModel::onProbaRazmerChange,
-                onRemove = viewModel::removeProba,
-                onAdd = viewModel::addProba,
-            )
+                ProbyList(
+                    proby = state.proby,
+                    enabled = !state.isSubmitting,
+                    onNomerChange = viewModel::onProbaNomerChange,
+                    onRazmerChange = viewModel::onProbaRazmerChange,
+                    onRemove = viewModel::removeProba,
+                    onAdd = viewModel::addProba,
+                )
+            }
 
             RezultatySection(
                 porody = state.porody,
                 rezultaty = state.rezultaty,
+                proby = state.proby,
                 enabled = !state.isSubmitting,
                 onTap = viewModel::tapPoroda,
                 onUndo = viewModel::undoPoroda,
@@ -90,22 +97,27 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
 
             PreviewCard(preview = state.preview)
 
-            Text("Решение", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PerevodReshenie.entries.forEach { option ->
-                    FilterChip(
-                        selected = state.reshenie == option,
-                        onClick = { viewModel.selectReshenie(option) },
-                        label = { Text(option.displayName) },
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Spacing.s),
+                modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
+            ) {
+                Text("Решение", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PerevodReshenie.entries.forEach { option ->
+                        FilterChip(
+                            selected = state.reshenie == option,
+                            onClick = { viewModel.selectReshenie(option) },
+                            label = { Text(option.displayName) },
+                        )
+                    }
+                }
+                if (state.reshenie == PerevodReshenie.PEREVESTI) {
+                    Text(
+                        "«Перевести» сразу меняет статус участка на сервере, без дополнительного подтверждения офисом",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
-            }
-            if (state.reshenie == PerevodReshenie.PEREVESTI) {
-                Text(
-                    "«Перевести» сразу меняет статус участка на сервере, без дополнительного подтверждения офисом",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
             }
 
             if (state.error != null) {

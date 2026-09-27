@@ -6,9 +6,11 @@ import com.lesovod.mobile.data.local.KubaturnikBatchStore
 import com.lesovod.mobile.data.local.KubaturnikBlock
 import com.lesovod.mobile.data.local.KubaturnikCalculation
 import com.lesovod.mobile.data.local.KubaturnikCountEntry
+import com.lesovod.mobile.data.local.KubaturnikSettingsStore
 import com.lesovod.mobile.data.local.KubaturnikSnapshot
 import com.lesovod.mobile.data.local.KubaturnikTable
 import com.lesovod.mobile.data.local.KubaturnikTableLoader
+import com.lesovod.mobile.data.local.TilesSide
 import com.lesovod.mobile.data.local.diameterButtons
 import com.lesovod.mobile.data.local.volumeFor
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +56,8 @@ data class KubaturnikUiState(
     val outOfRangeLengthMessage: String? = null,
     /** Ранее сохранённые расчёты («Новая партия» архивирует сюда текущий, а не стирает его). */
     val calculations: List<KubaturnikCalculation> = emptyList(),
+    /** Сторона плиток на вкладке «Счёт» — настройка экрана, не часть партии. */
+    val tilesSide: TilesSide = TilesSide.LEFT,
 ) {
     val lengthChosen: Boolean get() = selectedBlockId != null && selectedLengthIndex >= 0
 
@@ -126,18 +130,25 @@ data class KubaturnikUiState(
 
 class KubaturnikViewModel(application: Application) : AndroidViewModel(application) {
     private val store = KubaturnikBatchStore(application)
+    private val settingsStore = KubaturnikSettingsStore(application)
 
     private val _uiState = MutableStateFlow(KubaturnikUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
+        val tilesSide = settingsStore.tilesSide
         val table = runCatching { KubaturnikTableLoader.load(application) }
         table.onFailure {
-            _uiState.value = _uiState.value.copy(loading = false, error = it.message ?: "Не удалось загрузить таблицу ГОСТ 2708-75")
+            _uiState.value = _uiState.value.copy(
+                loading = false,
+                error = it.message ?: "Не удалось загрузить таблицу ГОСТ 2708-75",
+                tilesSide = tilesSide,
+            )
         }
         table.onSuccess { loaded ->
             val snapshot = store.loadDraft()
-            _uiState.value = buildState(loaded, snapshot).copy(calculations = store.listCalculations())
+            _uiState.value = buildState(loaded, snapshot)
+                .copy(calculations = store.listCalculations(), tilesSide = tilesSide)
         }
     }
 
@@ -206,6 +217,13 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
         persist()
     }
 
+    /** Переключатель «плитки слева/справа» — только вид экрана, счётчики партии не трогает. */
+    fun toggleTilesSide() {
+        val next = if (_uiState.value.tilesSide == TilesSide.LEFT) TilesSide.RIGHT else TilesSide.LEFT
+        settingsStore.tilesSide = next
+        _uiState.value = _uiState.value.copy(tilesSide = next)
+    }
+
     fun showAddSortDialog(show: Boolean) {
         _uiState.value = _uiState.value.copy(showAddSortDialog = show)
     }
@@ -250,7 +268,10 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
         bySort[state.destination] = byDest
         counts[state.activeSort] = bySort
 
-        _uiState.value = state.copy(counts = counts)
+        // Счёт «последней» плитки упал до 0 — сбрасываем «последний тап» (панель покажет «—»).
+        val lastTap = if (newCount <= 0 && state.lastTap?.first == diameter) null else state.lastTap
+
+        _uiState.value = state.copy(counts = counts, lastTap = lastTap)
         persist()
     }
 
@@ -271,7 +292,12 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
             calculations = store.listCalculations()
         }
         store.clearDraft()
-        _uiState.value = KubaturnikUiState(loading = false, table = state.table, calculations = calculations)
+        _uiState.value = KubaturnikUiState(
+            loading = false,
+            table = state.table,
+            calculations = calculations,
+            tilesSide = state.tilesSide,
+        )
     }
 
     fun deleteCalculation(id: Int) {
