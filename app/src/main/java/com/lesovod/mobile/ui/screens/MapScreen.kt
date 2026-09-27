@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -107,7 +108,13 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
     }
 
     var layersOpen by remember { mutableStateOf(false) }
+    var searchOpen by remember { mutableStateOf(false) }
     var cardHeightPx by remember { mutableStateOf(0) }
+
+    // Нашли результат поиска — прячем панель поиска, чтобы она не закрывала место, куда перелетели.
+    LaunchedEffect(state.flyToToken) {
+        if (state.flyToToken > 0) searchOpen = false
+    }
 
     val cardVisible = state.cardOpen
     // первый тап только выделяет участок — внизу подсказка, что второй тап откроет таксацию
@@ -133,11 +140,12 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
     }
 
     BackHandler(
-        enabled = cardVisible || layersOpen || state.selection != null || state.noteDraft != null || state.selectedGeoNote != null,
+        enabled = cardVisible || layersOpen || searchOpen || state.selection != null || state.noteDraft != null || state.selectedGeoNote != null,
     ) {
         when {
             state.noteDraft != null -> viewModel.dismissNoteDraft()
             state.selectedGeoNote != null -> viewModel.dismissGeoNotePopup()
+            searchOpen -> searchOpen = false
             layersOpen -> layersOpen = false
             cardVisible -> viewModel.closeCard()
             else -> viewModel.clearSelection()
@@ -162,6 +170,8 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
             onMapLongPress = { lat, lon -> layersOpen = false; viewModel.startNoteDraft(lat, lon) },
             onViewportChanged = viewModel::onViewportChanged,
             initialCamera = remember { viewModel.camera },
+            flyToCamera = state.flyToCamera,
+            flyToToken = state.flyToToken,
             controlsTopPadding = topInset + 68.dp,
             bottomInset = bottomInset,
             modifier = Modifier.fillMaxSize(),
@@ -183,7 +193,20 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
                     modifier = Modifier.weight(1f),
                 )
                 Surface(
-                    onClick = { layersOpen = !layersOpen },
+                    onClick = { searchOpen = !searchOpen; layersOpen = false },
+                    shape = CircleShape,
+                    color = if (searchOpen) ForestPrimary.copy(alpha = 0.92f) else ForestSurface.copy(alpha = 0.88f),
+                    contentColor = if (searchOpen) MaterialTheme.colorScheme.onPrimary else ForestPrimary,
+                    border = BorderStroke(1.dp, ForestOutline.copy(alpha = 0.7f)),
+                    shadowElevation = 3.dp,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .semantics { contentDescription = "Поиск по кварталу и выделу" },
+                ) {
+                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Search, contentDescription = null) }
+                }
+                Surface(
+                    onClick = { layersOpen = !layersOpen; searchOpen = false },
                     shape = CircleShape,
                     color = if (layersOpen) ForestPrimary.copy(alpha = 0.92f) else ForestSurface.copy(alpha = 0.88f),
                     contentColor = if (layersOpen) MaterialTheme.colorScheme.onPrimary else ForestPrimary,
@@ -195,6 +218,22 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
                 ) {
                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Layers, contentDescription = null) }
                 }
+            }
+
+            AnimatedVisibility(
+                visible = searchOpen,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+            ) {
+                VydelSearchPanel(
+                    kvartal = state.vydelSearchKvartal,
+                    vydel = state.vydelSearchVydel,
+                    onKvartalChange = viewModel::onVydelSearchKvartalChange,
+                    onVydelChange = viewModel::onVydelSearchVydelChange,
+                    onSearch = viewModel::searchVydel,
+                    isSearching = state.isSearchingVydel,
+                    error = state.vydelSearchError,
+                )
             }
 
             AnimatedVisibility(
@@ -460,6 +499,63 @@ private fun LesnichestvoPill(
                         expanded = false
                     },
                 )
+            }
+        }
+    }
+}
+
+/** Поиск делянки/квартала/выдела — по успеху карта сама перелетает к найденному месту (см. ForestMapView.flyToCamera). */
+@Composable
+private fun VydelSearchPanel(
+    kvartal: String,
+    vydel: String,
+    onKvartalChange: (String) -> Unit,
+    onVydelChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    isSearching: Boolean,
+    error: String?,
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = ForestSurface.copy(alpha = 0.94f),
+        border = BorderStroke(1.dp, ForestOutline.copy(alpha = 0.7f)),
+        shadowElevation = 4.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = kvartal,
+                    onValueChange = onKvartalChange,
+                    label = { Text("Квартал") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ForestPrimary),
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = vydel,
+                    onValueChange = onVydelChange,
+                    label = { Text("Выдел") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ForestPrimary),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Button(
+                onClick = onSearch,
+                enabled = !isSearching && kvartal.isNotBlank() && vydel.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = ForestPrimary),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (isSearching) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                } else {
+                    Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("Найти", modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+            if (error != null) {
+                Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

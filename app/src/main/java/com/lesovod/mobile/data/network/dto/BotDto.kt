@@ -13,6 +13,7 @@ data class RawReportRequest(
     val opisanie: String? = null,
     val lat: Double? = null,
     val lon: Double? = null,
+    @SerialName("delyanka_item_id") val delyankaItemId: Int? = null,
 )
 
 @Serializable
@@ -31,6 +32,22 @@ data class PhotoUploadResponseDto(
 data class DelyankaDto(
     val vydel: String,
     @SerialName("lesoseka_nomer") val lesosekaNomer: String? = null,
+)
+
+/**
+ * Результат поиска делянки по кварталу/выделу (GET /api/delyanki/by-location) — используется,
+ * чтобы рабочий мог привязать отчёт/трелёвку к конкретной delyanka_item, а не подбирать
+ * её числовой id вручную (см. TrelevkaRequest.delyankaItemId, RawReportRequest.delyankaItemId).
+ */
+@Serializable
+data class DelyankaLocationMatchDto(
+    @SerialName("item_id") val itemId: Int,
+    @SerialName("delyanka_id") val delyankaId: Int,
+    val nazvanie: String? = null,
+    @SerialName("delyanka_status") val delyankaStatus: String? = null,
+    @SerialName("status_rabot") val statusRabot: String? = null,
+    @SerialName("ispolnitel_fio") val ispolnitelFio: String? = null,
+    @SerialName("data_vypolneniya") val dataVypolneniya: String? = null,
 )
 
 @Serializable

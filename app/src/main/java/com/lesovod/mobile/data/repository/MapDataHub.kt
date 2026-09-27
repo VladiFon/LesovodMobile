@@ -4,6 +4,7 @@ import android.content.Context
 import com.lesovod.mobile.data.local.MapCache
 import com.lesovod.mobile.data.local.MapPrefs
 import com.lesovod.mobile.data.network.NetworkModule
+import com.lesovod.mobile.data.session.SessionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +39,7 @@ data class DownloadState(
  */
 class MapDataHub private constructor(context: Context) {
     val cache = MapCache(context)
-    val repository = MapRepository(NetworkModule.api, cache)
+    val repository = MapRepository(NetworkModule.api, cache, SessionManager.getInstance(context))
     val prefs = MapPrefs(context)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

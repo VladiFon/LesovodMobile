@@ -4,12 +4,14 @@ import android.content.Context
 import android.net.Uri
 import com.lesovod.mobile.data.network.ApiService
 import com.lesovod.mobile.data.network.ConnectivityException
+import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.buildPhotoPart
 import com.lesovod.mobile.data.network.dto.AttendanceMarkDto
 import com.lesovod.mobile.data.network.dto.AttendanceMarkRequest
 import com.lesovod.mobile.data.network.dto.AttendanceStatus
 import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.DelyankaDto
+import com.lesovod.mobile.data.network.dto.DelyankaLocationMatchDto
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
@@ -32,6 +34,7 @@ import com.lesovod.mobile.ui.proba.LesokulturyUchastok
 import com.lesovod.mobile.ui.proba.toLesokulturyUchastok
 import java.io.File
 import java.io.IOException
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.JsonElement
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -46,6 +49,11 @@ class BotRepository(
 
     suspend fun listDelyanki(kvartal: String): Result<List<DelyankaDto>> = safeCall {
         api.listDelyanki(requireToken(), kvartal)
+    }
+
+    /** Поиск делянки по кварталу/выделу — см. ApiService.getDelyankiByLocation. */
+    suspend fun findDelyankaByLocation(kvartal: String, vydel: String): Result<List<DelyankaLocationMatchDto>> = safeCall {
+        api.getDelyankiByLocation(kvartal, vydel)
     }
 
     suspend fun getRemaining(kvartal: String, vydel: String, lesoseka: String?): Result<RemainingResponseDto> = safeCall {
@@ -75,6 +83,7 @@ class BotRepository(
         photoPath: String?,
         lat: Double? = null,
         lon: Double? = null,
+        delyankaItemId: Int? = null,
     ): Result<Unit> {
         val telegramId = sessionManager.session.value?.appIdentity
             ?: return Result.failure(Exception("Не удалось определить учётную запись для отправки — переавторизуйтесь"))
@@ -91,6 +100,7 @@ class BotRepository(
                     opisanie = opisanie?.takeIf { it.isNotBlank() },
                     lat = lat,
                     lon = lon,
+                    delyankaItemId = delyankaItemId,
                 ),
             )
             Unit
@@ -120,7 +130,8 @@ class BotRepository(
     }
 
     suspend fun getLatestAttendance(): Result<AttendanceMarkDto?> = safeCall {
-        api.getLatestAttendanceMark(requireToken())
+        val raw = api.getLatestAttendanceMark(requireToken()).use { it.string() }.trim()
+        if (raw.isEmpty() || raw == "null") null else NetworkModule.json.decodeFromString<AttendanceMarkDto>(raw)
     }
 
     suspend fun listWorkPlan(): Result<List<WorkPlanItemDto>> = safeCall {
@@ -206,9 +217,16 @@ class BotRepository(
         } catch (e: HttpException) {
             Result.failure(Exception(extractErrorMessage(e, "Ошибка сервера")))
         } catch (e: IOException) {
-            // Сбой на уровне соединения (нет сети, DNS, таймаут), а не ответ сервера с ошибкой —
-            // по этому типу вызывающая сторона решает поставить действие в офлайн-очередь.
-            Result.failure(ConnectivityException("Нет соединения с интернетом", e))
+            // IOException прилетает и при настоящем отсутствии сети, и при прочих сетевых сбоях
+            // (таймаут, TLS, временная недоступность сервера) — раньше все они одинаково
+            // подписывались как «нет интернета», хотя соединение у пользователя было. Отличаем
+            // по факту наличия сети на устройстве: только его отсутствие ставит действие в
+            // офлайн-очередь, остальное — обычная ошибка запроса.
+            if (sessionManager.hasActiveNetwork()) {
+                Result.failure(Exception(e.message ?: "Не удалось связаться с сервером"))
+            } else {
+                Result.failure(ConnectivityException("Нет соединения с интернетом", e))
+            }
         } catch (e: Exception) {
             Result.failure(Exception(e.message ?: "Не удалось связаться с сервером"))
         }

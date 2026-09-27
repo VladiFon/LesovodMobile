@@ -3,7 +3,9 @@ package com.lesovod.mobile.data.repository
 import com.lesovod.mobile.data.local.MapCache
 import com.lesovod.mobile.data.network.ApiService
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
+import com.lesovod.mobile.data.network.dto.VydelLocationDto
 import com.lesovod.mobile.data.network.extractErrorMessage
+import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.map.GeoJsonStreamParser
 import com.lesovod.mobile.ui.map.GeoNoteMarker
 import com.lesovod.mobile.ui.map.MapShape
@@ -31,11 +33,18 @@ enum class CellTier(val degrees: Double, val serverZoom: Double, val tag: String
  * Слои карты читаются с диска, а сеть нужна только когда файл устарел (см. [cached]):
  * карта открывается сразу и работает без интернета там, где данные уже скачаны.
  */
-class MapRepository(private val api: ApiService, private val cache: MapCache) {
+class MapRepository(
+    private val api: ApiService,
+    private val cache: MapCache,
+    private val sessionManager: SessionManager,
+) {
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }
+
+    private fun requireToken(): String =
+        sessionManager.session.value?.token?.let { "Bearer $it" } ?: error("Сессия истекла, войдите заново")
 
     /** Данные старше этой отметки считаются устаревшими независимо от TTL. */
     @Volatile
@@ -120,10 +129,26 @@ class MapRepository(private val api: ApiService, private val cache: MapCache) {
         key = "geo_notes",
         ttlMs = GEO_NOTES_TTL_MS,
         force = force,
-        fetch = { api.getGeoNotesGeoJson().features.mapNotNull { it.toGeoNoteMarker() } },
+        fetch = { api.getGeoNotesGeoJson(requireToken()).features.mapNotNull { it.toGeoNoteMarker() } },
         decode = { json.decodeFromString<List<GeoNoteMarker>>(it.readBytes().decodeToString()) },
         encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
     )
+
+    /**
+     * Координаты выдела по кварталу/выделу — для поиска на карте (см. MapViewModel.searchVydel).
+     * Не кэшируется: это разовое действие по запросу пользователя, а не слой карты.
+     */
+    suspend fun findVydelLocation(lesnichestvoNum: Int, kvartal: String, vydel: String): Result<VydelLocationDto?> =
+        withContext(Dispatchers.IO) {
+            try {
+                val dto = api.getDelyankaLocation(lesnichestvoNum.toString(), kvartal, vydel)
+                Result.success(if (dto.found) dto else null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Result.failure(Exception(describe(e)))
+            }
+        }
 
     /** Данные конкретной делянки: {delyanka, items[]}. */
     suspend fun getDelyanka(id: Int): Result<JsonObject> = cached(

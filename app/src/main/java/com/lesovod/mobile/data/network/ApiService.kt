@@ -5,6 +5,7 @@ import com.lesovod.mobile.data.network.dto.AttendanceMarkRequest
 import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.CompleteWorkPlanResponseDto
 import com.lesovod.mobile.data.network.dto.DelyankaDto
+import com.lesovod.mobile.data.network.dto.DelyankaLocationMatchDto
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.GeoJsonFeatureCollection
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
@@ -22,6 +23,7 @@ import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
+import com.lesovod.mobile.data.network.dto.VydelLocationDto
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
 import com.lesovod.mobile.data.network.dto.WorkerLoginRequest
 import com.lesovod.mobile.ui.proba.LesokulturyUchastokDto
@@ -86,10 +88,13 @@ interface ApiService {
         @Body body: AttendanceMarkRequest,
     ): ResponseBody
 
+    // Возвращает "null" как валидное тело ответа, когда отметок ещё не было — тип-конвертер
+    // на базе kotlinx.serialization не различает Kotlin-nullability у стёртого Java Type
+    // suspend-функции и падает на литерале null, поэтому парсим тело вручную (см. BotRepository).
     @GET("api/bot/attendance/latest")
     suspend fun getLatestAttendanceMark(
         @Header("Authorization") bearerToken: String,
-    ): AttendanceMarkDto?
+    ): ResponseBody
 
     @GET("api/bot/work-plan")
     suspend fun listWorkPlan(
@@ -135,9 +140,13 @@ interface ApiService {
         @Body body: GeoNoteCreateRequest,
     ): ResponseBody
 
-    // Публичный, как остальные слои карты (kvartaly/vydela/import-layers) — без Authorization.
-    @GET("api/map/geo-notes.geojson")
-    suspend fun getGeoNotesGeoJson(): GeoJsonFeatureCollection
+    // НЕ api/map/geo-notes.geojson — тот защищён общим сервисным токеном QGIS-моста
+    // (?token=...), которого у мобильного клиента нет и быть не должно. Здесь —
+    // отдельный эндпоинт с обычной Bearer-авторизацией рабочего (см. app/routers/bot.py).
+    @GET("api/bot/geo-notes.geojson")
+    suspend fun getGeoNotesGeoJson(
+        @Header("Authorization") bearerToken: String,
+    ): GeoJsonFeatureCollection
 
     @POST("api/uhody/proby")
     suspend fun createProba(
@@ -241,10 +250,30 @@ interface ApiService {
     @GET("api/delyanki/{id}")
     suspend fun getDelyanka(@Path("id") id: Int): JsonObject
 
+    // Поиск делянки (delyanka_item) по кварталу/выделу — рабочий находит её id так,
+    // не подбирая число вручную (см. TrelevkaScreen/WorkReportScreen). Без Authorization,
+    // как и остальные /api/delyanki/* — эндпоинт публичный (см. getDelyankiForMap выше).
+    @GET("api/delyanki/by-location")
+    suspend fun getDelyankiByLocation(
+        @Query("kvartal") kvartal: String,
+        @Query("vydel") vydel: String,
+        @Query("lesnichestvo") lesnichestvo: String? = null,
+    ): List<DelyankaLocationMatchDto>
+
     @GET("api/taxation/vydel")
     suspend fun getVydelCard(
         @Query("kvartal") kvartal: String,
         @Query("vydel") vydel: String,
         @Query("lesnichestvo") lesnichestvo: String? = null,
     ): JsonObject
+
+    // Координаты выдела по кварталу/выделу — чтобы карта могла перелететь к найденному участку
+    // (поиск делянки/квартала/выдела на экране "Карта"). Без Authorization, как и остальные
+    // /api/map/* и /api/delyanki/* эндпоинты чтения.
+    @GET("api/map/delyanka-location")
+    suspend fun getDelyankaLocation(
+        @Query("lesnichestvo_num") lesnichestvoNum: String,
+        @Query("kvartal") kvartal: String,
+        @Query("vydel") vydel: String,
+    ): VydelLocationDto
 }

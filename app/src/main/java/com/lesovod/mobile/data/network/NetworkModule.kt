@@ -14,7 +14,7 @@ import com.lesovod.mobile.data.session.SessionManager
 object NetworkModule {
     private const val BASE_URL = "https://lesovodapipom.store/"
 
-    private val json = Json {
+    val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }

@@ -102,6 +102,8 @@ fun ForestMapView(
     onMapLongPress: (lat: Double, lon: Double) -> Unit,
     onViewportChanged: (bbox: String, zoom: Double, latitude: Double, longitude: Double) -> Unit,
     initialCamera: MapCamera?,
+    flyToCamera: MapCamera?,
+    flyToToken: Int,
     controlsTopPadding: Dp,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
@@ -165,6 +167,17 @@ fun ForestMapView(
             )
             if (next != hud) hud = next
         }
+    }
+
+    // Результат поиска делянки/квартала/выдела — перелетаем на найденную точку. Ключ по токену
+    // (не по камере), чтобы повторный поиск того же места тоже срабатывал.
+    LaunchedEffect(flyToToken) {
+        if (flyToToken == 0) return@LaunchedEffect
+        val mapView = mapViewState.value ?: return@LaunchedEffect
+        val camera = flyToCamera ?: return@LaunchedEffect
+        mapView.controller.setZoom(camera.zoom)
+        mapView.controller.animateTo(GeoPoint(camera.latitude, camera.longitude))
+        reportViewport(mapView)
     }
 
     Box(modifier = modifier) {

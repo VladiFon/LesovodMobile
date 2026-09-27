@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.session.canReportBreakdown
 import com.lesovod.mobile.data.session.canTrelevka
+import com.lesovod.mobile.ui.components.DelyankaSearchField
 import com.lesovod.mobile.ui.components.PhotoPickerField
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.bot.WorkReportViewModel
@@ -191,6 +192,27 @@ fun WorkReportScreen(
                         }
                     }
                 }
+
+                Text(
+                    "Привязать к делянке (необязательно)",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                DelyankaSearchField(
+                    kvartal = state.delyankaSearchKvartal,
+                    vydel = state.delyankaSearchVydel,
+                    onKvartalChange = viewModel::onDelyankaSearchKvartalChange,
+                    onVydelChange = viewModel::onDelyankaSearchVydelChange,
+                    onSearch = viewModel::searchDelyanka,
+                    isSearching = state.isSearchingDelyanka,
+                    matches = state.delyankaMatches,
+                    selected = state.selectedDelyanka,
+                    onSelect = viewModel::selectDelyanka,
+                    onClearSelection = viewModel::clearSelectedDelyanka,
+                    searchError = state.delyankaSearchError,
+                    enabled = !state.isSubmitting,
+                )
 
                 OutlinedTextField(
                     value = state.opisanie,

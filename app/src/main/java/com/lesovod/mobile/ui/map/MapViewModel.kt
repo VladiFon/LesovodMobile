@@ -76,6 +76,14 @@ data class MapUiState(
     val noteDraft: GeoNoteDraft? = null,
     /** Метка, по которой тапнули — маленькая карточка с текстом. */
     val selectedGeoNote: GeoNoteMarker? = null,
+    /** Поиск делянки/квартала/выдела на карте. */
+    val vydelSearchKvartal: String = "",
+    val vydelSearchVydel: String = "",
+    val isSearchingVydel: Boolean = false,
+    val vydelSearchError: String? = null,
+    /** Куда перелететь по результату поиска — растёт при каждом новом попадании, даже повторном. */
+    val flyToCamera: MapCamera? = null,
+    val flyToToken: Int = 0,
 )
 
 /** Выделы показываем только с масштаба, где их можно разглядеть: на общем плане хватает кварталов. */
@@ -188,6 +196,47 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissGeoNotePopup() {
         _uiState.value = _uiState.value.copy(selectedGeoNote = null)
+    }
+
+    fun onVydelSearchKvartalChange(value: String) {
+        _uiState.value = _uiState.value.copy(vydelSearchKvartal = value, vydelSearchError = null)
+    }
+
+    fun onVydelSearchVydelChange(value: String) {
+        _uiState.value = _uiState.value.copy(vydelSearchVydel = value, vydelSearchError = null)
+    }
+
+    /** Поиск делянки по кварталу/выделу — карта перелетает к найденному выделу и подсвечивает его. */
+    fun searchVydel() {
+        val state = _uiState.value
+        val lesnichestvoName = state.selectedLesnichestvo ?: return
+        val num = state.lesnichestva[lesnichestvoName] ?: return
+        val kvartal = state.vydelSearchKvartal.trim()
+        val vydel = state.vydelSearchVydel.trim()
+        if (kvartal.isEmpty() || vydel.isEmpty()) return
+
+        _uiState.value = state.copy(isSearchingVydel = true, vydelSearchError = null)
+        viewModelScope.launch {
+            val result = repository.findVydelLocation(num, kvartal, vydel)
+            _uiState.value = result.fold(
+                onSuccess = { location ->
+                    if (location?.lat != null && location.lon != null) {
+                        _uiState.value.copy(
+                            isSearchingVydel = false,
+                            flyToCamera = MapCamera(location.lat, location.lon, 16.0),
+                            flyToToken = _uiState.value.flyToToken + 1,
+                            selection = MapSelection(kvartal, vydel, ShapeKind.VYDEL),
+                            cardOpen = false,
+                        )
+                    } else {
+                        _uiState.value.copy(isSearchingVydel = false, vydelSearchError = "Не найдено — проверьте квартал и выдел")
+                    }
+                },
+                onFailure = {
+                    _uiState.value.copy(isSearchingVydel = false, vydelSearchError = it.message ?: "Не удалось найти")
+                },
+            )
+        }
     }
 
     fun loadLesnichestva() {

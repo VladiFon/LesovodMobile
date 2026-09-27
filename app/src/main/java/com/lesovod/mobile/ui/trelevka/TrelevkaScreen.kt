@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.ui.components.DelyankaSearchField
 import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.theme.ForestSuccess
 
@@ -98,15 +99,19 @@ fun TrelevkaScreen(onBack: () -> Unit, viewModel: TrelevkaViewModel = viewModel(
                     }
                 }
             } else {
-                OutlinedTextField(
-                    value = state.delyankaItemId,
-                    onValueChange = viewModel::onDelyankaItemIdChange,
-                    label = { Text("ID делянки (необязательно)") },
-                    singleLine = true,
+                DelyankaSearchField(
+                    kvartal = state.delyankaKvartal,
+                    vydel = state.delyankaVydel,
+                    onKvartalChange = viewModel::onDelyankaKvartalChange,
+                    onVydelChange = viewModel::onDelyankaVydelChange,
+                    onSearch = viewModel::searchDelyanka,
+                    isSearching = state.isSearchingDelyanka,
+                    matches = state.delyankaMatches,
+                    selected = state.selectedDelyanka,
+                    onSelect = viewModel::selectDelyanka,
+                    onClearSelection = viewModel::clearSelectedDelyanka,
+                    searchError = state.delyankaSearchError,
                     enabled = !state.isSubmitting,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = state.otkuda,

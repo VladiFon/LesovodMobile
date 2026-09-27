@@ -1,6 +1,8 @@
 package com.lesovod.mobile.data.session
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.core.content.edit
 import com.lesovod.mobile.data.network.dto.LoginResponseDto
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +18,8 @@ data class WorkerSession(
 )
 
 class SessionManager private constructor(context: Context) {
-    private val prefs = context.applicationContext
+    private val appContext = context.applicationContext
+    private val prefs = appContext
         .getSharedPreferences("lesovod_session", Context.MODE_PRIVATE)
 
     private val _session = MutableStateFlow(readFromPrefs())
@@ -58,6 +61,19 @@ class SessionManager private constructor(context: Context) {
             role = WorkerRole.fromDolzhnost(dolzhnost),
             appIdentity = appIdentity,
         )
+    }
+
+    /**
+     * Есть ли у устройства действующее сетевое подключение — используется, чтобы отличить
+     * настоящее «нет интернета» от прочих сбоев запроса (таймаут, TLS, недоступен конкретно
+     * наш сервер), которые раньше все подряд подписывались как «нет соединения с интернетом».
+     */
+    fun hasActiveNetwork(): Boolean {
+        val connectivityManager = appContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return true
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     fun clear() {

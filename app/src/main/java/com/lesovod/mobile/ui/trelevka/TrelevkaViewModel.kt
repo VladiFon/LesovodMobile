@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
+import com.lesovod.mobile.data.network.dto.DelyankaLocationMatchDto
 import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
@@ -13,10 +14,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class TrelevkaUiState(
-    val delyankaItemId: String = "",
     val otkuda: String = "",
     val kuda: String = "",
     val obyom: String = "",
+    val delyankaKvartal: String = "",
+    val delyankaVydel: String = "",
+    val isSearchingDelyanka: Boolean = false,
+    val delyankaSearchError: String? = null,
+    val delyankaMatches: List<DelyankaLocationMatchDto> = emptyList(),
+    val selectedDelyanka: DelyankaLocationMatchDto? = null,
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val submitted: Boolean = false,
@@ -31,8 +37,44 @@ class TrelevkaViewModel(application: Application) : AndroidViewModel(application
     private val _uiState = MutableStateFlow(TrelevkaUiState())
     val uiState = _uiState.asStateFlow()
 
-    fun onDelyankaItemIdChange(value: String) {
-        _uiState.value = _uiState.value.copy(delyankaItemId = value, error = null)
+    fun onDelyankaKvartalChange(value: String) {
+        _uiState.value = _uiState.value.copy(delyankaKvartal = value, delyankaSearchError = null)
+    }
+
+    fun onDelyankaVydelChange(value: String) {
+        _uiState.value = _uiState.value.copy(delyankaVydel = value, delyankaSearchError = null)
+    }
+
+    fun searchDelyanka() {
+        val state = _uiState.value
+        val kvartal = state.delyankaKvartal.trim()
+        val vydel = state.delyankaVydel.trim()
+        if (kvartal.isEmpty() || vydel.isEmpty()) return
+
+        _uiState.value = state.copy(isSearchingDelyanka = true, delyankaSearchError = null, delyankaMatches = emptyList())
+        viewModelScope.launch {
+            val result = repository.findDelyankaByLocation(kvartal, vydel)
+            _uiState.value = result.fold(
+                onSuccess = { matches ->
+                    _uiState.value.copy(
+                        isSearchingDelyanka = false,
+                        delyankaMatches = matches,
+                        delyankaSearchError = if (matches.isEmpty()) "Делянка с таким кварталом и выделом не найдена" else null,
+                    )
+                },
+                onFailure = {
+                    _uiState.value.copy(isSearchingDelyanka = false, delyankaSearchError = it.message ?: "Не удалось найти делянку")
+                },
+            )
+        }
+    }
+
+    fun selectDelyanka(match: DelyankaLocationMatchDto) {
+        _uiState.value = _uiState.value.copy(selectedDelyanka = match, delyankaMatches = emptyList())
+    }
+
+    fun clearSelectedDelyanka() {
+        _uiState.value = _uiState.value.copy(selectedDelyanka = null)
     }
 
     fun onOtkudaChange(value: String) {
@@ -58,11 +100,7 @@ class TrelevkaViewModel(application: Application) : AndroidViewModel(application
             _uiState.value = state.copy(error = "Укажите объём числом")
             return
         }
-        val delyankaItemId = state.delyankaItemId.trim().takeIf { it.isNotBlank() }?.toIntOrNull()
-        if (state.delyankaItemId.isNotBlank() && delyankaItemId == null) {
-            _uiState.value = state.copy(error = "ID делянки указывается числом")
-            return
-        }
+        val delyankaItemId = state.selectedDelyanka?.itemId
 
         _uiState.value = state.copy(isSubmitting = true, error = null)
         viewModelScope.launch {
