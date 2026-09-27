@@ -82,9 +82,14 @@ fun TasksScreen(
     val context = LocalContext.current
     val queueManager = remember { OfflineQueueManager.getInstance(context) }
     val pending by queueManager.pending.collectAsState()
+    val isSyncing by queueManager.isSyncing.collectAsState()
     val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
     val unreadCount by badgeManager.unreadCount.collectAsState()
-    val skyState = if (pending.isEmpty()) SkyState.Sun else SkyState.Cloud(pending.size)
+    val skyState = when {
+        isSyncing -> SkyState.Syncing
+        pending.isEmpty() -> SkyState.Sun
+        else -> SkyState.Cloud(pending.size)
+    }
 
     Scaffold(
         topBar = {
@@ -109,7 +114,10 @@ fun TasksScreen(
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.isLoading,
-            onRefresh = viewModel::loadTasks,
+            onRefresh = {
+                viewModel.loadTasks()
+                queueManager.retryNow()
+            },
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
             LazyColumn(

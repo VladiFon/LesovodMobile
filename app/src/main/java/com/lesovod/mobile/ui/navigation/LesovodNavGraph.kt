@@ -5,11 +5,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -23,7 +28,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +46,12 @@ import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
+import com.lesovod.mobile.data.session.canReportBreakdown
+import com.lesovod.mobile.data.session.canSeeStock
+import com.lesovod.mobile.data.session.canTrelevka
+import com.lesovod.mobile.ui.components.QuickAction
+import com.lesovod.mobile.ui.components.QuickActionIcons
+import com.lesovod.mobile.ui.components.QuickActionsSheet
 import com.lesovod.mobile.ui.kubaturnik.KubaturnikScreen
 import com.lesovod.mobile.ui.lesokultury.InventarizatsiyaScreen
 import com.lesovod.mobile.ui.lesokultury.PerevodScreen
@@ -49,6 +62,7 @@ import com.lesovod.mobile.ui.screens.AttendanceScreen
 import com.lesovod.mobile.ui.screens.BreakdownScreen
 import com.lesovod.mobile.ui.screens.LoginScreen
 import com.lesovod.mobile.ui.screens.MapScreen
+import com.lesovod.mobile.ui.screens.MoreScreen
 import com.lesovod.mobile.ui.screens.ProfileScreen
 import com.lesovod.mobile.ui.screens.RegistrationScreen
 import com.lesovod.mobile.ui.screens.StockScreen
@@ -129,9 +143,20 @@ fun LesovodNavGraph() {
                             popUpTo(0)
                         }
                     },
+                )
+            }
+        }
+        composable(Screen.More.route) {
+            MainScaffold(navController) {
+                MoreScreen(
+                    onOpenProfile = { navController.navigate(Screen.Profile.route) },
                     onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
+                    onOpenWorkReport = { navController.navigate(Screen.WorkReport.route) },
+                    onOpenProba = { navController.navigate(Screen.Proba.route) },
                     onOpenInventarizatsiya = { navController.navigate(Screen.Inventarizatsiya.route) },
                     onOpenPerevod = { navController.navigate(Screen.Perevod.route) },
+                    onOpenStock = { navController.navigate(Screen.Stock.route) },
+                    onOpenKubaturnik = { navController.navigate(Screen.Kubaturnik.route) },
                 )
             }
         }
@@ -165,10 +190,28 @@ private fun MainScaffold(
     val queueManager = remember { OfflineQueueManager.getInstance(context) }
     val pending by queueManager.pending.collectAsState()
     val session by SessionManager.getInstance(context).session.collectAsState()
-    val navItems = bottomNavItemsFor(session?.role)
+    val role = session?.role
+    val navItems = remember { bottomNavItems() }
     val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
     val unreadCount by badgeManager.unreadCount.collectAsState()
     LaunchedEffect(Unit) { badgeManager.refresh() }
+    var showQuickActions by remember { mutableStateOf(false) }
+
+    if (showQuickActions) {
+        val actions = buildList {
+            if (role?.canReportBreakdown == true) {
+                add(QuickAction("Поломка", QuickActionIcons.Breakdown) { navController.navigate(Screen.Breakdown.route) })
+            }
+            if (role?.canTrelevka == true) {
+                add(QuickAction("Трелёвка", QuickActionIcons.Trelevka) { navController.navigate(Screen.Trelevka.route) })
+            }
+            if (role?.canSeeStock == true) {
+                add(QuickAction("Остатки", QuickActionIcons.Stock) { navController.navigate(Screen.Stock.route) })
+            }
+            add(QuickAction("Заметка", QuickActionIcons.Note) { navController.navigate(Screen.Notes.route) })
+        }
+        QuickActionsSheet(actions = actions, onDismiss = { showQuickActions = false })
+    }
 
     Scaffold(
         bottomBar = {
@@ -192,7 +235,7 @@ private fun MainScaffold(
                             }
                         },
                         icon = {
-                            if (item.screen == Screen.Profile && unreadCount > 0) {
+                            if (item.screen == Screen.More && unreadCount > 0) {
                                 BadgedBox(badge = { Badge { Text(unreadCount.coerceAtMost(99).toString()) } }) {
                                     Icon(item.icon, contentDescription = item.label)
                                 }
@@ -204,7 +247,18 @@ private fun MainScaffold(
                     )
                 }
             }
-        }
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showQuickActions = true },
+                shape = CircleShape,
+                containerColor = MaterialTheme.colorScheme.tertiary,
+                contentColor = MaterialTheme.colorScheme.onTertiary,
+                modifier = Modifier.size(54.dp),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Быстрые действия")
+            }
+        },
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
             if (pending.isNotEmpty()) {
