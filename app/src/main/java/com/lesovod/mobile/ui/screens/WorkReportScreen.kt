@@ -131,9 +131,10 @@ fun WorkReportScreen(
                 // Локация отчёта: по умолчанию — привязка к реальной делянке из справочника;
                 // «указать вручную» остаётся запасным путём для работ вне заведённых делянок.
                 if (state.locationMode == WorkReportLocationMode.DELYANKA) {
-                    if (state.selectedDelyanka != null) {
+                    val selectedDelyanka = state.selectedDelyanka
+                    if (selectedDelyanka != null) {
                         SelectedDelyankaCard(
-                            delyanka = state.selectedDelyanka,
+                            delyanka = selectedDelyanka,
                             enabled = !state.isSubmitting,
                             onChange = viewModel::openDelyankaPicker,
                         )
