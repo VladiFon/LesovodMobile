@@ -3,6 +3,7 @@ package com.lesovod.mobile.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,10 +13,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Forest
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -23,9 +23,14 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.lesovod.mobile.BuildConfig
+import com.lesovod.mobile.data.update.AppUpdateManager
+import com.lesovod.mobile.data.update.UpdateState
 import com.lesovod.mobile.ui.map.MapSettingsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -41,9 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.platform.LocalContext
-import com.lesovod.mobile.data.repository.NotificationsBadgeManager
-import com.lesovod.mobile.data.session.canManageLesokultury
 import com.lesovod.mobile.ui.auth.AuthViewModel
 import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.DestructiveButton
@@ -54,20 +56,18 @@ import com.lesovod.mobile.ui.components.StatusChip
 import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 
-/** Экран 11 редизайна «Поляна» (docs/SCREENS.md) — «Профиль». */
+/**
+ * Экран 11 редизайна «Поляна» (docs/SCREENS.md) — «Профиль»: личные данные, карта и выход.
+ * Уведомления и разделы, доступные не всем ролям (Инвентаризация/Перевод лесных культур,
+ * Проба, Остатки, Кубатурник), переехали в «Ещё» ([MoreScreen]) вместе с реструктуризацией
+ * нижней навигации — здесь их дублировать не нужно.
+ */
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
-    onOpenNotifications: () -> Unit = {},
-    onOpenInventarizatsiya: () -> Unit = {},
-    onOpenPerevod: () -> Unit = {},
     viewModel: AuthViewModel = viewModel(),
 ) {
     val session by viewModel.session.collectAsState()
-    val context = LocalContext.current
-    val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
-    val unreadCount by badgeManager.unreadCount.collectAsState()
-    val canManageLesokultury = session?.role?.canManageLesokultury == true
 
     Column(
         modifier = Modifier
@@ -123,27 +123,7 @@ fun ProfileScreen(
 
             MapSettingsCard()
 
-            SecondaryButton(
-                text = if (unreadCount > 0) "Уведомления ($unreadCount)" else "Уведомления",
-                onClick = onOpenNotifications,
-                icon = { Icon(Icons.Filled.Notifications, contentDescription = null) },
-                modifier = Modifier.padding(top = Spacing.l),
-            )
-
-            if (canManageLesokultury) {
-                SecondaryButton(
-                    text = "Инвентаризация лесных культур",
-                    onClick = onOpenInventarizatsiya,
-                    icon = { Icon(Icons.Filled.Forest, contentDescription = null) },
-                    modifier = Modifier.padding(top = Spacing.s),
-                )
-                SecondaryButton(
-                    text = "Перевод лесных культур",
-                    onClick = onOpenPerevod,
-                    icon = { Icon(Icons.Filled.SwapHoriz, contentDescription = null) },
-                    modifier = Modifier.padding(top = Spacing.s),
-                )
-            }
+            UpdateCard()
 
             DestructiveButton(
                 text = "Выйти",
@@ -162,6 +142,91 @@ private fun ProfileRow(label: String, value: String) {
     Column(modifier = Modifier.padding(vertical = Spacing.xs)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/**
+ * «О приложении»: обновления вне Google Play — приложение сверяется с последним GitHub
+ * Release репозитория и, если он новее, скачивает и ставит APK через системный
+ * `DownloadManager` (см. [com.lesovod.mobile.data.update.AppUpdateManager]).
+ */
+@Composable
+private fun UpdateCard() {
+    val context = LocalContext.current
+    val manager = remember { AppUpdateManager.getInstance(context) }
+    val state by manager.state.collectAsState()
+
+    LaunchedEffect(Unit) { manager.checkForUpdate() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .softCard()
+            .padding(Spacing.l)
+            .padding(top = Spacing.l),
+    ) {
+        Text("О приложении", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Версия ${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
+
+        when (val s = state) {
+            is UpdateState.Checking -> {
+                Row(modifier = Modifier.padding(top = Spacing.m)) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text(
+                        "Проверка обновлений…",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(start = Spacing.s),
+                    )
+                }
+            }
+            is UpdateState.Available -> {
+                Text(
+                    "Доступно обновление до версии ${s.info.versionName}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = Spacing.m),
+                )
+                PrimaryButton(
+                    text = "Скачать обновление",
+                    onClick = {
+                        if (manager.canInstallPackages()) {
+                            manager.startDownload(s.info)
+                        } else {
+                            context.startActivity(manager.requestInstallPermissionIntent())
+                        }
+                    },
+                    icon = { Icon(Icons.Filled.SystemUpdate, contentDescription = null) },
+                    modifier = Modifier.padding(top = Spacing.m),
+                )
+            }
+            is UpdateState.Downloading -> {
+                Row(modifier = Modifier.padding(top = Spacing.m)) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text(
+                        "Загрузка версии ${s.info.versionName}… появится уведомление по завершении",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(start = Spacing.s),
+                    )
+                }
+            }
+            is UpdateState.Error -> {
+                StatusChip(text = s.message, tone = ChipTone.ERROR, modifier = Modifier.padding(top = Spacing.m))
+            }
+            UpdateState.UpToDate -> {
+                Text(
+                    "У вас последняя версия",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = Spacing.m),
+                )
+            }
+            UpdateState.Idle -> Unit
+        }
     }
 }
 

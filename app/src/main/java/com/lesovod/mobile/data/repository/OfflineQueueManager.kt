@@ -60,6 +60,10 @@ class OfflineQueueManager private constructor(context: Context) {
     /** Все действия, ожидающие отправки (любого типа), самое старое — первым. */
     val pending: StateFlow<List<PendingAction>> = _pending.asStateFlow()
 
+    private val _isSyncing = MutableStateFlow(false)
+    /** true, пока идёт попытка отправить очередь — драйвит [SkyState.Syncing] в SkyStatusPill. */
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
     private val _completed = MutableSharedFlow<PendingAction>(extraBufferCapacity = 8)
     /** Эмитит действие сразу после того, как оно успешно ушло на сервер из очереди. */
     val completed: SharedFlow<PendingAction> = _completed.asSharedFlow()
@@ -186,23 +190,30 @@ class OfflineQueueManager private constructor(context: Context) {
 
     private suspend fun flush() {
         mutex.withLock {
-            for (action in store.list().sortedBy { it.createdAt }) {
-                when (val outcome = process(action)) {
-                    FlushOutcome.Sent -> {
-                        store.remove(action.id)
-                        action.photoLocalPath?.let { runCatching { File(it).delete() } }
-                        action.photoLocalPath2?.let { runCatching { File(it).delete() } }
-                        _pending.value = store.list()
-                        _completed.emit(action)
-                    }
-                    FlushOutcome.StillOffline -> {
-                        return@withLock
-                    }
-                    is FlushOutcome.Failed -> {
-                        store.update(action.copy(attempts = action.attempts + 1, lastError = outcome.message))
-                        _pending.value = store.list()
+            val queue = store.list().sortedBy { it.createdAt }
+            if (queue.isEmpty()) return@withLock
+            _isSyncing.value = true
+            try {
+                for (action in queue) {
+                    when (val outcome = process(action)) {
+                        FlushOutcome.Sent -> {
+                            store.remove(action.id)
+                            action.photoLocalPath?.let { runCatching { File(it).delete() } }
+                            action.photoLocalPath2?.let { runCatching { File(it).delete() } }
+                            _pending.value = store.list()
+                            _completed.emit(action)
+                        }
+                        FlushOutcome.StillOffline -> {
+                            return@withLock
+                        }
+                        is FlushOutcome.Failed -> {
+                            store.update(action.copy(attempts = action.attempts + 1, lastError = outcome.message))
+                            _pending.value = store.list()
+                        }
                     }
                 }
+            } finally {
+                _isSyncing.value = false
             }
         }
     }
