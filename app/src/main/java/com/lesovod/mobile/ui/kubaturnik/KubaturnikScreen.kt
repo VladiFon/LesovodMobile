@@ -1,16 +1,12 @@
 package com.lesovod.mobile.ui.kubaturnik
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,11 +29,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -53,14 +52,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.local.KubaturnikCalculation
+import com.lesovod.mobile.data.local.TilesSide
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.ForestAccent
-import com.lesovod.mobile.ui.theme.ForestSuccess
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private fun Double.fmt(decimals: Int = 3): String = String.format(Locale.US, "%.${decimals}f", this)
+internal fun Double.fmt(decimals: Int = 3): String = String.format(Locale.US, "%.${decimals}f", this)
 
 @Composable
 fun KubaturnikScreen(viewModel: KubaturnikViewModel = viewModel()) {
@@ -189,11 +188,24 @@ private fun KubaturnikMain(state: KubaturnikUiState, viewModel: KubaturnikViewMo
 private fun KubaturnikCounting(state: KubaturnikUiState, viewModel: KubaturnikViewModel) {
     Column(modifier = Modifier.fillMaxSize()) {
         KubaturnikHeader(state = state, viewModel = viewModel)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        Row(modifier = Modifier.weight(1f)) {
-            LeftPanel(state = state, modifier = Modifier.weight(0.42f))
-            DiameterGrid(state = state, viewModel = viewModel, modifier = Modifier.weight(0.58f))
-        }
+        ScoreBody(
+            tilesSide = state.tilesSide,
+            diameters = state.diameterButtonValues,
+            counts = state.currentCombo,
+            lastTapped = state.lastTap?.first,
+            onTap = viewModel::tapDiameter,
+            onUndo = viewModel::undoDiameter,
+            panel = {
+                ReferencePanel(
+                    lastTap = state.lastTap,
+                    rows = state.currentComboRows,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            },
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -212,6 +224,17 @@ private fun KubaturnikHeader(state: KubaturnikUiState, viewModel: KubaturnikView
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
+            IconButton(onClick = viewModel::toggleTilesSide) {
+                Icon(
+                    imageVector = Icons.Filled.SwapHoriz,
+                    contentDescription = if (state.tilesSide == TilesSide.LEFT) {
+                        "Плитки слева — переключить направо"
+                    } else {
+                        "Плитки справа — переключить налево"
+                    },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             TextButton(onClick = viewModel::requestReset) {
                 Text("Новая партия")
             }
@@ -297,113 +320,6 @@ private fun SortRow(state: KubaturnikUiState, viewModel: KubaturnikViewModel) {
             )
         }
         AssistChip(onClick = { viewModel.showAddSortDialog(true) }, label = { Text("+") })
-    }
-}
-
-@Composable
-private fun LeftPanel(state: KubaturnikUiState, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(start = 12.dp, end = 4.dp),
-    ) {
-        state.lastTap?.let { (diameter, volume) ->
-            Card(
-                colors = CardDefaults.cardColors(containerColor = ForestSuccess.copy(alpha = 0.12f)),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    Text("⌀ $diameter см", style = MaterialTheme.typography.labelMedium, color = ForestSuccess)
-                    Text("${volume.fmt(4)} м³ — одно бревно", style = MaterialTheme.typography.bodyMedium, color = ForestSuccess)
-                }
-            }
-        }
-
-        Text(
-            "${state.activeSort} · ${state.destination.label}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-        )
-
-        val rows = state.currentComboRows
-        if (rows.isEmpty()) {
-            Text(
-                "Пока пусто",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(rows, key = { it.diameter }) { row ->
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Text("⌀${row.diameter}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.3f))
-                        Text("×${row.count}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.3f))
-                        Text(row.totalVolume.fmt(3), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.4f))
-                    }
-                }
-                item {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "Комбо: ${rows.sumOf { it.count }} шт · ${rows.sumOf { it.totalVolume }.fmt(3)} м³",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DiameterGrid(state: KubaturnikUiState, viewModel: KubaturnikViewModel, modifier: Modifier = Modifier) {
-    val buttons = state.diameterButtonValues
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = modifier.fillMaxSize(),
-    ) {
-        items(buttons) { diameter ->
-            DiameterButton(
-                diameter = diameter,
-                count = state.currentCombo[diameter] ?: 0,
-                onTap = { viewModel.tapDiameter(diameter) },
-                onUndo = { viewModel.undoDiameter(diameter) },
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun DiameterButton(diameter: Int, count: Int, onTap: () -> Unit, onUndo: () -> Unit) {
-    val hasCount = count > 0
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = if (hasCount) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(
-            1.dp,
-            if (hasCount) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-        ),
-        modifier = Modifier
-            .aspectRatio(1.3f)
-            .combinedClickable(onClick = onTap, onLongClick = onUndo),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("$diameter", style = MaterialTheme.typography.titleLarge)
-            if (hasCount) {
-                Text("×$count", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-        }
     }
 }
 
