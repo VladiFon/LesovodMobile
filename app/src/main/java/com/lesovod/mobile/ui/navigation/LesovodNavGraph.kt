@@ -94,6 +94,7 @@ fun LesovodNavGraph() {
                 TasksScreen(
                     onOpenAttendance = { navController.navigate(Screen.Attendance.route) },
                     onOpenProba = { navController.navigate(Screen.Proba.route) },
+                    onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
                 )
             }
         }
