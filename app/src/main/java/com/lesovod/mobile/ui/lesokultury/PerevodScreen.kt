@@ -9,14 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -28,9 +23,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.ui.components.ChipTone
+import com.lesovod.mobile.ui.components.PrimaryButton
+import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.theme.Spacing
 
 @Composable
 fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel()) {
@@ -42,22 +40,18 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState()),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(Spacing.xs)) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Назад")
             }
-            Text(
-                "Перевод лесных культур",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Text("Перевод лесных культур", style = MaterialTheme.typography.titleSmall)
         }
 
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.m),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = Spacing.l, vertical = Spacing.m),
         ) {
             val result = state.result
             if (result != null) {
@@ -115,37 +109,18 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
             }
 
             if (state.error != null) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = state.error.orEmpty(),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp),
-                    )
-                }
+                StatusChip(text = state.error.orEmpty(), tone = ChipTone.ERROR)
             }
 
-            Button(
+            PrimaryButton(
+                text = "Отправить",
                 onClick = viewModel::submit,
                 enabled = !state.isSubmitting,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp),
-            ) {
-                if (state.isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                } else {
-                    Text("Отправить")
-                }
-            }
+                modifier = Modifier.padding(bottom = Spacing.xl),
+                icon = if (state.isSubmitting) {
+                    { CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) }
+                } else null,
+            )
         }
     }
 }

@@ -16,13 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,7 +26,6 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -45,21 +39,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.local.NoteReminderEntry
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
+import com.lesovod.mobile.ui.components.ChipTone
+import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.ScreenTitle
-import com.lesovod.mobile.ui.theme.ForestAccent
-import com.lesovod.mobile.ui.theme.ForestSuccess
+import com.lesovod.mobile.ui.components.SecondaryButton
+import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.softCard
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+/** Экран 9 редизайна «Поляна» (docs/SCREENS.md) — «Заметки». */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotesScreen(viewModel: NotesViewModel = viewModel()) {
@@ -84,74 +82,48 @@ fun NotesScreen(viewModel: NotesViewModel = viewModel()) {
         ScreenTitle("Заметки")
 
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.m),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = Spacing.l),
         ) {
             SendNoteSection(state = state, viewModel = viewModel)
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.m))
             SentNotesSection(state = state)
 
             if (state.canViewInbox) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.m))
                 InboxSection(state = state, viewModel = viewModel)
 
                 if (state.reminders.isNotEmpty()) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.m))
                     RemindersSection(state = state, viewModel = viewModel)
                 }
             } else {
-                Spacer24()
+                Spacer(Modifier.height(Spacing.xl))
             }
         }
     }
 }
 
-@Composable
-private fun Spacer24() {
-    Spacer(Modifier.height(24.dp))
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SendNoteSection(state: NotesUiState, viewModel: NotesViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
         if (state.sent) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = ForestSuccess.copy(alpha = 0.12f)),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Заметка отправлена", color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
-                    OutlinedButton(onClick = viewModel::resetSent, modifier = Modifier.padding(top = 12.dp)) {
-                        Text("Написать ещё одну")
-                    }
-                }
-            }
+            StatusChip(text = "Заметка отправлена", tone = ChipTone.OK)
+            SecondaryButton(text = "Написать ещё одну", onClick = viewModel::resetSent)
         } else if (state.queuedOffline) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Нет сети — заметка сохранена на устройстве", color = ForestAccent, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Она отправится автоматически, как только появится связь.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    OutlinedButton(onClick = viewModel::resetSent, modifier = Modifier.padding(top = 12.dp)) {
-                        Text("Написать ещё одну")
-                    }
-                }
-            }
+            StatusChip(text = "Нет сети — заметка сохранена на устройстве", tone = ChipTone.WARN)
+            Text(
+                "Она отправится автоматически, как только появится связь.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SecondaryButton(text = "Написать ещё одну", onClick = viewModel::resetSent)
         } else {
-            Text("Новая заметка", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text("Новая заметка", style = MaterialTheme.typography.titleSmall)
 
             OutlinedTextField(
                 value = state.noteText,
@@ -202,43 +174,25 @@ private fun SendNoteSection(state: NotesUiState, viewModel: NotesViewModel) {
             }
 
             if (state.sendError != null) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = state.sendError,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp),
-                    )
-                }
+                StatusChip(text = state.sendError, tone = ChipTone.ERROR)
             }
 
-            Button(
+            PrimaryButton(
+                text = "Отправить",
                 onClick = viewModel::sendNote,
                 enabled = !state.isSending,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (state.isSending) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                } else {
-                    Text("Отправить")
-                }
-            }
+                icon = if (state.isSending) {
+                    { CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) }
+                } else null,
+            )
         }
     }
 }
 
 @Composable
 private fun SentNotesSection(state: NotesUiState) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Мои заметки", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        Text("Мои заметки", style = MaterialTheme.typography.titleSmall)
 
         if (state.isLoadingSent) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -254,28 +208,21 @@ private fun SentNotesSection(state: NotesUiState) {
 
 @Composable
 private fun SentNoteCard(note: SentNoteDto) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(note.text, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                listOfNotNull(note.recipientFio ?: "Всем", note.createdAt).joinToString(" · "),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
+    Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m)) {
+        Text(note.text, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            listOfNotNull(note.recipientFio ?: "Всем", note.createdAt).joinToString(" · "),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
     }
 }
 
 @Composable
 private fun InboxSection(state: NotesUiState, viewModel: NotesViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Входящие", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        Text("Входящие", style = MaterialTheme.typography.titleSmall)
 
         if (state.isLoadingInbox) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -298,69 +245,55 @@ private fun InboxSection(state: NotesUiState, viewModel: NotesViewModel) {
             }
         }
 
-        Spacer24()
+        Spacer(Modifier.height(Spacing.xl))
     }
 }
 
 @Composable
 private fun NoteCard(note: NoteDto, onRemind: () -> Unit) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(note.text, style = MaterialTheme.typography.bodyLarge)
-            Row(modifier = Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    listOfNotNull(note.authorFio, note.createdAt).joinToString(" · "),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onRemind) { Text("Напомнить через…") }
-            }
+    Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m)) {
+        Text(note.text, style = MaterialTheme.typography.bodyLarge)
+        Row(modifier = Modifier.padding(top = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                listOfNotNull(note.authorFio, note.createdAt).joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRemind) { Text("Напомнить через…") }
         }
     }
 }
 
 @Composable
 private fun RemindersSection(state: NotesUiState, viewModel: NotesViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Напоминания", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        Text("Напоминания", style = MaterialTheme.typography.titleSmall)
 
         state.reminders.forEach { reminder ->
             ReminderEntryCard(reminder = reminder, onCancel = { viewModel.cancelReminder(reminder.noteId) })
         }
 
-        Spacer24()
+        Spacer(Modifier.height(Spacing.xl))
     }
 }
 
 @Composable
 private fun ReminderEntryCard(reminder: NoteReminderEntry, onCancel: () -> Unit) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth(),
+    Row(
+        modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(reminder.noteText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-                Text(
-                    formatReminderTime(reminder.triggerAtMillis),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            TextButton(onClick = onCancel) { Text("Отменить") }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(reminder.noteText, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+            Text(
+                formatReminderTime(reminder.triggerAtMillis),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
         }
+        TextButton(onClick = onCancel) { Text("Отменить") }
     }
 }
 
@@ -376,33 +309,33 @@ private fun ReminderPicker(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f), MaterialTheme.shapes.medium)
+            .padding(Spacing.s),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s),
     ) {
-        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                AssistChip(onClick = onPick15, label = { Text("Через 15 мин") })
-                AssistChip(onClick = onPick60, label = { Text("Через 1 час") })
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                AssistChip(onClick = onPickTomorrow, label = { Text("Завтра утром") })
-                AssistChip(
-                    onClick = {
-                        val now = Calendar.getInstance()
-                        TimePickerDialog(
-                            context,
-                            { _, hour, minute -> onPickCustom(hour, minute) },
-                            now.get(Calendar.HOUR_OF_DAY),
-                            now.get(Calendar.MINUTE),
-                            true,
-                        ).show()
-                    },
-                    label = { Text("Своё время") },
-                )
-            }
-            TextButton(onClick = onDismiss) { Text("Отмена") }
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            AssistChip(onClick = onPick15, label = { Text("Через 15 мин") })
+            AssistChip(onClick = onPick60, label = { Text("Через 1 час") })
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            AssistChip(onClick = onPickTomorrow, label = { Text("Завтра утром") })
+            AssistChip(
+                onClick = {
+                    val now = Calendar.getInstance()
+                    TimePickerDialog(
+                        context,
+                        { _, hour, minute -> onPickCustom(hour, minute) },
+                        now.get(Calendar.HOUR_OF_DAY),
+                        now.get(Calendar.MINUTE),
+                        true,
+                    ).show()
+                },
+                label = { Text("Своё время") },
+            )
+        }
+        TextButton(onClick = onDismiss) { Text("Отмена") }
     }
 }

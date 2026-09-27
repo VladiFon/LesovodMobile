@@ -43,10 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.lesovod.mobile.data.local.CompletedWorkStore
 import com.lesovod.mobile.data.location.hasLocationPermission
-import com.lesovod.mobile.ui.theme.ForestError
-import com.lesovod.mobile.ui.theme.ForestOutline
-import com.lesovod.mobile.ui.theme.ForestPrimary
-import com.lesovod.mobile.ui.theme.ForestSurface
 import kotlinx.coroutines.delay
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
@@ -318,7 +314,7 @@ fun ForestMapView(
                     Icon(
                         Icons.Filled.Navigation,
                         contentDescription = null,
-                        tint = ForestError,
+                        tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(22.dp).rotate(hud.bearing),
                     )
                 }
@@ -376,7 +372,7 @@ fun ForestMapView(
 
         // Всегда видимый масштаб: линейка рисуется самой картой, а здесь — числом.
         Surface(
-            color = ForestPrimary.copy(alpha = 0.78f),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.78f),
             shape = RoundedCornerShape(10.dp),
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -410,9 +406,9 @@ private fun GlassButton(
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = if (active) ForestPrimary.copy(alpha = 0.92f) else ForestSurface.copy(alpha = 0.88f),
-        contentColor = if (active) Color.White else ForestPrimary,
-        border = BorderStroke(1.dp, ForestOutline.copy(alpha = 0.7f)),
+        color = if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.92f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+        contentColor = if (active) Color.White else MaterialTheme.colorScheme.primary,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
         shadowElevation = 3.dp,
         modifier = Modifier
             .size(44.dp)

@@ -1,6 +1,7 @@
 package com.lesovod.mobile.ui.notifications
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
@@ -21,8 +21,6 @@ import androidx.compose.material.icons.filled.Forest
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Message
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,9 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.lesovod.mobile.ui.theme.ForestAccent
-import com.lesovod.mobile.ui.theme.ForestPrimary
+import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.softCard
 
+/** Экран 10 редизайна «Поляна» (docs/SCREENS.md) — «Уведомления». */
 @Composable
 fun NotificationsScreen(
     onBack: () -> Unit,
@@ -53,16 +52,11 @@ fun NotificationsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(Spacing.xs)) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Назад")
             }
-            Text(
-                "Уведомления",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f),
-            )
+            Text("Уведомления", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             if (state.items.any { !it.isRead }) {
                 TextButton(onClick = viewModel::markAllRead) {
                     Text("Отметить всё прочитанным")
@@ -74,15 +68,15 @@ fun NotificationsScreen(
             state.isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-            state.error != null -> Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
+            state.error != null -> Box(modifier = Modifier.fillMaxSize().padding(Spacing.l), contentAlignment = Alignment.Center) {
                 Text(state.error.orEmpty(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
-            state.items.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
+            state.items.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(Spacing.l), contentAlignment = Alignment.Center) {
                 Text("Уведомлений нет", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
             else -> LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.l, vertical = Spacing.s),
+                verticalArrangement = Arrangement.spacedBy(Spacing.s),
             ) {
                 items(state.items, key = { it.id }) { item ->
                     NotificationCard(
@@ -100,41 +94,37 @@ fun NotificationsScreen(
 
 @Composable
 private fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (item.isRead) MaterialTheme.colorScheme.surface else ForestAccent.copy(alpha = 0.12f),
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth(),
+    val containerColor = if (item.isRead) {
+        MaterialTheme.colorScheme.surface
+    } else {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(containerColor, MaterialTheme.shapes.medium)
+            .softCard()
+            .clickable(onClick = onClick)
+            .padding(Spacing.m),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.m),
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(ForestPrimary.copy(alpha = 0.1f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(item.type.icon(), contentDescription = null, tint = ForestPrimary, modifier = Modifier.size(20.dp))
+            Icon(item.type.icon(), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(item.text.ifBlank { "Уведомление" }, style = MaterialTheme.typography.bodyLarge)
+            item.createdAt?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    item.text.ifBlank { "Уведомление" },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (item.isRead) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface,
-                )
-                item.createdAt?.let {
-                    Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
-                }
-            }
-            if (!item.isRead) {
-                Box(modifier = Modifier.size(9.dp).background(ForestAccent, CircleShape))
-            }
+        }
+        if (!item.isRead) {
+            Box(modifier = Modifier.size(9.dp).background(MaterialTheme.colorScheme.tertiary, CircleShape))
         }
     }
 }

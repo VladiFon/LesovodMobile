@@ -8,14 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,14 +19,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.lesovod.mobile.ui.components.SecondaryButton
+import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.softCard
 
+/** Часть экрана 1 редизайна «Поляна» (docs/SCREENS.md) — «Как получить доступ». */
 @Composable
 fun RegistrationScreen(onBackToLogin: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 32.dp),
+            .padding(horizontal = Spacing.xxl),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -38,22 +38,21 @@ fun RegistrationScreen(onBackToLogin: () -> Unit) {
             modifier = Modifier
                 .size(64.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)),
+                .background(MaterialTheme.colorScheme.primaryContainer),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
                 Icons.Filled.Info,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
 
         Text(
             text = "Как получить доступ",
             style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 16.dp),
+            modifier = Modifier.padding(top = Spacing.l),
         )
 
         Text(
@@ -62,40 +61,31 @@ fun RegistrationScreen(onBackToLogin: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = Spacing.s),
         )
 
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 24.dp),
+                .softCard()
+                .padding(Spacing.l)
+                .padding(top = Spacing.xl),
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    "Чтобы начать работать в приложении:",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    "1. Обратитесь к мастеру или лесничему.\n" +
-                        "2. Сообщите свои ФИО и должность.\n" +
-                        "3. Вам выдадут логин и PIN-код для входа.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
+            Text("Чтобы начать работать в приложении:", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "1. Обратитесь к мастеру или лесничему.\n" +
+                    "2. Сообщите свои ФИО и должность.\n" +
+                    "3. Вам выдадут логин и PIN-код для входа.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.s),
+            )
         }
 
-        OutlinedButton(
+        SecondaryButton(
+            text = "Вернуться ко входу",
             onClick = onBackToLogin,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 24.dp),
-        ) {
-            Text("Вернуться ко входу")
-        }
+            modifier = Modifier.padding(top = Spacing.xl),
+        )
     }
 }
