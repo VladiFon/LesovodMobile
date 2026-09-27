@@ -10,15 +10,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,7 +25,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
@@ -38,9 +32,15 @@ import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.PorodaRemainingDto
 import com.lesovod.mobile.data.network.dto.VolumeBreakdownDto
 import com.lesovod.mobile.ui.bot.StockViewModel
+import com.lesovod.mobile.ui.components.ChipTone
+import com.lesovod.mobile.ui.components.PrimaryButton
+import com.lesovod.mobile.ui.components.SecondaryButton
 import com.lesovod.mobile.ui.components.ScreenTitle
-import com.lesovod.mobile.ui.theme.ForestError
+import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.softCard
 
+/** Экран 7 редизайна «Поляна» (docs/SCREENS.md) — «Остатки по делянке». */
 @Composable
 fun StockScreen(viewModel: StockViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
@@ -54,12 +54,12 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
         ScreenTitle("Остатки по делянке")
 
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.m),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = Spacing.l),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
                 OutlinedTextField(
                     value = state.kvartal,
                     onValueChange = viewModel::onKvartalChange,
@@ -68,14 +68,12 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.weight(1f),
                 )
-                Button(
+                SecondaryButton(
+                    text = "Делянки",
                     onClick = viewModel::loadDelyanki,
                     enabled = !state.isLoadingDelyanki && state.kvartal.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.padding(start = 8.dp),
-                ) {
-                    Text("Делянки")
-                }
+                    modifier = Modifier.weight(0.6f),
+                )
             }
 
             if (state.isLoadingDelyanki) {
@@ -84,7 +82,7 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
 
             if (state.delyanki.isNotEmpty()) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s),
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                 ) {
                     state.delyanki.forEach { delyanka: DelyankaDto ->
@@ -116,35 +114,17 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Button(
+            PrimaryButton(
+                text = "Проверить остаток",
                 onClick = viewModel::loadRemaining,
                 enabled = !state.isLoadingRemaining,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (state.isLoadingRemaining) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                } else {
-                    Text("Проверить остаток")
-                }
-            }
+                icon = if (state.isLoadingRemaining) {
+                    { CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) }
+                } else null,
+            )
 
             if (state.error != null) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = state.error.orEmpty(),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp),
-                    )
-                }
+                StatusChip(text = state.error.orEmpty(), tone = ChipTone.ERROR)
             }
 
             val remaining = state.remaining
@@ -153,25 +133,24 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
                     Text(
                         "Делянка не найдена в системе расхода",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
                     )
                 } else {
                     remaining.grouped?.forEach { (poroda, group) ->
                         PorodaCard(poroda, group)
                     }
 
-                    Column(modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)) {
+                    Column(modifier = Modifier.padding(bottom = Spacing.xl)) {
                         remaining.lastUpdate?.let {
                             Text(
                                 "Наряды обновлены: $it",
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         remaining.egaisImportedAt?.let {
                             Text(
                                 "ЕГАИС загружен: $it",
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -189,25 +168,17 @@ private fun PorodaCard(poroda: String, group: PorodaRemainingDto) {
     val totalLimit = (group.delovaya?.limit ?: 0.0) + (group.drova?.limit ?: 0.0)
     val totalOstatok = (group.delovaya?.ostatokSafe ?: 0.0) + (group.drova?.ostatokSafe ?: 0.0)
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(poroda, style = MaterialTheme.typography.titleMedium)
-            group.delovaya?.let { VolumeRow("Деловая древесина", it) }
-            group.drova?.let { VolumeRow("Дрова", it) }
+    Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.l)) {
+        Text(poroda, style = MaterialTheme.typography.titleSmall)
+        group.delovaya?.let { VolumeRow("Деловая древесина", it) }
+        group.drova?.let { VolumeRow("Дрова", it) }
 
-            Column(modifier = Modifier.padding(top = 10.dp)) {
-                Text(
-                    "Итого лимит: ${totalLimit.fmt()} м³ · Итого остаток: ${totalOstatok.fmt()} м³",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
+        Text(
+            "Итого лимит: ${totalLimit.fmt()} м³ · Итого остаток: ${totalOstatok.fmt()} м³",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = Spacing.s),
+        )
     }
 }
 
@@ -215,7 +186,7 @@ private fun PorodaCard(poroda: String, group: PorodaRemainingDto) {
 private fun VolumeRow(label: String, volume: VolumeBreakdownDto) {
     val egaisExceedsNaryad = (volume.faktEgais ?: 0.0) > (volume.faktNaryad ?: 0.0)
 
-    Column(modifier = Modifier.padding(top = 10.dp)) {
+    Column(modifier = Modifier.padding(top = Spacing.s)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         Text(
             "Лимит: ${volume.limit.fmt()} м³ · Наряд: ${volume.faktNaryad.fmt()} м³ · " +
@@ -224,21 +195,13 @@ private fun VolumeRow(label: String, volume: VolumeBreakdownDto) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (egaisExceedsNaryad) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 4.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Warning,
-                    contentDescription = null,
-                    tint = ForestError,
-                    modifier = Modifier.size(16.dp),
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = Spacing.xs)) {
+                Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                 Text(
                     "ЕГАИС показывает больше, чем наряд",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = ForestError,
-                    modifier = Modifier.padding(start = 6.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = Spacing.xs),
                 )
             }
         }

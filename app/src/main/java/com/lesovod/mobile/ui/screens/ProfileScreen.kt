@@ -10,14 +10,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Forest
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -32,12 +30,8 @@ import com.lesovod.mobile.ui.map.MapSettingsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -51,9 +45,16 @@ import androidx.compose.ui.platform.LocalContext
 import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.data.session.canManageLesokultury
 import com.lesovod.mobile.ui.auth.AuthViewModel
+import com.lesovod.mobile.ui.components.ChipTone
+import com.lesovod.mobile.ui.components.DestructiveButton
+import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.ScreenTitle
-import com.lesovod.mobile.ui.theme.ForestError
+import com.lesovod.mobile.ui.components.SecondaryButton
+import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.softCard
 
+/** Экран 11 редизайна «Поляна» (docs/SCREENS.md) — «Профиль». */
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
@@ -79,21 +80,21 @@ fun ProfileScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 4.dp),
+                .padding(horizontal = Spacing.l),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column(
                 modifier = Modifier
                     .size(88.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    .background(MaterialTheme.colorScheme.primaryContainer),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
                     Icons.Filled.Person,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(44.dp),
                 )
             }
@@ -101,7 +102,7 @@ fun ProfileScreen(
             Text(
                 session?.fio?.takeIf { it.isNotBlank() } ?: "Сотрудник",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(top = 12.dp),
+                modifier = Modifier.padding(top = Spacing.m),
             )
             Text(
                 session?.role?.displayName ?: "Должность не указана",
@@ -109,76 +110,57 @@ fun ProfileScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 24.dp),
+                    .softCard()
+                    .padding(Spacing.l)
+                    .padding(top = Spacing.xl),
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    ProfileRow("Логин", session?.login?.takeIf { it.isNotBlank() } ?: "—")
-                    ProfileRow("Должность", session?.dolzhnost?.takeIf { it.isNotBlank() } ?: "—")
-                }
+                ProfileRow("Логин", session?.login?.takeIf { it.isNotBlank() } ?: "—")
+                ProfileRow("Должность", session?.dolzhnost?.takeIf { it.isNotBlank() } ?: "—")
             }
 
             MapSettingsCard()
 
-            OutlinedButton(
+            SecondaryButton(
+                text = if (unreadCount > 0) "Уведомления ($unreadCount)" else "Уведомления",
                 onClick = onOpenNotifications,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-            ) {
-                Icon(Icons.Filled.Notifications, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text(
-                    if (unreadCount > 0) "Уведомления ($unreadCount)" else "Уведомления",
-                    modifier = Modifier.padding(start = 8.dp),
+                icon = { Icon(Icons.Filled.Notifications, contentDescription = null) },
+                modifier = Modifier.padding(top = Spacing.l),
+            )
+
+            if (canManageLesokultury) {
+                SecondaryButton(
+                    text = "Инвентаризация лесных культур",
+                    onClick = onOpenInventarizatsiya,
+                    icon = { Icon(Icons.Filled.Forest, contentDescription = null) },
+                    modifier = Modifier.padding(top = Spacing.s),
+                )
+                SecondaryButton(
+                    text = "Перевод лесных культур",
+                    onClick = onOpenPerevod,
+                    icon = { Icon(Icons.Filled.SwapHoriz, contentDescription = null) },
+                    modifier = Modifier.padding(top = Spacing.s),
                 )
             }
 
-            if (canManageLesokultury) {
-                OutlinedButton(
-                    onClick = onOpenInventarizatsiya,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                ) {
-                    Icon(Icons.Filled.Forest, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text("Инвентаризация лесных культур", modifier = Modifier.padding(start = 8.dp))
-                }
-                OutlinedButton(
-                    onClick = onOpenPerevod,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                ) {
-                    Icon(Icons.Filled.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text("Перевод лесных культур", modifier = Modifier.padding(start = 8.dp))
-                }
-            }
-
-            OutlinedButton(
+            DestructiveButton(
+                text = "Выйти",
                 onClick = {
                     viewModel.logout()
                     onLogout()
                 },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = ForestError),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 24.dp, bottom = 24.dp),
-            ) {
-                Text("Выйти")
-            }
+                modifier = Modifier.padding(top = Spacing.xl, bottom = Spacing.xl),
+            )
         }
     }
 }
 
 @Composable
 private fun ProfileRow(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(modifier = Modifier.padding(vertical = Spacing.xs)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyLarge)
     }
 }
@@ -192,99 +174,91 @@ private fun MapSettingsCard(viewModel: MapSettingsViewModel = viewModel()) {
     val download = state.download
     val downloadingThis = download.running && download.lesnichestvo == state.defaultLesnichestvo
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp),
+            .softCard()
+            .padding(Spacing.l)
+            .padding(top = Spacing.l),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Карта", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        Text("Карта", style = MaterialTheme.typography.titleSmall)
 
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = it },
-                modifier = Modifier.padding(top = 12.dp),
-            ) {
-                OutlinedTextField(
-                    value = state.defaultLesnichestvo ?: "Не выбрано",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Лесничество по умолчанию") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
-                )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    state.lesnichestva.keys.forEach { name ->
-                        DropdownMenuItem(
-                            text = { Text(name) },
-                            onClick = {
-                                viewModel.setDefault(name)
-                                expanded = false
-                            },
-                        )
-                    }
-                }
-            }
-            Text(
-                "Карта будет открываться сразу на этом лесничестве",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = it },
+            modifier = Modifier.padding(top = Spacing.m),
+        ) {
+            OutlinedTextField(
+                value = state.defaultLesnichestvo ?: "Не выбрано",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Лесничество по умолчанию") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth(),
             )
-
-            if (downloadingThis) {
-                LinearProgressIndicator(
-                    progress = { download.fraction },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                )
-                Text(
-                    "Загрузка: ${(download.fraction * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                OutlinedButton(onClick = viewModel::cancelDownload, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    Text("Отменить")
-                }
-            } else {
-                Button(
-                    onClick = viewModel::download,
-                    enabled = state.defaultLesnichestvo != null && !download.running,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                ) {
-                    Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text(if (state.lastDownloadAt != null) "Обновить карту" else "Скачать карту", modifier = Modifier.padding(start = 8.dp))
+            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                state.lesnichestva.keys.forEach { name ->
+                    DropdownMenuItem(
+                        text = { Text(name) },
+                        onClick = {
+                            viewModel.setDefault(name)
+                            expanded = false
+                        },
+                    )
                 }
             }
+        }
+        Text(
+            "Карта будет открываться сразу на этом лесничестве",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
 
-            state.lastDownloadAt?.let {
-                Text(
-                    "Скачано: " + SimpleDateFormat("dd.MM.yyyy HH:mm", Locale("ru")).format(Date(it)),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            (download.error ?: state.error)?.let {
-                Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
-            }
-
+        if (downloadingThis) {
+            LinearProgressIndicator(
+                progress = { download.fraction },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = Spacing.l),
+            )
             Text(
-                "Сохраняются границы кварталов, выделов и делянок — они работают без интернета. Спутниковый снимок " +
-                    "запоминается по мере просмотра: массовая загрузка снимков запрещена условиями поставщика. " +
-                    "Таксация открывается офлайн для тех участков, которые вы уже открывали.",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp),
+                "Загрузка: ${(download.fraction * 100).toInt()}%",
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+            SecondaryButton(text = "Отменить", onClick = viewModel::cancelDownload, modifier = Modifier.padding(top = Spacing.s))
+        } else {
+            PrimaryButton(
+                text = if (state.lastDownloadAt != null) "Обновить карту" else "Скачать карту",
+                onClick = viewModel::download,
+                enabled = state.defaultLesnichestvo != null && !download.running,
+                icon = { Icon(Icons.Filled.Download, contentDescription = null) },
+                modifier = Modifier.padding(top = Spacing.l),
             )
         }
+
+        state.lastDownloadAt?.let {
+            Text(
+                "Скачано: " + SimpleDateFormat("dd.MM.yyyy HH:mm", Locale("ru")).format(Date(it)),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.s),
+            )
+        }
+        (download.error ?: state.error)?.let {
+            StatusChip(text = it, tone = ChipTone.ERROR, modifier = Modifier.padding(top = Spacing.s))
+        }
+
+        Text(
+            "Сохраняются границы кварталов, выделов и делянок — они работают без интернета. Спутниковый снимок " +
+                "запоминается по мере просмотра: массовая загрузка снимков запрещена условиями поставщика. " +
+                "Таксация открывается офлайн для тех участков, которые вы уже открывали.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.m),
+        )
     }
 }

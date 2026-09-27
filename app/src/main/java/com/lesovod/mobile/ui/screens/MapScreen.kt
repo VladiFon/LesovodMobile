@@ -87,9 +87,6 @@ import com.lesovod.mobile.ui.map.ShapeKind
 import com.lesovod.mobile.ui.map.MapUiState
 import com.lesovod.mobile.ui.map.MapViewModel
 import com.lesovod.mobile.ui.map.VydelCard
-import com.lesovod.mobile.ui.theme.ForestOutline
-import com.lesovod.mobile.ui.theme.ForestPrimary
-import com.lesovod.mobile.ui.theme.ForestSurface
 
 @Composable
 fun MapScreen(viewModel: MapViewModel = viewModel()) {
@@ -185,9 +182,9 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
                 Surface(
                     onClick = { layersOpen = !layersOpen },
                     shape = CircleShape,
-                    color = if (layersOpen) ForestPrimary.copy(alpha = 0.92f) else ForestSurface.copy(alpha = 0.88f),
-                    contentColor = if (layersOpen) MaterialTheme.colorScheme.onPrimary else ForestPrimary,
-                    border = BorderStroke(1.dp, ForestOutline.copy(alpha = 0.7f)),
+                    color = if (layersOpen) MaterialTheme.colorScheme.primary.copy(alpha = 0.92f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                    contentColor = if (layersOpen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
                     shadowElevation = 3.dp,
                     modifier = Modifier
                         .size(44.dp)
@@ -291,8 +288,8 @@ private fun GeoNoteDraftCard(
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = ForestSurface.copy(alpha = 0.98f),
-        border = BorderStroke(1.dp, ForestOutline),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shadowElevation = 8.dp,
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -306,7 +303,7 @@ private fun GeoNoteDraftCard(
                 Text(
                     "Новая метка",
                     style = MaterialTheme.typography.titleLarge,
-                    color = ForestPrimary,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(end = 40.dp),
                 )
 
@@ -316,7 +313,7 @@ private fun GeoNoteDraftCard(
                     label = { Text("Текст (необязательно)") },
                     enabled = !draft.isSubmitting,
                     minLines = 2,
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ForestPrimary),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 )
 
@@ -337,7 +334,7 @@ private fun GeoNoteDraftCard(
                     onClick = onSubmit,
                     enabled = !draft.isSubmitting,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = ForestPrimary,
+                        containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                     ),
                     modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
@@ -364,14 +361,14 @@ private fun GeoNoteDraftCard(
 private fun GeoNotePopup(note: GeoNoteMarker, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = ForestSurface.copy(alpha = 0.98f),
-        border = BorderStroke(1.dp, ForestOutline),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shadowElevation = 8.dp,
         modifier = modifier.fillMaxWidth(),
     ) {
         Box {
             Column(modifier = Modifier.padding(start = 18.dp, end = 40.dp, top = 14.dp, bottom = 14.dp)) {
-                Text("Метка", style = MaterialTheme.typography.titleMedium, color = ForestPrimary)
+                Text("Метка", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 note.authorFio?.let {
                     Text(
                         it,
@@ -424,8 +421,8 @@ private fun LesnichestvoPill(
         Surface(
             onClick = { if (options.isNotEmpty()) expanded = true },
             shape = RoundedCornerShape(22.dp),
-            color = ForestSurface.copy(alpha = 0.88f),
-            border = BorderStroke(1.dp, ForestOutline.copy(alpha = 0.7f)),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
             shadowElevation = 3.dp,
             modifier = Modifier
                 .fillMaxWidth()
@@ -440,14 +437,14 @@ private fun LesnichestvoPill(
                     Text(
                         selected ?: "Выберите",
                         style = MaterialTheme.typography.titleSmall,
-                        color = ForestPrimary,
+                        color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
                     )
                 }
                 if (loading) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.secondary)
                 } else {
-                    Icon(Icons.Filled.ExpandMore, contentDescription = null, tint = ForestPrimary)
+                    Icon(Icons.Filled.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -470,8 +467,8 @@ private fun LesnichestvoPill(
 private fun LayersPanel(layers: MapLayers, onChange: (MapLayers) -> Unit, onDownload: () -> Unit, downloadRunning: Boolean) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = ForestSurface.copy(alpha = 0.94f),
-        border = BorderStroke(1.dp, ForestOutline.copy(alpha = 0.7f)),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
         shadowElevation = 4.dp,
         modifier = Modifier.width(210.dp),
     ) {
@@ -480,7 +477,7 @@ private fun LayersPanel(layers: MapLayers, onChange: (MapLayers) -> Unit, onDown
             LayerRow("Выделы", layers.vydela) { onChange(layers.copy(vydela = it)) }
             LayerRow("Делянки", layers.lesoseki) { onChange(layers.copy(lesoseki = it)) }
             LayerRow("Спутниковый снимок", layers.satellite) { onChange(layers.copy(satellite = it)) }
-            HorizontalDivider(color = ForestOutline)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             TextButton(onClick = onDownload, enabled = !downloadRunning, modifier = Modifier.padding(horizontal = 6.dp)) {
                 Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                 Text(if (downloadRunning) "Идёт загрузка…" else "Скачать карту", modifier = Modifier.padding(start = 8.dp))
@@ -502,7 +499,7 @@ private fun LayerRow(label: String, checked: Boolean, onCheckedChange: (Boolean)
                 checked = checked,
                 onCheckedChange = null,
                 modifier = Modifier.padding(10.dp),
-                colors = CheckboxDefaults.colors(checkedColor = ForestPrimary),
+                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
             )
             Text(label, style = MaterialTheme.typography.bodyMedium)
         }
@@ -513,7 +510,7 @@ private fun LayerRow(label: String, checked: Boolean, onCheckedChange: (Boolean)
 private fun StatusChip(text: String, isError: Boolean = false) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = ForestSurface.copy(alpha = 0.9f),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
         border = BorderStroke(1.dp, (if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary).copy(alpha = 0.6f)),
     ) {
         Text(
@@ -530,8 +527,8 @@ private fun StatusChip(text: String, isError: Boolean = false) {
 private fun ObjectCard(state: MapUiState, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = ForestSurface.copy(alpha = 0.96f),
-        border = BorderStroke(1.dp, ForestOutline),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shadowElevation = 8.dp,
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -570,7 +567,7 @@ private fun ObjectCard(state: MapUiState, onDismiss: () -> Unit, modifier: Modif
                         Text(
                             state.selectedKvartalLabel,
                             style = MaterialTheme.typography.titleLarge,
-                            color = ForestPrimary,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(end = 40.dp),
                         )
                         Text(
@@ -602,7 +599,7 @@ private fun VydelCardContent(card: VydelCard, kind: ShapeKind?) {
     Text(
         (if (kind == ShapeKind.LESOSEKA) "Делянка · " else "Выдел · ") + "кв. ${card.kvartal ?: "—"}, выд. ${card.vydel ?: "—"}",
         style = MaterialTheme.typography.titleLarge,
-        color = ForestPrimary,
+        color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(end = 40.dp),
     )
     card.lesnichestvo?.let {
@@ -652,7 +649,7 @@ private fun Stat(label: String, value: String?, modifier: Modifier = Modifier) {
     ) {
         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value ?: "—", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = ForestPrimary)
+            Text(value ?: "—", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -679,8 +676,8 @@ private val legendItems = listOf(
 private fun Legend() {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = ForestSurface.copy(alpha = 0.82f),
-        border = BorderStroke(1.dp, ForestOutline.copy(alpha = 0.6f)),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
     ) {
         Row(
             modifier = Modifier
@@ -706,14 +703,14 @@ private fun SelectionHint(selection: MapSelection, onOpen: () -> Unit, onClear: 
     Surface(
         onClick = onOpen,
         shape = RoundedCornerShape(20.dp),
-        color = ForestSurface.copy(alpha = 0.96f),
-        border = BorderStroke(1.dp, ForestOutline),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shadowElevation = 8.dp,
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp).fillMaxWidth(),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 6.dp, end = 4.dp)) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, color = ForestPrimary)
+                Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 Text(
                     if (selection.vydel != null) "Нажмите ещё раз — таксация" else "Нажмите ещё раз — информация",
                     style = MaterialTheme.typography.labelMedium,
@@ -740,7 +737,7 @@ private fun DelyankaCardContent(card: DelyankaCard) {
     Text(
         "Делянка" + (card.nazvanie?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
         style = MaterialTheme.typography.titleLarge,
-        color = ForestPrimary,
+        color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(end = 40.dp),
     )
     Text(

@@ -9,19 +9,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -30,14 +24,17 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.ui.bot.BreakdownViewModel
+import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PhotoPickerField
-import com.lesovod.mobile.ui.theme.ForestAccent
-import com.lesovod.mobile.ui.theme.ForestSuccess
+import com.lesovod.mobile.ui.components.SecondaryButton
+import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.components.UrgentErrorButton
+import com.lesovod.mobile.ui.theme.Spacing
 
+/** Экран 5 редизайна «Поляна» (docs/SCREENS.md) — «Поломка техники». */
 @Composable
 fun BreakdownScreen(
     onBack: () -> Unit,
@@ -51,60 +48,38 @@ fun BreakdownScreen(
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState()),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(Spacing.xs)) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Назад")
             }
-            Text(
-                "Поломка техники",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Text("Поломка техники", style = MaterialTheme.typography.titleSmall)
         }
 
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.m),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = Spacing.l, vertical = Spacing.m),
         ) {
             if (state.submitted) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = ForestSuccess.copy(alpha = 0.12f)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Сообщение отправлено", color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Мастер и лесничий получат уведомление о поломке.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                        OutlinedButton(onClick = onBack, modifier = Modifier.padding(top = 12.dp)) {
-                            Text("Вернуться к отчёту")
-                        }
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    StatusChip(text = "Сообщение отправлено", tone = ChipTone.OK)
+                    Text(
+                        "Мастер и лесничий получат уведомление о поломке.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SecondaryButton(text = "Вернуться к отчёту", onClick = onBack)
                 }
             } else if (state.queuedOffline) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Нет сети — сообщение сохранено на устройстве", color = ForestAccent, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Оно отправится автоматически, как только появится связь.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                        OutlinedButton(onClick = onBack, modifier = Modifier.padding(top = 12.dp)) {
-                            Text("Вернуться к отчёту")
-                        }
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    StatusChip(text = "Нет сети — сообщение сохранено на устройстве", tone = ChipTone.WARN)
+                    Text(
+                        "Оно отправится автоматически, как только появится связь.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SecondaryButton(text = "Вернуться к отчёту", onClick = onBack)
                 }
             } else {
                 OutlinedTextField(
@@ -120,39 +95,23 @@ fun BreakdownScreen(
                 PhotoPickerField(uri = state.photoUri, onPicked = viewModel::onPhotoPicked)
 
                 if (state.error != null) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = state.error.orEmpty(),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(12.dp),
-                        )
+                    StatusChip(text = state.error.orEmpty(), tone = ChipTone.ERROR)
+                }
+
+                if (state.isSubmitting) {
+                    Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     }
                 }
 
-                Button(
+                // Заливка `error`, не `tertiary` — сознательное исключение: это тревога,
+                // а не «следующий шаг» (см. docs/COMPONENTS.md редизайна «Поляна»).
+                UrgentErrorButton(
+                    text = "Сообщить о поломке",
                     onClick = viewModel::submit,
                     enabled = !state.isSubmitting,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (state.isSubmitting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text("Сообщить о поломке")
-                    }
-                }
+                    modifier = Modifier.padding(bottom = Spacing.xl),
+                )
             }
         }
     }

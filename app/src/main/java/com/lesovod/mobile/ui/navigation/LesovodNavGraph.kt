@@ -54,7 +54,6 @@ import com.lesovod.mobile.ui.screens.RegistrationScreen
 import com.lesovod.mobile.ui.screens.StockScreen
 import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
-import com.lesovod.mobile.ui.theme.ForestAccent
 import com.lesovod.mobile.ui.trelevka.TrelevkaScreen
 
 @Composable
@@ -221,7 +220,7 @@ private fun MainScaffold(
 @Composable
 private fun PendingSyncBanner(count: Int, onRetryNow: () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)),
         shape = RoundedCornerShape(0.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -232,7 +231,7 @@ private fun PendingSyncBanner(count: Int, onRetryNow: () -> Unit) {
             Text(
                 text = "Нет сети: $count " + pluralActionsRu(count) + " ждут отправки",
                 style = MaterialTheme.typography.bodyMedium,
-                color = ForestAccent,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onRetryNow) {

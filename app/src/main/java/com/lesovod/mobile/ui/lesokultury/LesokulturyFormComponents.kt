@@ -15,8 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -26,7 +24,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -40,9 +37,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.lesovod.mobile.ui.components.ChipTone
+import com.lesovod.mobile.ui.components.SecondaryButton
+import com.lesovod.mobile.ui.components.StatusChip
 import com.lesovod.mobile.ui.proba.LesokulturyUchastok
-import com.lesovod.mobile.ui.theme.ForestPrimary
-import com.lesovod.mobile.ui.theme.ForestSuccess
+import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.softCard
 import kotlinx.serialization.json.JsonElement
 import java.util.Locale
 
@@ -125,9 +125,7 @@ fun ProbyList(
                 }
             }
         }
-        OutlinedButton(onClick = onAdd, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
-            Text("Добавить пробу")
-        }
+        SecondaryButton(text = "Добавить пробу", onClick = onAdd, enabled = enabled)
     }
 }
 
@@ -188,8 +186,8 @@ private fun PorodaChip(poroda: String, count: Int, enabled: Boolean, onTap: () -
     val hasCount = count > 0
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = if (hasCount) ForestPrimary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, if (hasCount) ForestPrimary else MaterialTheme.colorScheme.outlineVariant),
+        color = if (hasCount) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, if (hasCount) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.combinedClickable(enabled = enabled, onClick = onTap, onLongClick = onUndo),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -198,7 +196,7 @@ private fun PorodaChip(poroda: String, count: Int, enabled: Boolean, onTap: () -
                 Text(
                     " ×$count",
                     style = MaterialTheme.typography.labelLarge,
-                    color = ForestPrimary,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -235,28 +233,22 @@ private fun RezultatRow(rezultat: RezultatEntry, enabled: Boolean, onVysazhenoCh
 @Composable
 fun PreviewCard(preview: LesokulturyPreview) {
     if (preview.shtNaGa == null) return
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m)) {
+        Text(
+            "Предварительный расчёт — не отправляется на сервер",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Штук на 1 га: %.0f".format(Locale.US, preview.shtNaGa),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
+        preview.naPloshad?.let {
             Text(
-                "Предварительный расчёт — не отправляется на сервер",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                "Штук на 1 га: %.0f".format(Locale.US, preview.shtNaGa),
+                "На всю площадь участка: %.0f шт.".format(Locale.US, it),
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(top = 4.dp),
             )
-            preview.naPloshad?.let {
-                Text(
-                    "На всю площадь участка: %.0f шт.".format(Locale.US, it),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
         }
     }
 }
@@ -264,23 +256,11 @@ fun PreviewCard(preview: LesokulturyPreview) {
 /** Ответ сервера после сохранения — схема на сервере не типизирована, показываем то, что реально пришло. */
 @Composable
 fun ServerResultCard(result: JsonElement, title: String, onNewCard: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = ForestSuccess.copy(alpha = 0.12f)),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
-            result.toDisplayRows().forEach { (key, value) ->
-                Text(
-                    "$key: $value",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-            }
-            OutlinedButton(onClick = onNewCard, modifier = Modifier.padding(top = 12.dp)) {
-                Text("Новая карточка")
-            }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        StatusChip(text = title, tone = ChipTone.OK)
+        result.toDisplayRows().forEach { (key, value) ->
+            Text("$key: $value", style = MaterialTheme.typography.bodyMedium)
         }
+        SecondaryButton(text = "Новая карточка", onClick = onNewCard)
     }
 }

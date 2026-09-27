@@ -11,22 +11,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -35,15 +29,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.network.dto.ProbaResponse
+import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PhotoPickerField
-import com.lesovod.mobile.ui.theme.ForestAccent
-import com.lesovod.mobile.ui.theme.ForestSuccess
+import com.lesovod.mobile.ui.components.PrimaryButton
+import com.lesovod.mobile.ui.components.SecondaryButton
+import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.softCard
 import java.util.Calendar
 import java.util.Locale
 
@@ -57,22 +54,18 @@ fun ProbaScreen(onBack: () -> Unit, viewModel: ProbaViewModel = viewModel()) {
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState()),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(Spacing.xs)) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Назад")
             }
-            Text(
-                "Проба рубок ухода",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Text("Проба рубок ухода", style = MaterialTheme.typography.titleSmall)
         }
 
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.m),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = Spacing.l, vertical = Spacing.m),
         ) {
             if (state.result != null) {
                 ProbaResultCard(result = state.result, onNewProba = viewModel::newProba)
@@ -88,62 +81,40 @@ fun ProbaScreen(onBack: () -> Unit, viewModel: ProbaViewModel = viewModel()) {
 @Composable
 private fun ProbaResultCard(result: ProbaResponse?, onNewProba: () -> Unit) {
     if (result == null) return
-    Card(
-        colors = CardDefaults.cardColors(containerColor = ForestSuccess.copy(alpha = 0.12f)),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Проба сохранена", color = ForestSuccess, style = MaterialTheme.typography.titleMedium)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        StatusChip(text = "Проба сохранена", tone = ChipTone.OK)
 
-            ResultRow("Запас на укладках", result.obyomSkladTotal)
-            ResultRow("Запас пробы", result.zapasProbyTotal)
-            ResultRow("Запас на 1 га", result.zapasNa1Ga)
-            ResultRow("Запас на лесосеке", result.zapasNaLesoseke)
+        ResultRow("Запас на укладках", result.obyomSkladTotal)
+        ResultRow("Запас пробы", result.zapasProbyTotal)
+        ResultRow("Запас на 1 га", result.zapasNa1Ga)
+        ResultRow("Запас на лесосеке", result.zapasNaLesoseke)
 
-            if (result.rows.isNotEmpty()) {
+        if (result.rows.isNotEmpty()) {
+            Text("По укладкам", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            result.rows.forEach { row ->
                 Text(
-                    "По укладкам",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 10.dp),
+                    "${row.poroda}: ${row.shirina}×${row.vysota}×${row.dlina}" +
+                        (row.obyom?.let { " → %.3f м³".format(Locale.US, it) } ?: ""),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                result.rows.forEach { row ->
-                    Text(
-                        "${row.poroda}: ${row.shirina}×${row.vysota}×${row.dlina}" +
-                            (row.obyom?.let { " → %.3f м³".format(Locale.US, it) } ?: ""),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            OutlinedButton(onClick = onNewProba, modifier = Modifier.padding(top = 12.dp)) {
-                Text("Новая проба")
             }
         }
+
+        SecondaryButton(text = "Новая проба", onClick = onNewProba)
     }
 }
 
 @Composable
 private fun ProbaQueuedOfflineCard(onNewProba: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = ForestAccent.copy(alpha = 0.15f)),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Нет сети — проба сохранена на устройстве", color = ForestAccent, style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Она отправится автоматически, как только появится связь.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            OutlinedButton(onClick = onNewProba, modifier = Modifier.padding(top = 12.dp)) {
-                Text("Новая проба")
-            }
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        StatusChip(text = "Нет сети — проба сохранена на устройстве", tone = ChipTone.WARN)
+        Text(
+            "Она отправится автоматически, как только появится связь.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        SecondaryButton(text = "Новая проба", onClick = onNewProba)
     }
 }
 
@@ -202,7 +173,8 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
             .fillMaxWidth()
             .padding(bottom = 4.dp),
     )
-    OutlinedButton(
+    SecondaryButton(
+        text = "Изменить дату",
         onClick = {
             val parts = state.dataZamera.split("-").mapNotNull { it.toIntOrNull() }
             val calendar = Calendar.getInstance()
@@ -216,9 +188,7 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
             ).show()
         },
         enabled = !state.isSubmitting,
-    ) {
-        Text("Изменить дату")
-    }
+    )
 
     Text(
         "Укладки",
@@ -240,9 +210,7 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
         )
     }
 
-    OutlinedButton(onClick = viewModel::addRow, enabled = !state.isSubmitting, modifier = Modifier.fillMaxWidth()) {
-        Text("Добавить укладку")
-    }
+    SecondaryButton(text = "Добавить укладку", onClick = viewModel::addRow, enabled = !state.isSubmitting)
 
     Text(
         "Пробные площадки",
@@ -310,38 +278,19 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
     }
 
     if (state.error != null) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = state.error,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(12.dp),
-            )
-        }
+        StatusChip(text = state.error, tone = ChipTone.ERROR)
     }
 
     val canSubmit = !state.isSubmitting && state.fotoStolbDelyankiUri != null && state.fotoStolbProbyUri != null
-    Button(
+    PrimaryButton(
+        text = "Рассчитать и сохранить",
         onClick = viewModel::submit,
         enabled = canSubmit,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 24.dp),
-    ) {
-        if (state.isSubmitting) {
-            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-        } else {
-            Text("Рассчитать и сохранить")
-        }
-    }
+        modifier = Modifier.padding(bottom = Spacing.xl),
+        icon = if (state.isSubmitting) {
+            { CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) }
+        } else null,
+    )
 }
 
 @Composable
@@ -355,13 +304,7 @@ private fun ProbaRowCard(
     onDlinaChange: (String) -> Unit,
     onRemove: () -> Unit,
 ) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = row.poroda,
@@ -410,6 +353,5 @@ private fun ProbaRowCard(
                     modifier = Modifier.weight(1f),
                 )
             }
-        }
     }
 }
