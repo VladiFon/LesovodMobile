@@ -12,11 +12,30 @@ android {
         applicationId = "com.lesovod.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
+    }
+
+    // Фиксированный debug-ключ в репозитории (keystore/debug.keystore) вместо
+    // автогенерируемого Gradle ~/.android/debug.keystore: каждый раз, когда CI собирает
+    // APK на свежей машине без этого файла, Gradle создаёт НОВЫЙ случайный ключ — подпись
+    // отличается от предыдущей сборки, и Android отказывается ставить обновление поверх
+    // старой версии ("конфликт пакетов" / INSTALL_FAILED_UPDATE_INCOMPATIBLE). С общим
+    // закоммиченным ключом все debug-сборки подписаны одинаково, обновления ставятся
+    // без переустановки (кроме одного раза — перехода со сборки со старым случайным ключом).
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("../keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
