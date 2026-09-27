@@ -68,6 +68,7 @@ import com.lesovod.mobile.ui.screens.RegistrationScreen
 import com.lesovod.mobile.ui.screens.StockScreen
 import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
+import com.lesovod.mobile.ui.tabel.TabelScreen
 import com.lesovod.mobile.ui.trelevka.TrelevkaScreen
 
 @Composable
@@ -155,8 +156,12 @@ fun LesovodNavGraph() {
                     onOpenProba = { navController.navigate(Screen.Proba.route) },
                     onOpenInventarizatsiya = { navController.navigate(Screen.Inventarizatsiya.route) },
                     onOpenPerevod = { navController.navigate(Screen.Perevod.route) },
+                    onOpenTabel = { navController.navigate(Screen.Tabel.route) },
                 )
             }
+        }
+        composable(Screen.Tabel.route) {
+            TabelScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Notifications.route) {
             NotificationsScreen(

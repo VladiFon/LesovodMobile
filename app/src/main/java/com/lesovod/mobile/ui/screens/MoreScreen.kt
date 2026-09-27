@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.data.session.canManageLesokultury
+import com.lesovod.mobile.data.session.canManageTabel
 import com.lesovod.mobile.data.session.canViewProba
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.Dimens
@@ -58,6 +60,7 @@ fun MoreScreen(
     onOpenProba: () -> Unit,
     onOpenInventarizatsiya: () -> Unit,
     onOpenPerevod: () -> Unit,
+    onOpenTabel: () -> Unit,
 ) {
     val context = LocalContext.current
     val session by SessionManager.getInstance(context).session.collectAsState()
@@ -90,6 +93,9 @@ fun MoreScreen(
             if (role?.canManageLesokultury == true) {
                 MoreRow(icon = Icons.Filled.Forest, label = "Инвентаризация лесных культур", onClick = onOpenInventarizatsiya)
                 MoreRow(icon = Icons.Filled.SwapHoriz, label = "Перевод лесных культур", onClick = onOpenPerevod)
+            }
+            if (role?.canManageTabel == true) {
+                MoreRow(icon = Icons.Filled.EventNote, label = "Табель — ручной ввод", onClick = onOpenTabel)
             }
 
             Spacer(Modifier.height(Spacing.xl))

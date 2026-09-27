@@ -21,8 +21,13 @@ import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
+import com.lesovod.mobile.data.network.dto.TabelDayEntryDto
+import com.lesovod.mobile.data.network.dto.TabelDaySaveRequest
+import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
+import com.lesovod.mobile.data.network.dto.VidRabotyCreateRequest
+import com.lesovod.mobile.data.network.dto.VidRabotyDto
 import com.lesovod.mobile.data.network.dto.WorkerLoginRequest
 import com.lesovod.mobile.ui.proba.LesokulturyUchastokDto
 import kotlinx.serialization.json.JsonElement
@@ -247,4 +252,35 @@ interface ApiService {
         @Query("vydel") vydel: String,
         @Query("lesnichestvo") lesnichestvo: String? = null,
     ): JsonObject
+
+    // Табель — ручной ввод (app/routers/tabel.py): require_office_or_master, тот же круг
+    // ролей, что и у остальных экранов руководителей мобильного приложения.
+    @GET("api/tabel/day")
+    suspend fun getTabelDay(
+        @Header("Authorization") bearerToken: String,
+        @Query("data") data: String,
+    ): List<TabelDayEntryDto>
+
+    @POST("api/tabel/day")
+    suspend fun saveTabelDay(
+        @Header("Authorization") bearerToken: String,
+        @Body body: TabelDaySaveRequest,
+    ): List<TabelDayEntryDto>
+
+    @GET("api/tabel/vidy-rabot")
+    suspend fun listVidyRabot(
+        @Header("Authorization") bearerToken: String,
+    ): List<VidRabotyDto>
+
+    @POST("api/tabel/vidy-rabot")
+    suspend fun createVidRaboty(
+        @Header("Authorization") bearerToken: String,
+        @Body body: VidRabotyCreateRequest,
+    ): VidRabotyDto
+
+    @GET("api/tabel/lesokultury-uchastki")
+    suspend fun listTabelLesokulturyUchastki(
+        @Header("Authorization") bearerToken: String,
+        @Query("search") search: String? = null,
+    ): List<TabelLesokulturyUchastokDto>
 }
