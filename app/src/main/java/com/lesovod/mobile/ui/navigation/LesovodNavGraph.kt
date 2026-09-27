@@ -155,8 +155,6 @@ fun LesovodNavGraph() {
                     onOpenProba = { navController.navigate(Screen.Proba.route) },
                     onOpenInventarizatsiya = { navController.navigate(Screen.Inventarizatsiya.route) },
                     onOpenPerevod = { navController.navigate(Screen.Perevod.route) },
-                    onOpenStock = { navController.navigate(Screen.Stock.route) },
-                    onOpenKubaturnik = { navController.navigate(Screen.Kubaturnik.route) },
                 )
             }
         }
@@ -191,7 +189,7 @@ private fun MainScaffold(
     val pending by queueManager.pending.collectAsState()
     val session by SessionManager.getInstance(context).session.collectAsState()
     val role = session?.role
-    val navItems = remember { bottomNavItems() }
+    val navItems = remember(role) { bottomNavItems(role) }
     val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
     val unreadCount by badgeManager.unreadCount.collectAsState()
     LaunchedEffect(Unit) { badgeManager.refresh() }
