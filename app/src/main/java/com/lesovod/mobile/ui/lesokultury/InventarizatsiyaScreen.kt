@@ -83,6 +83,8 @@ fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewMo
                 return@Column
             }
 
+            UchastokPolyaCard(uchastok = state.selectedUchastok!!, enabled = !state.isSubmitting)
+
             Column(
                 verticalArrangement = Arrangement.spacedBy(Spacing.m),
                 modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),

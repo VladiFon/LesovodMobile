@@ -15,6 +15,7 @@ import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.PerevodRequest
+import com.lesovod.mobile.data.network.dto.UchastokPolyaRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
@@ -222,6 +223,10 @@ class BotRepository(
 
     suspend fun submitPerevod(uchastokId: Int, request: PerevodRequest): Result<JsonElement> = safeCall {
         api.createPerevod(requireToken(), uchastokId, request)
+    }
+
+    suspend fun updateUchastokPolya(uchastokId: Int, request: UchastokPolyaRequest): Result<JsonElement> = safeCall {
+        api.updateUchastokPolya(requireToken(), uchastokId, request)
     }
 
     /** Справочник пород — публичный, не требует токена. */

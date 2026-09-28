@@ -315,6 +315,7 @@ class OfflineQueueManager private constructor(context: Context) {
         val result = when {
             payload.inventarizatsiya != null -> repository.submitInventarizatsiya(payload.uchastokId, payload.inventarizatsiya)
             payload.perevod != null -> repository.submitPerevod(payload.uchastokId, payload.perevod)
+            payload.polya != null -> repository.updateUchastokPolya(payload.uchastokId, payload.polya)
             else -> return FlushOutcome.Failed("Повреждённые данные действия")
         }
         return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
