@@ -92,6 +92,8 @@ class BotRepository(
         photoPath: String?,
         lat: Double? = null,
         lon: Double? = null,
+        delyankaId: Int? = null,
+        lesokulturyUchastokId: Int? = null,
     ): Result<Unit> {
         val telegramId = sessionManager.session.value?.appIdentity
             ?: return Result.failure(Exception("Не удалось определить учётную запись для отправки — переавторизуйтесь"))
@@ -108,6 +110,8 @@ class BotRepository(
                     opisanie = opisanie?.takeIf { it.isNotBlank() },
                     lat = lat,
                     lon = lon,
+                    delyankaId = delyankaId,
+                    lesokulturyUchastokId = lesokulturyUchastokId,
                 ),
             )
             Unit

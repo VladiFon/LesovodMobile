@@ -13,6 +13,8 @@ data class RawReportRequest(
     val opisanie: String? = null,
     val lat: Double? = null,
     val lon: Double? = null,
+    @SerialName("delyanka_id") val delyankaId: Int? = null,
+    @SerialName("lesokultury_uchastok_id") val lesokulturyUchastokId: Int? = null,
 )
 
 @Serializable

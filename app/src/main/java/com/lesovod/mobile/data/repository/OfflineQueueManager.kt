@@ -89,10 +89,14 @@ class OfflineQueueManager private constructor(context: Context) {
         uploadedPhotoPath: String?,
         lat: Double? = null,
         lon: Double? = null,
+        delyankaId: Int? = null,
+        lesokulturyUchastokId: Int? = null,
     ) {
         val id = UUID.randomUUID().toString()
         val localPhotoPath = photoUri?.let { copyUriToLocalFile(id, it) }
-        val payload = PendingReportPayload(tipRaboty, kvartal, vydels, opisanie, uploadedPhotoPath, lat, lon)
+        val payload = PendingReportPayload(
+            tipRaboty, kvartal, vydels, opisanie, uploadedPhotoPath, lat, lon, delyankaId, lesokulturyUchastokId,
+        )
         enqueue(id, PendingActionType.REPORT, json.encodeToString(payload), localPhotoPath)
     }
 
@@ -251,6 +255,7 @@ class OfflineQueueManager private constructor(context: Context) {
         }
         val result = repository.submitReport(
             payload.tipRaboty, payload.kvartal, payload.vydels, payload.opisanie, photoPath, payload.lat, payload.lon,
+            payload.delyankaId, payload.lesokulturyUchastokId,
         )
         return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
     }

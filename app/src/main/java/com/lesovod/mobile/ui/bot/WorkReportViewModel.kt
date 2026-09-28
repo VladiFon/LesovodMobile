@@ -12,12 +12,17 @@ import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
+import com.lesovod.mobile.ui.proba.LesokulturyUchastok
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Как заполнена локация отчёта: привязка к реальной делянке или ручной ввод квартала/выдела. */
-enum class WorkReportLocationMode { DELYANKA, MANUAL }
+/** Как заполнена локация отчёта: делянка, участок лесных культур или ручной ввод квартала/выдела. */
+enum class WorkReportLocationMode(val label: String) {
+    DELYANKA("Делянка"),
+    LESOKULTURY("Лесные культуры"),
+    MANUAL("Вручную"),
+}
 
 data class WorkReportUiState(
     val tipRaboty: String = "",
@@ -39,6 +44,11 @@ data class WorkReportUiState(
     val delyankiError: String? = null,
     val delyankaSearchQuery: String = "",
     val showDelyankaPicker: Boolean = false,
+    // Участок лесных культур — для работ по уходу за культурами.
+    val uchastki: List<LesokulturyUchastok> = emptyList(),
+    val selectedUchastok: LesokulturyUchastok? = null,
+    val isLoadingUchastki: Boolean = false,
+    val uchastkiError: String? = null,
 )
 
 class WorkReportViewModel(application: Application) : AndroidViewModel(application) {
@@ -87,6 +97,31 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
     /** Переключение между «выбрать делянку» и «указать вручную» — обе ветки хранятся в стейте. */
     fun setLocationMode(mode: WorkReportLocationMode) {
         _uiState.value = _uiState.value.copy(locationMode = mode, error = null)
+        if (mode == WorkReportLocationMode.LESOKULTURY && _uiState.value.uchastki.isEmpty() && !_uiState.value.isLoadingUchastki) {
+            loadUchastki()
+        }
+    }
+
+    fun retryLoadUchastki() = loadUchastki()
+
+    private fun loadUchastki() {
+        _uiState.value = _uiState.value.copy(isLoadingUchastki = true, uchastkiError = null)
+        viewModelScope.launch {
+            val result = repository.listLesokulturyUchastki()
+            _uiState.value = result.fold(
+                onSuccess = { list -> _uiState.value.copy(isLoadingUchastki = false, uchastki = list) },
+                onFailure = { err ->
+                    _uiState.value.copy(
+                        isLoadingUchastki = false,
+                        uchastkiError = err.message ?: "Не удалось загрузить участки лесных культур",
+                    )
+                },
+            )
+        }
+    }
+
+    fun selectUchastok(uchastok: LesokulturyUchastok?) {
+        _uiState.value = _uiState.value.copy(selectedUchastok = uchastok, error = null)
     }
 
     fun openDelyankaPicker() {
@@ -145,12 +180,19 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.value = state.copy(error = "Выберите делянку или перейдите на ручной ввод квартала/выдела")
             return
         }
+        if (state.locationMode == WorkReportLocationMode.LESOKULTURY && state.selectedUchastok == null) {
+            _uiState.value = state.copy(error = "Выберите участок лесных культур")
+            return
+        }
 
-        // Локация отчёта: либо реальная делянка (шлём её id и её квартал/выдел), либо то, что
-        // человек ввёл руками — работа велась не на заведённой делянке.
+        // Локация отчёта: реальная делянка или участок л/к (шлём id и их квартал/выдел), либо то,
+        // что человек ввёл руками — работа велась не на заведённом объекте.
         val delyanka = state.selectedDelyanka.takeIf { state.locationMode == WorkReportLocationMode.DELYANKA }
-        val kvartal = delyanka?.kvartal ?: state.kvartal
-        val vydels = delyanka?.vydel?.let { listOf(it) } ?: state.vydels
+        val uchastok = state.selectedUchastok.takeIf { state.locationMode == WorkReportLocationMode.LESOKULTURY }
+        val kvartal = delyanka?.kvartal ?: uchastok?.kvartal ?: state.kvartal
+        val vydels = delyanka?.vydel?.let { listOf(it) } ?: uchastok?.vydel?.let { listOf(it) } ?: state.vydels
+        val delyankaId = delyanka?.delyankaId
+        val uchastokId = uchastok?.id
 
         _uiState.value = state.copy(isSubmitting = true, error = null)
         viewModelScope.launch {
@@ -174,6 +216,8 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                         uploadedPhotoPath = null,
                         lat = lat,
                         lon = lon,
+                        delyankaId = delyankaId,
+                        lesokulturyUchastokId = uchastokId,
                     )
                     _uiState.value = WorkReportUiState(queuedOffline = true)
                     return@launch
@@ -196,6 +240,8 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                 photoPath = photoPath,
                 lat = lat,
                 lon = lon,
+                delyankaId = delyankaId,
+                lesokulturyUchastokId = uchastokId,
             )
             val error = result.exceptionOrNull()
             if (error is ConnectivityException) {
@@ -208,6 +254,8 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                     uploadedPhotoPath = photoPath,
                     lat = lat,
                     lon = lon,
+                    delyankaId = delyankaId,
+                    lesokulturyUchastokId = uchastokId,
                 )
                 _uiState.value = WorkReportUiState(queuedOffline = true)
                 return@launch

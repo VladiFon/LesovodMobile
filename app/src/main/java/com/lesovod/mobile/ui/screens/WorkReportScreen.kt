@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
@@ -58,6 +59,7 @@ import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.components.SecondaryButton
 import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.components.UchastokSelector
 import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 
@@ -128,9 +130,37 @@ fun WorkReportScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                // Локация отчёта: по умолчанию — привязка к реальной делянке из справочника;
-                // «указать вручную» остаётся запасным путём для работ вне заведённых делянок.
-                if (state.locationMode == WorkReportLocationMode.DELYANKA) {
+                // Локация отчёта: делянка из справочника, участок лесных культур (поиск + год)
+                // или ручной ввод — запасной путь для работ вне заведённых объектов.
+                Text("Где велась работа", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
+                    WorkReportLocationMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = state.locationMode == mode,
+                            onClick = { viewModel.setLocationMode(mode) },
+                            label = { Text(mode.label) },
+                            enabled = !state.isSubmitting,
+                        )
+                    }
+                }
+                if (state.locationMode == WorkReportLocationMode.LESOKULTURY) {
+                    when {
+                        state.isLoadingUchastki -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        state.uchastkiError != null -> {
+                            StatusChip(text = state.uchastkiError.orEmpty(), tone = ChipTone.ERROR)
+                            SecondaryButton(text = "Повторить", onClick = viewModel::retryLoadUchastki)
+                        }
+                        else -> UchastokSelector(
+                            uchastki = state.uchastki,
+                            selected = state.selectedUchastok,
+                            onSelect = viewModel::selectUchastok,
+                            enabled = !state.isSubmitting,
+                        )
+                    }
+                } else if (state.locationMode == WorkReportLocationMode.DELYANKA) {
                     val selectedDelyanka = state.selectedDelyanka
                     if (selectedDelyanka != null) {
                         SelectedDelyankaCard(
@@ -146,11 +176,6 @@ fun WorkReportScreen(
                             icon = { Icon(Icons.Filled.Place, contentDescription = null) },
                         )
                     }
-                    SecondaryButton(
-                        text = "Работа не на делянке — указать вручную",
-                        onClick = { viewModel.setLocationMode(WorkReportLocationMode.MANUAL) },
-                        enabled = !state.isSubmitting,
-                    )
                 } else {
                     OutlinedTextField(
                         value = state.kvartal,
@@ -198,13 +223,6 @@ fun WorkReportScreen(
                             }
                         }
                     }
-
-                    SecondaryButton(
-                        text = "Выбрать делянку из справочника",
-                        onClick = { viewModel.setLocationMode(WorkReportLocationMode.DELYANKA) },
-                        enabled = !state.isSubmitting,
-                        icon = { Icon(Icons.Filled.Place, contentDescription = null) },
-                    )
                 }
 
                 OutlinedTextField(

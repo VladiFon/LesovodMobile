@@ -36,6 +36,8 @@ data class PendingReportPayload(
     val photoPath: String? = null,
     val lat: Double? = null,
     val lon: Double? = null,
+    val delyankaId: Int? = null,
+    val lesokulturyUchastokId: Int? = null,
 )
 
 @Serializable
