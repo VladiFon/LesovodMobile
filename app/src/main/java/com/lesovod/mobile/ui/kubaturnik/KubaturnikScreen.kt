@@ -49,6 +49,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.local.KubaturnikCalculation
@@ -325,8 +327,8 @@ private fun SortRow(state: KubaturnikUiState, viewModel: KubaturnikViewModel) {
 
 @Composable
 private fun KubaturnikSummary(state: KubaturnikUiState) {
-    val rows = state.thicknessSummary()
-    if (rows.isEmpty()) {
+    val tables = state.thicknessSummary()
+    if (tables.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Пока нет данных", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -335,30 +337,65 @@ private fun KubaturnikSummary(state: KubaturnikUiState) {
 
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(rows) { row ->
+        items(tables) { table ->
             Card(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Ступень ${row.rangeLabel} см", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Column(modifier = Modifier.padding(vertical = 12.dp)) {
                     Text(
-                        "${row.sort} · ${row.destination.label}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        table.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
-                    Text(
-                        "${row.count} брёвен · ${row.volume.fmt(3)} м³",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                    ThicknessLine("Диаметр", "кол-во", "Объём, м³", header = true)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    table.rows.forEach { row ->
+                        when (row.kind) {
+                            ThicknessRowKind.DIAMETER ->
+                                ThicknessLine(row.label, row.count.toString(), row.volume.fmt(3))
+                            ThicknessRowKind.GROUP ->
+                                ThicknessLine(row.label, row.count.toString(), row.volume.fmt(3), group = true)
+                            ThicknessRowKind.TOTAL -> {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                ThicknessLine(row.label, row.count.toString(), row.volume.fmt(3), header = true)
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * Строка таблицы сводки. Диаметры — числом справа, как в ведомости; итоговые строки групп
+ * («14–24», «26 и б.») — подписью слева на подсвеченном фоне, чтобы их не спутать со ступенью.
+ */
+@Composable
+private fun ThicknessLine(label: String, count: String, volume: String, header: Boolean = false, group: Boolean = false) {
+    val style = if (header || group) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyLarge
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (group) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            label,
+            style = style,
+            color = if (group) MaterialTheme.colorScheme.primary else Color.Unspecified,
+            textAlign = if (header || group) TextAlign.Start else TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
+        Text(count, style = style, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+        Text(volume, style = style, textAlign = TextAlign.End, modifier = Modifier.weight(1.2f))
     }
 }
 
