@@ -38,6 +38,22 @@ object NetworkModule {
         response
     }
 
+    /**
+     * Токен рабочего ко всем запросам /api/, где его не поставили явно: с 28.09.2026 сервер
+     * отдаёт карту (кварталы, выделы, слои из QGIS, склады) только вошедшим.
+     */
+    private val authHeaderInterceptor = okhttp3.Interceptor { chain ->
+        val request = chain.request()
+        val token = SessionManager.peekInstance()?.session?.value?.token
+        if (token.isNullOrBlank() || request.header("Authorization") != null ||
+            !request.url.encodedPath.startsWith("/api/")
+        ) {
+            chain.proceed(request)
+        } else {
+            chain.proceed(request.newBuilder().header("Authorization", "Bearer $token").build())
+        }
+    }
+
     // OkHttp по умолчанию даёт 10 с на каждую фазу — маловато для мобильной связи в
     // лесничествах (медленная/нестабильная сеть), и SocketTimeoutException попадает в тот же
     // catch (IOException), что и настоящее отсутствие сети, поэтому "Нет соединения с
@@ -47,6 +63,7 @@ object NetworkModule {
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .addInterceptor(authHeaderInterceptor)
         .addInterceptor(authExpiryInterceptor)
         .addInterceptor(loggingInterceptor)
         .build()
