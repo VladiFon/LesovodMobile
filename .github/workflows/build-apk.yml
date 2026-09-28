@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,3 +36,22 @@ jobs:
           name: lesovod-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # Тег vX.Y.Z → релиз на GitHub с этим APK. Приложение (AppUpdateManager) берёт
+      # releases/latest и сравнивает тег с versionName — так рабочим приходит обновление.
+      - name: Check tag matches versionName
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "Тег ${GITHUB_REF_NAME} не совпадает с versionName $version" >&2
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: app/build/outputs/apk/debug/app-debug.apk
+          generate_release_notes: true
