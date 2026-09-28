@@ -67,7 +67,7 @@ data class TabelRowState(
             return TabelRowState(
                 sotrudnikId = dto.sotrudnikId,
                 fio = dto.fio,
-                dolzhnost = dto.dolzhnost,
+                dolzhnost = dto.dolzhnost.orEmpty(),
                 status = TabelStatus.fromWireValue(dto.status),
                 place = place,
                 vidRabotyId = dto.vidRabotyId,

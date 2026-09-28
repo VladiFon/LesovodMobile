@@ -13,7 +13,8 @@ import kotlinx.serialization.Serializable
 data class TabelDayEntryDto(
     @SerialName("sotrudnik_id") val sotrudnikId: Int,
     val fio: String,
-    val dolzhnost: String,
+    /** В справочнике сотрудников должность может быть не указана (NULL). */
+    val dolzhnost: String? = null,
     @SerialName("zapis_id") val zapisId: Int? = null,
     val status: String? = null,
     val kommentariy: String? = null,
@@ -73,5 +74,5 @@ data class TabelLesokulturyUchastokDto(
     val vydel: String? = null,
     val lesnichestvo: String? = null,
     @SerialName("glavnaya_poroda") val glavnayaPoroda: String? = null,
-    val nazvanie: String? = null,
+    @SerialName("delyanka_nazvanie") val nazvanie: String? = null,
 )

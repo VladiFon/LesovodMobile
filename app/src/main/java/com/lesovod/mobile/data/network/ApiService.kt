@@ -124,7 +124,9 @@ interface ApiService {
         @Body body: NoteCreateRequest,
     ): ResponseBody
 
-    @GET("api/notes")
+    // Со слешем на конце: без него сервер отвечал 307-редиректом на http://,
+    // Android его блокировал и экран показывал «Нет соединения с интернетом».
+    @GET("api/notes/")
     suspend fun listNotes(
         @Header("Authorization") bearerToken: String,
     ): List<NoteDto>
@@ -173,7 +175,7 @@ interface ApiService {
     @GET("api/uhody/porody")
     suspend fun listPorody(): PorodySpravochnikDto
 
-    @GET("api/notifications")
+    @GET("api/notifications/")
     suspend fun listNotifications(
         @Header("Authorization") bearerToken: String,
     ): List<JsonObject>

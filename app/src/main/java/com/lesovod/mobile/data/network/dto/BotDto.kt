@@ -81,7 +81,8 @@ data class RecipientDto(
 data class NoteDto(
     val id: Int,
     val text: String,
-    @SerialName("author_fio") val authorFio: String? = null,
+    /** Сервер отдаёт автора заметки как sotrudnik_fio (webext.list_worker_notes). */
+    @SerialName("sotrudnik_fio") val authorFio: String? = null,
     @SerialName("created_at") val createdAt: String,
 )
 
