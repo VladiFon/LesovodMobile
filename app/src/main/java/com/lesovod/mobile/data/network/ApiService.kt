@@ -20,6 +20,7 @@ import com.lesovod.mobile.data.network.dto.WorkColorsDto
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.LoginResponseDto
 import com.lesovod.mobile.data.network.dto.PerevodRequest
+import com.lesovod.mobile.data.network.dto.UchastokPolyaRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.PhotoUploadResponseDto
@@ -183,6 +184,13 @@ interface ApiService {
         @Header("Authorization") bearerToken: String,
         @Path("uchastok_id") uchastokId: Int,
         @Body body: PerevodRequest,
+    ): JsonElement
+
+    @PATCH("api/lesokultury/{uchastok_id}/polya")
+    suspend fun updateUchastokPolya(
+        @Header("Authorization") bearerToken: String,
+        @Path("uchastok_id") uchastokId: Int,
+        @Body body: UchastokPolyaRequest,
     ): JsonElement
 
     // Справочник пород (app/routers/uhody.py) — публичный, как остальные справочники карты.

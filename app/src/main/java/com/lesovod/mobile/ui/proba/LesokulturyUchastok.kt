@@ -18,6 +18,28 @@ data class LesokulturyUchastokDto(
     @SerialName("delyanka_nazvanie") val delyankaNazvanie: String? = null,
     val ploshad: Double? = null,
     @SerialName("god_sozdaniya") val godSozdaniya: String? = null,
+    @SerialName("vydel_staryy") val vydelStaryy: String? = null,
+    val podvydel: String? = null,
+    @SerialName("metod_sozdaniya") val metodSozdaniya: String? = null,
+    @SerialName("sposob_obrabotki") val sposobObrabotki: String? = null,
+    @SerialName("shema_mezhdu_ryadami") val shemaMezhduRyadami: Double? = null,
+    @SerialName("shema_v_ryadu") val shemaVRyadu: Double? = null,
+    @SerialName("gustota_posadki") val gustotaPosadki: Double? = null,
+    @SerialName("posadochnyy_material") val posadochnyyMaterial: String? = null,
+    @SerialName("sostav_formula") val sostavFormula: String? = null,
+)
+
+/** Поля участка для ведомостей текущих изменений — видны и дописываются в карточке на телефоне. */
+data class UchastokPolya(
+    val vydelStaryy: String? = null,
+    val podvydel: String? = null,
+    val metodSozdaniya: String? = null,
+    val sposobObrabotki: String? = null,
+    val shemaMezhduRyadami: Double? = null,
+    val shemaVRyadu: Double? = null,
+    val gustotaPosadki: Double? = null,
+    val posadochnyyMaterial: String? = null,
+    val sostavFormula: String? = null,
 )
 
 /**
@@ -32,6 +54,7 @@ data class LesokulturyUchastok(
     val kvartal: String? = null,
     val vydel: String? = null,
     val god: String? = null,
+    val polya: UchastokPolya = UchastokPolya(),
 )
 
 /** Год из god_sozdaniya: поле текстовое, встречается и "2023", и "2023 (весна)". */
@@ -55,5 +78,16 @@ fun LesokulturyUchastokDto.toLesokulturyUchastok(): LesokulturyUchastok {
         kvartal = kvartal?.takeIf { it.isNotBlank() },
         vydel = vydel?.takeIf { it.isNotBlank() },
         god = god,
+        polya = UchastokPolya(
+            vydelStaryy = vydelStaryy?.takeIf { it.isNotBlank() },
+            podvydel = podvydel?.takeIf { it.isNotBlank() },
+            metodSozdaniya = metodSozdaniya?.takeIf { it.isNotBlank() },
+            sposobObrabotki = sposobObrabotki?.takeIf { it.isNotBlank() },
+            shemaMezhduRyadami = shemaMezhduRyadami,
+            shemaVRyadu = shemaVRyadu,
+            gustotaPosadki = gustotaPosadki,
+            posadochnyyMaterial = posadochnyyMaterial?.takeIf { it.isNotBlank() },
+            sostavFormula = sostavFormula?.takeIf { it.isNotBlank() },
+        ),
     )
 }

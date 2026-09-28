@@ -3,6 +3,7 @@ package com.lesovod.mobile.data.local
 import com.lesovod.mobile.data.network.dto.ProbaRowRequest
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.PerevodRequest
+import com.lesovod.mobile.data.network.dto.UchastokPolyaRequest
 import kotlinx.serialization.Serializable
 
 /** Виды действий, которые можно выполнить офлайн и отправить позже. */
@@ -95,4 +96,5 @@ data class PendingLesokulturyPayload(
     val uchastokId: Int,
     val inventarizatsiya: InventarizatsiyaRequest? = null,
     val perevod: PerevodRequest? = null,
+    val polya: UchastokPolyaRequest? = null,
 )
