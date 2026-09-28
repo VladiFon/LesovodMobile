@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.lesovod.mobile.data.local.CompletedWorkStore
+import com.lesovod.mobile.data.network.dto.SkladDto
 import com.lesovod.mobile.data.location.hasLocationPermission
 import kotlinx.coroutines.delay
 import org.osmdroid.config.Configuration
@@ -50,6 +51,8 @@ import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.MapTileProviderBasic
+import org.osmdroid.tileprovider.modules.OfflineTileProvider
+import org.osmdroid.tileprovider.util.SimpleRegisterReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -92,6 +95,22 @@ fun ForestMapView(
     fitToken: Int,
     lesosekiTappable: Boolean,
     geoNotes: List<GeoNoteMarker>,
+    colorMode: ColorMode,
+    workColors: Map<String, Int>,
+    delyankaStatusColors: Map<String, Int>,
+    lesokulturyKeys: Set<String>,
+    taskKeys: Set<String>,
+    sklady: List<SkladDto>,
+    tool: MapTool,
+    rulerPoints: List<LatLon>,
+    walkPoints: List<LatLon>,
+    navTarget: LatLon?,
+    myLocation: LatLon?,
+    focus: MapFocus?,
+    offlineBasePath: String?,
+    onSkladTap: (SkladDto) -> Unit,
+    onRulerTap: (LatLon) -> Unit,
+    onLocationFix: (lat: Double, lon: Double, accuracy: Float?) -> Unit,
     onShapeTap: (MapShape) -> Unit,
     onEmptyTap: () -> Unit,
     onGeoNoteTap: (GeoNoteMarker) -> Unit,
@@ -110,6 +129,11 @@ fun ForestMapView(
     val scaleBarState = remember { mutableStateOf<ScaleBarOverlay?>(null) }
     val featuresOverlay = remember { ForestFeaturesOverlay(density) }
     val geoNotesOverlay = remember { GeoNotesOverlay(density) }
+    val toolsOverlay = remember { MapToolsOverlay(density) }
+    val offlineBaseOverlayState = remember { mutableStateOf<Pair<String, TilesOverlay>?>(null) }
+    val lastFocusToken = remember { mutableStateOf(focus?.token ?: 0) }
+    val onLocationFixState = remember { mutableStateOf(onLocationFix) }
+    onLocationFixState.value = onLocationFix
     // вернулись на вкладку — остаёмся там, где были, а не прыгаем на всё лесничество заново
     val lastFitToken = remember { mutableStateOf(if (initialCamera != null) fitToken else 0) }
     val onViewportChangedState = remember { mutableStateOf(onViewportChanged) }
@@ -140,6 +164,7 @@ fun ForestMapView(
     // у osmdroid нет слушателя поворота, а лишних перерисовок Compose при равных значениях не будет.
     LaunchedEffect(mapViewState.value) {
         val mapView = mapViewState.value ?: return@LaunchedEffect
+        var lastFixTime = 0L
         while (true) {
             delay(HUD_POLL_MS)
             val overlay = myLocationOverlayState.value
@@ -151,6 +176,13 @@ fun ForestMapView(
                     if (fix != null && fix.hasBearing() && fix.speed > 0.5f) {
                         mapView.mapOrientation = -fix.bearing
                     }
+                }
+            }
+            // каждая новая GPS-точка — в модель: "вы в кв./выд.", обмер обходом, "веди до делянки"
+            overlay?.lastFix?.let { fix ->
+                if (fix.time != lastFixTime) {
+                    lastFixTime = fix.time
+                    onLocationFixState.value(fix.latitude, fix.longitude, fix.accuracy.takeIf { fix.hasAccuracy() })
                 }
             }
             val next = MapHud(
@@ -208,6 +240,8 @@ fun ForestMapView(
 
                     overlays.add(featuresOverlay)
                     overlays.add(geoNotesOverlay)
+                    // выше меток: линейка должна перехватывать тапы раньше всех
+                    overlays.add(toolsOverlay)
 
                     val scaleBar = ScaleBarOverlay(this).apply {
                         setAlignBottom(true)
@@ -281,8 +315,49 @@ fun ForestMapView(
                 if (featuresOverlay.completed != completed) { featuresOverlay.completed = completed; dirty = true }
                 featuresOverlay.onShapeTap = onShapeTap
                 featuresOverlay.lesosekiTappable = lesosekiTappable
-                if (geoNotesOverlay.notes !== geoNotes) { geoNotesOverlay.notes = geoNotes; dirty = true }
+                val shownNotes = if (layers.geoNotes) geoNotes else emptyList()
+                if (geoNotesOverlay.notes !== shownNotes) { geoNotesOverlay.notes = shownNotes; dirty = true }
                 geoNotesOverlay.onNoteTap = onGeoNoteTap
+
+                if (featuresOverlay.colorMode != colorMode) { featuresOverlay.colorMode = colorMode; dirty = true }
+                if (featuresOverlay.workColors !== workColors) { featuresOverlay.workColors = workColors; dirty = true }
+                if (featuresOverlay.delyankaStatusColors !== delyankaStatusColors) { featuresOverlay.delyankaStatusColors = delyankaStatusColors; dirty = true }
+                if (featuresOverlay.lesokulturyKeys !== lesokulturyKeys) { featuresOverlay.lesokulturyKeys = lesokulturyKeys; dirty = true }
+                if (featuresOverlay.taskKeys != taskKeys) { featuresOverlay.taskKeys = taskKeys; dirty = true }
+
+                val rulerActive = tool == MapTool.RULER
+                if (toolsOverlay.rulerActive != rulerActive) { toolsOverlay.rulerActive = rulerActive; dirty = true }
+                if (toolsOverlay.rulerPoints !== rulerPoints) { toolsOverlay.rulerPoints = rulerPoints; dirty = true }
+                if (toolsOverlay.walkPoints !== walkPoints) { toolsOverlay.walkPoints = walkPoints; dirty = true }
+                if (toolsOverlay.navTarget != navTarget) { toolsOverlay.navTarget = navTarget; dirty = true }
+                if (toolsOverlay.myLocation != myLocation && navTarget != null) dirty = true
+                toolsOverlay.myLocation = myLocation
+                if (toolsOverlay.sklady !== sklady) { toolsOverlay.sklady = sklady; dirty = true }
+                if (toolsOverlay.showSklady != layers.sklady) { toolsOverlay.showSklady = layers.sklady; dirty = true }
+                toolsOverlay.onRulerTap = onRulerTap
+                toolsOverlay.onSkladTap = onSkladTap
+
+                // своя подложка (.mbtiles) — под всеми слоями, прозрачная там, где тайлов нет
+                val wantedBase = offlineBasePath?.takeIf { layers.offlineBase }
+                val currentBase = offlineBaseOverlayState.value
+                if (currentBase?.first != wantedBase) {
+                    currentBase?.let { (_, overlay) ->
+                        mapView.overlays.remove(overlay)
+                        overlay.onDetach(mapView)
+                    }
+                    offlineBaseOverlayState.value = wantedBase?.let { path ->
+                        createOfflineBaseOverlay(context, path)?.also { mapView.overlays.add(0, it) }?.let { path to it }
+                    }
+                    dirty = true
+                }
+
+                if (focus != null && focus.token != lastFocusToken.value) {
+                    lastFocusToken.value = focus.token
+                    myLocationOverlayState.value?.disableFollowLocation()
+                    locateMode = LocateMode.Off
+                    mapView.controller.animateTo(GeoPoint(focus.point.lat, focus.point.lon), focus.zoom, 700L)
+                    reportViewport(mapView)
+                }
 
                 if (fitToken != lastFitToken.value && kvartaly.isNotEmpty()) {
                     lastFitToken.value = fitToken
@@ -426,4 +501,20 @@ private fun scaleDenominator(zoom: Double, latitude: Double, xdpi: Float): Long 
 private fun formatScale(denominator: Long): String {
     val rounded = if (denominator >= 1000) (denominator / 100.0).roundToLong() * 100 else denominator
     return "%,d".format(rounded).replace(',', ' ')
+}
+
+/** Слой из файла .mbtiles; null — если файл не открылся (повреждён, не тот формат). */
+private fun createOfflineBaseOverlay(context: android.content.Context, path: String): TilesOverlay? = try {
+    val file = File(path)
+    if (!file.exists()) {
+        null
+    } else {
+        val provider = OfflineTileProvider(SimpleRegisterReceiver(context), arrayOf(file))
+        TilesOverlay(provider, context).apply {
+            setLoadingBackgroundColor(AndroidColor.TRANSPARENT)
+            setLoadingLineColor(AndroidColor.TRANSPARENT)
+        }
+    }
+} catch (e: Exception) {
+    null
 }

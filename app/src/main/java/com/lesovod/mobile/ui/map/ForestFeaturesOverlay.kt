@@ -1,6 +1,7 @@
 package com.lesovod.mobile.ui.map
 
 import android.graphics.Canvas
+import android.graphics.DashPathEffect
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
 import android.graphics.Path
@@ -18,6 +19,22 @@ import kotlin.math.pow
 /** Цвет делянки, где работа отмечена выполненной (см. legendItems в MapScreen). */
 val DONE_COLOR: Int = AndroidColor.parseColor("#2196F3")
 private val HIGHLIGHT_COLOR = AndroidColor.parseColor("#DF964E")
+val LESOKULTURY_COLOR: Int = AndroidColor.parseColor("#00E5FF")
+val TASK_COLOR: Int = AndroidColor.parseColor("#E040FB")
+
+enum class ColorMode { WORKS, STATUS }
+
+/** Статусы делянок — те же цвета, что на сервере (map_features.DELYANKA_STATUSES) и в QGIS. */
+enum class DelyankaStatus(val code: String, val label: String, val color: Int) {
+    WAITING("ожидает", "Ожидает", AndroidColor.parseColor("#FF9800")),
+    IN_PROGRESS("в работе", "В работе", AndroidColor.parseColor("#FFD600")),
+    DONE("выполнено", "Выполнено", AndroidColor.parseColor("#43A047"));
+
+    companion object {
+        fun fromCode(code: String?): DelyankaStatus =
+            entries.firstOrNull { it.code.equals(code?.trim(), ignoreCase = true) } ?: WAITING
+    }
+}
 
 private const val SELECTED_FILL_ALPHA = 130
 private const val MIN_VISIBLE_PX = 2.0
@@ -38,6 +55,19 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
     var completed: Set<String> = emptySet()
     var onShapeTap: (MapShape) -> Unit = {}
 
+    /** Как красить: по видам выполненных работ или по статусу делянок. */
+    var colorMode: ColorMode = ColorMode.WORKS
+
+    /** "кв|выд" -> цвет по видам работ (GET /api/map/work-colors, свежее цвета в кэше геометрии). */
+    var workColors: Map<String, Int> = emptyMap()
+
+    /** "кв|выд" -> цвет статуса делянки (ожидает / в работе / выполнено). */
+    var delyankaStatusColors: Map<String, Int> = emptyMap()
+
+    /** Выделы с участками лесных культур и с задачами рабочего на сегодня — поверх обычного стиля. */
+    var lesokulturyKeys: Set<String> = emptySet()
+    var taskKeys: Set<String> = emptySet()
+
     /** Приблизительные прямоугольники вместо настоящих контуров делянок не выбираем — тап уходит в выдел под ними. */
     var lesosekiTappable: Boolean = true
 
@@ -49,6 +79,18 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeJoin = Paint.Join.ROUND
+    }
+    private val lesokulturyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = LESOKULTURY_COLOR
+        strokeWidth = 3f * density
+        pathEffect = DashPathEffect(floatArrayOf(10f * density, 6f * density), 0f)
+    }
+    private val taskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = TASK_COLOR
+        strokeWidth = 4f * density
+        pathEffect = DashPathEffect(floatArrayOf(4f * density, 4f * density), 0f)
     }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.WHITE
@@ -101,6 +143,11 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
         buildPath(shape, v.projection)
         if (fillPaint.alpha > 0) v.canvas.drawPath(path, fillPaint)
         v.canvas.drawPath(path, strokePaint)
+        if (shape.kind == ShapeKind.VYDEL && shape.vydel != null) {
+            val key = CompletedWorkStore.key(shape.kvartal, shape.vydel)
+            if (layers.lesokultury && key in lesokulturyKeys) v.canvas.drawPath(path, lesokulturyPaint)
+            if (layers.tasks && key in taskKeys) v.canvas.drawPath(path, taskPaint)
+        }
 
         val labelled = when (shape.kind) {
             ShapeKind.KVARTAL -> v.zoom >= 11.5 && minOf(widthPx, heightPx) > 60
@@ -127,7 +174,13 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
                 }
             }
             ShapeKind.VYDEL -> {
-                val base = if (done) DONE_COLOR else shape.statusColor
+                val key = CompletedWorkStore.key(shape.kvartal, shape.vydel.orEmpty())
+                val base = when (colorMode) {
+                    // Цвет из свежего запроса; если его ещё нет (нет связи с первого запуска) —
+                    // тот, что пришёл вместе с геометрией.
+                    ColorMode.WORKS -> if (done) DONE_COLOR else workColors[key] ?: shape.statusColor.takeIf { workColors.isEmpty() }
+                    ColorMode.STATUS -> delyankaStatusColors[key]
+                }
                 if (base != null) {
                     fillPaint.color = withAlpha(base, 110)
                     strokePaint.color = base
@@ -144,11 +197,19 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
                 }
             }
             ShapeKind.LESOSEKA -> {
+                // контур делянки — цветом её статуса (ожидает / в работе / выполнено)
+                val status = delyankaStatusColors[CompletedWorkStore.key(shape.kvartal, shape.vydel.orEmpty())]
                 strokePaint.strokeWidth = if (selected) 8f else 5f
-                strokePaint.color = if (done && !selected) DONE_COLOR else HIGHLIGHT_COLOR
+                strokePaint.color = when {
+                    selected -> HIGHLIGHT_COLOR
+                    done -> DONE_COLOR
+                    status != null -> status
+                    else -> HIGHLIGHT_COLOR
+                }
                 fillPaint.color = when {
                     selected -> withAlpha(HIGHLIGHT_COLOR, SELECTED_FILL_ALPHA)
                     done -> withAlpha(DONE_COLOR, 140)
+                    colorMode == ColorMode.STATUS && status != null -> withAlpha(status, 110)
                     else -> AndroidColor.TRANSPARENT
                 }
             }
@@ -215,25 +276,5 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
             return true
         }
         return false
-    }
-
-    private fun MapShape.contains(lat: Double, lon: Double): Boolean {
-        if (lat < minLat || lat > maxLat || lon < minLon || lon > maxLon) return false
-        return rings.any { pointInRing(it, lat, lon) }
-    }
-
-    private fun pointInRing(ring: DoubleArray, lat: Double, lon: Double): Boolean {
-        var inside = false
-        val n = ring.size / 2
-        var j = n - 1
-        for (i in 0 until n) {
-            val latI = ring[i * 2]
-            val lonI = ring[i * 2 + 1]
-            val latJ = ring[j * 2]
-            val lonJ = ring[j * 2 + 1]
-            if ((latI > lat) != (latJ > lat) && lon < (lonJ - lonI) * (lat - latI) / (latJ - latI) + lonI) inside = !inside
-            j = i
-        }
-        return inside
     }
 }

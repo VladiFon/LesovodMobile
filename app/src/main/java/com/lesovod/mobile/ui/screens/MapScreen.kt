@@ -12,44 +12,47 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,30 +66,37 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.ui.components.PhotoPickerField
+import com.lesovod.mobile.ui.map.ColorMode
 import com.lesovod.mobile.ui.map.DONE_COLOR
 import com.lesovod.mobile.ui.map.DelyankaCard
+import com.lesovod.mobile.ui.map.DelyankaStatus
 import com.lesovod.mobile.ui.map.ForestMapView
 import com.lesovod.mobile.ui.map.GeoNoteDraft
-import com.lesovod.mobile.ui.map.GeoNoteMarker
+import com.lesovod.mobile.ui.map.LESOKULTURY_COLOR
+import com.lesovod.mobile.ui.map.LatLon
 import com.lesovod.mobile.ui.map.MapLayers
 import com.lesovod.mobile.ui.map.MapSelection
-import com.lesovod.mobile.ui.map.ShapeKind
+import com.lesovod.mobile.ui.map.MapTool
 import com.lesovod.mobile.ui.map.MapUiState
 import com.lesovod.mobile.ui.map.MapViewModel
+import com.lesovod.mobile.ui.map.ShapeKind
+import com.lesovod.mobile.ui.map.TASK_COLOR
 import com.lesovod.mobile.ui.map.VydelCard
+import kotlinx.coroutines.delay
 
 @Composable
 fun MapScreen(viewModel: MapViewModel = viewModel()) {
@@ -97,25 +107,52 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { /* карта и без геолокации работает — просто не покажет "где я" */ }
 
+    // своя подложка — файл .mbtiles; тип у таких файлов обычно не определён, поэтому "*/*"
+    val offlineBasePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.importOfflineBase(uri)
+    }
+
     LaunchedEffect(Unit) {
         permissionLauncher.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
         )
     }
 
-    var layersOpen by remember { mutableStateOf(false) }
-    var cardHeightPx by remember { mutableStateOf(0) }
+    // короткие сообщения ("Контур сохранён…") сами исчезают
+    LaunchedEffect(state.message) {
+        if (state.message != null) {
+            delay(4500)
+            viewModel.dismissMessage()
+        }
+    }
 
+    // пока идёт обмер обходом, экран не гаснет — иначе GPS-точки перестают приходить
+    val view = LocalView.current
+    DisposableEffect(state.walk.recording) {
+        view.keepScreenOn = state.walk.recording
+        onDispose { view.keepScreenOn = false }
+    }
+
+    var layersOpen by remember { mutableStateOf(false) }
+    var toolsMenuOpen by remember { mutableStateOf(false) }
+    var bottomPanelPx by remember { mutableStateOf(0) }
+
+    val toolPanelVisible = state.tool != MapTool.NONE
     val cardVisible = state.cardOpen
+    val bottomPanelVisible = cardVisible || toolPanelVisible || state.tasksOpen ||
+        state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null
     // первый тап только выделяет участок — внизу подсказка, что второй тап откроет таксацию
-    val hintVisible = state.selection != null && !cardVisible
+    val hintVisible = state.selection != null && !bottomPanelVisible
     var lastSelection by remember { mutableStateOf(state.selection) }
     if (state.selection != null) lastSelection = state.selection
     val bottomInset = when {
-        cardVisible -> with(density) { cardHeightPx.toDp() }
+        bottomPanelVisible -> with(density) { bottomPanelPx.toDp() }
         hintVisible -> 76.dp
         else -> 0.dp
     }
+    val measureBottom = Modifier
+        .padding(horizontal = 12.dp, vertical = 12.dp)
+        .onSizeChanged { bottomPanelPx = it.height + with(density) { 24.dp.roundToPx() } }
     // Scaffold в MainScaffold уже отдаёт содержимому отступ под статус-бар — второй раз его не добавляем
     val topInset = 0.dp
 
@@ -129,13 +166,21 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val closeOverlays = { layersOpen = false; toolsMenuOpen = false }
+
     BackHandler(
-        enabled = cardVisible || layersOpen || state.selection != null || state.noteDraft != null || state.selectedGeoNote != null,
+        enabled = state.search.open || cardVisible || layersOpen || toolsMenuOpen || state.selection != null ||
+            state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null ||
+            state.tasksOpen || (toolPanelVisible && !state.walk.recording),
     ) {
         when {
+            state.search.open -> viewModel.openSearch(false)
             state.noteDraft != null -> viewModel.dismissNoteDraft()
             state.selectedGeoNote != null -> viewModel.dismissGeoNotePopup()
-            layersOpen -> layersOpen = false
+            state.selectedSklad != null -> viewModel.dismissSklad()
+            state.tasksOpen -> viewModel.openTasks(false)
+            layersOpen || toolsMenuOpen -> closeOverlays()
+            toolPanelVisible && !state.walk.recording -> viewModel.setTool(MapTool.NONE)
             cardVisible -> viewModel.closeCard()
             else -> viewModel.clearSelection()
         }
@@ -152,11 +197,27 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
             completed = state.completed,
             fitToken = state.fitToken,
             lesosekiTappable = !state.usedFallbackRectangles,
-            geoNotes = state.geoNotes,
-            onShapeTap = { layersOpen = false; viewModel.onShapeTap(it) },
-            onEmptyTap = { layersOpen = false; viewModel.clearSelection() },
-            onGeoNoteTap = { layersOpen = false; viewModel.onGeoNoteTap(it) },
-            onMapLongPress = { lat, lon -> layersOpen = false; viewModel.startNoteDraft(lat, lon) },
+            geoNotes = if (state.layers.geoNotes) state.geoNotes else emptyList(),
+            colorMode = state.colorMode,
+            workColors = state.workColors,
+            delyankaStatusColors = state.delyankaStatusColors,
+            lesokulturyKeys = if (state.layers.lesokultury) state.lesokulturyKeys else emptySet(),
+            taskKeys = if (state.layers.tasks) viewModel.taskKeys(state) else emptySet(),
+            sklady = if (state.layers.sklady) state.sklady else emptyList(),
+            tool = state.tool,
+            rulerPoints = state.rulerPoints,
+            walkPoints = state.walk.points,
+            navTarget = state.navTarget?.point,
+            myLocation = state.myLocation,
+            focus = state.focus,
+            offlineBasePath = state.offlineBasePath.takeIf { state.layers.offlineBase },
+            onSkladTap = { closeOverlays(); viewModel.onSkladTap(it) },
+            onRulerTap = viewModel::onRulerTap,
+            onLocationFix = viewModel::onLocationFix,
+            onShapeTap = { closeOverlays(); viewModel.onShapeTap(it) },
+            onEmptyTap = { closeOverlays(); viewModel.clearSelection() },
+            onGeoNoteTap = { closeOverlays(); viewModel.onGeoNoteTap(it) },
+            onMapLongPress = { lat, lon -> closeOverlays(); if (state.tool == MapTool.NONE) viewModel.startNoteDraft(lat, lon) },
             onViewportChanged = viewModel::onViewportChanged,
             initialCamera = remember { viewModel.camera },
             controlsTopPadding = topInset + 68.dp,
@@ -179,19 +240,50 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
                     onSelected = viewModel::selectLesnichestvo,
                     modifier = Modifier.weight(1f),
                 )
-                Surface(
-                    onClick = { layersOpen = !layersOpen },
-                    shape = CircleShape,
-                    color = if (layersOpen) MaterialTheme.colorScheme.primary.copy(alpha = 0.92f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                    contentColor = if (layersOpen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
-                    shadowElevation = 3.dp,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .semantics { contentDescription = "Слои карты" },
-                ) {
-                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Layers, contentDescription = null) }
+                RoundButton(Icons.Filled.Search, "Поиск", active = state.search.open) {
+                    closeOverlays()
+                    viewModel.openSearch(!state.search.open)
                 }
+                Box {
+                    RoundButton(Icons.Filled.Straighten, "Инструменты", active = toolsMenuOpen || toolPanelVisible) {
+                        layersOpen = false
+                        toolsMenuOpen = !toolsMenuOpen
+                    }
+                    DropdownMenu(expanded = toolsMenuOpen, onDismissRequest = { toolsMenuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Линейка и площадь") },
+                            leadingIcon = { Icon(Icons.Filled.Straighten, contentDescription = null) },
+                            onClick = { toolsMenuOpen = false; viewModel.setTool(MapTool.RULER) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Обмер обходом") },
+                            leadingIcon = { Icon(Icons.Filled.DirectionsWalk, contentDescription = null) },
+                            onClick = { toolsMenuOpen = false; viewModel.setTool(MapTool.WALK) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Мои задачи") },
+                            leadingIcon = { Icon(Icons.Filled.Assignment, contentDescription = null) },
+                            onClick = { toolsMenuOpen = false; viewModel.openTasks(true) },
+                        )
+                    }
+                }
+                RoundButton(Icons.Filled.Layers, "Слои карты", active = layersOpen) {
+                    toolsMenuOpen = false
+                    layersOpen = !layersOpen
+                }
+            }
+
+            AnimatedVisibility(
+                visible = state.search.open,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+            ) {
+                SearchPanel(
+                    state = state.search,
+                    onQuery = viewModel::onSearchQuery,
+                    onPick = viewModel::goTo,
+                    onClose = { viewModel.openSearch(false) },
+                )
             }
 
             AnimatedVisibility(
@@ -200,31 +292,60 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
                 exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
                 modifier = Modifier.align(Alignment.End),
             ) {
-                LayersPanel(layers = state.layers, onChange = viewModel::setLayers, onDownload = viewModel::downloadCurrent, downloadRunning = state.download.running)
+                LayersPanel(
+                    layers = state.layers,
+                    colorMode = state.colorMode,
+                    offlineBaseName = state.offlineBaseName,
+                    downloadRunning = state.download.running,
+                    onChange = viewModel::setLayers,
+                    onColorMode = viewModel::setColorMode,
+                    onDownload = viewModel::downloadCurrent,
+                    onRefresh = viewModel::refreshOverlays,
+                    onImportBase = { offlineBasePicker.launch(arrayOf("*/*")) },
+                    onRemoveBase = viewModel::removeOfflineBase,
+                )
             }
 
-            if (state.layers.vydela || state.layers.lesoseki) Box(modifier = Modifier.padding(end = 56.dp)) { Legend() } // справа — колонка кнопок
+            if (!state.search.open) {
+                if (state.layers.vydela || state.layers.lesoseki) {
+                    Box(modifier = Modifier.padding(end = 56.dp)) { LegendRow(legendFor(state)) } // справа — колонка кнопок
+                }
 
-            if (state.download.running) StatusChip("Загрузка карты: ${(state.download.fraction * 100).toInt()}%")
-            state.download.error?.let { StatusChip(it, isError = true) }
-            state.error?.let { StatusChip(it, isError = true) }
-            if (state.usedFallbackRectangles && state.vydela.isNotEmpty()) {
-                StatusChip("Контуры лесосек ещё не получены — показаны границы выдела")
+                state.navTarget?.let { target ->
+                    Box(modifier = Modifier.padding(end = 56.dp)) {
+                        NavigationChip(target = target, me = state.myLocation, mapBearing = 0f, onStop = viewModel::stopNavigation)
+                    }
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(end = 56.dp).horizontalScroll(rememberScrollState()),
+                ) {
+                    state.here?.let { place -> MapChip("Вы здесь: ${place.label}", color = Color(0xFF00E676), onClick = viewModel::openHere) }
+                    val taskCount = state.tasks.size
+                    if (taskCount > 0 && !state.tasksOpen) {
+                        MapChip("Задачи: $taskCount", color = Color(TASK_COLOR), onClick = { viewModel.openTasks(true) })
+                    }
+                }
+
+                if (state.download.running) StatusChip("Загрузка карты: ${(state.download.fraction * 100).toInt()}%")
+                state.download.error?.let { StatusChip(it, isError = true) }
+                state.error?.let { StatusChip(it, isError = true) }
+                state.geoNotesError?.let { StatusChip(it, isError = true) }
+                state.message?.let { StatusChip(it) }
+                if (state.usedFallbackRectangles && state.vydela.isNotEmpty()) {
+                    StatusChip("Контуры лесосек ещё не получены — показаны границы выдела")
+                }
             }
         }
 
-        AnimatedVisibility(
-            visible = cardVisible,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
+        BottomPanel(visible = cardVisible) {
             ObjectCard(
                 state = state,
+                point = viewModel.selectedPoint(),
+                onNavigate = { label -> viewModel.navigateToSelected(label) },
                 onDismiss = viewModel::closeCard,
-                modifier = Modifier
-                    .padding(horizontal = 12.dp, vertical = 12.dp)
-                    .onSizeChanged { cardHeightPx = it.height + with(density) { 24.dp.roundToPx() } },
+                modifier = measureBottom,
             )
         }
 
@@ -237,50 +358,128 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
             lastSelection?.let { SelectionHint(it, onOpen = viewModel::openSelected, onClear = viewModel::clearSelection) }
         }
 
+        BottomPanel(visible = state.tool == MapTool.RULER && state.noteDraft == null) {
+            RulerPanel(
+                points = state.rulerPoints,
+                onUndo = viewModel::undoRulerPoint,
+                onClear = viewModel::clearRuler,
+                onClose = { viewModel.setTool(MapTool.NONE) },
+                modifier = measureBottom,
+            )
+        }
+
+        BottomPanel(visible = state.tool == MapTool.WALK) {
+            WalkPanel(
+                walk = state.walk,
+                accuracy = state.myAccuracy,
+                onStart = viewModel::startWalk,
+                onPause = viewModel::pauseWalk,
+                onUndo = viewModel::undoWalkPoint,
+                onFinish = viewModel::finishWalk,
+                onClose = { viewModel.setTool(MapTool.NONE) },
+                modifier = measureBottom,
+            )
+        }
+        if (state.walk.showSaveDialog) {
+            WalkSaveDialog(
+                walk = state.walk,
+                defaultName = state.here?.label?.let { "Обмер, $it" } ?: "Обмер",
+                onSave = viewModel::saveWalk,
+                onDismiss = viewModel::dismissWalkDialog,
+            )
+        }
+
+        BottomPanel(visible = state.tasksOpen) {
+            TasksPanel(
+                tasks = state.tasks,
+                onPick = viewModel::goToTask,
+                onClose = { viewModel.openTasks(false) },
+                modifier = measureBottom,
+            )
+        }
+
+        var lastSklad by remember { mutableStateOf(state.selectedSklad) }
+        if (state.selectedSklad != null) lastSklad = state.selectedSklad
+        BottomPanel(visible = state.selectedSklad != null) {
+            (state.selectedSklad ?: lastSklad)?.let { sklad ->
+                SkladDetails(
+                    sklad = sklad,
+                    onNavigate = { viewModel.dismissSklad(); viewModel.navigateTo(LatLon(sklad.lat, sklad.lon), "склад ${sklad.nazvanie}") },
+                    onDismiss = viewModel::dismissSklad,
+                    modifier = measureBottom,
+                )
+            }
+        }
+
         var lastNoteDraft by remember { mutableStateOf(state.noteDraft) }
         if (state.noteDraft != null) lastNoteDraft = state.noteDraft
-        AnimatedVisibility(
-            visible = state.noteDraft != null,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
+        BottomPanel(visible = state.noteDraft != null) {
             (state.noteDraft ?: lastNoteDraft)?.let { draft ->
                 GeoNoteDraftCard(
                     draft = draft,
                     onTextChange = viewModel::updateNoteDraftText,
+                    onCategoryChange = viewModel::updateNoteDraftCategory,
                     onPhotoChange = viewModel::updateNoteDraftPhoto,
                     onSubmit = viewModel::submitNoteDraft,
                     onDismiss = viewModel::dismissNoteDraft,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                    modifier = measureBottom,
                 )
             }
         }
 
         var lastGeoNote by remember { mutableStateOf(state.selectedGeoNote) }
         if (state.selectedGeoNote != null) lastGeoNote = state.selectedGeoNote
-        AnimatedVisibility(
-            visible = state.selectedGeoNote != null,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
+        BottomPanel(visible = state.selectedGeoNote != null) {
             (state.selectedGeoNote ?: lastGeoNote)?.let { note ->
-                GeoNotePopup(
+                GeoNoteDetails(
                     note = note,
+                    onNavigate = {
+                        viewModel.dismissGeoNotePopup()
+                        viewModel.navigateTo(LatLon(note.lat, note.lon), "метка: ${note.category.label}")
+                    },
+                    onDelete = { viewModel.deleteGeoNote(note) },
                     onDismiss = viewModel::dismissGeoNotePopup,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                    modifier = measureBottom,
                 )
             }
         }
     }
 }
 
-/** Форма новой метки — открывается долгим нажатием на карту, отправляет текст и/или фото. */
+/** Выезжающая снизу панель — у всех карточек одна анимация. */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.BottomPanel(visible: Boolean, content: @Composable () -> Unit) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = Modifier.align(Alignment.BottomCenter),
+    ) { content() }
+}
+
+@Composable
+private fun RoundButton(icon: ImageVector, description: String, active: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.92f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+        contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+        shadowElevation = 3.dp,
+        modifier = Modifier
+            .size(44.dp)
+            .semantics { contentDescription = description },
+    ) {
+        Box(contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null) }
+    }
+}
+
+/** Форма новой метки — открывается долгим нажатием на карту: тип, текст и/или фото. */
 @Composable
 private fun GeoNoteDraftCard(
     draft: GeoNoteDraft,
     onTextChange: (String) -> Unit,
+    onCategoryChange: (com.lesovod.mobile.ui.map.GeoNoteCategory) -> Unit,
     onPhotoChange: (android.net.Uri?) -> Unit,
     onSubmit: () -> Unit,
     onDismiss: () -> Unit,
@@ -296,7 +495,7 @@ private fun GeoNoteDraftCard(
         Box {
             Column(
                 modifier = Modifier
-                    .heightIn(max = 420.dp)
+                    .heightIn(max = 460.dp)
                     .verticalScroll(rememberScrollState())
                     .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),
             ) {
@@ -306,6 +505,14 @@ private fun GeoNoteDraftCard(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(end = 40.dp),
                 )
+
+                Text(
+                    "Тип",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
+                )
+                CategoryPicker(selected = draft.category, enabled = !draft.isSubmitting, onSelect = onCategoryChange)
 
                 OutlinedTextField(
                     value = draft.text,
@@ -351,57 +558,6 @@ private fun GeoNoteDraftCard(
                 modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(40.dp),
             ) {
                 Icon(Icons.Filled.Close, contentDescription = "Отмена", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-/** Карточка уже существующей метки — текст, "есть фото" (без загрузки самого файла) и автор/дата, если сервер их прислал. */
-@Composable
-private fun GeoNotePopup(note: GeoNoteMarker, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        shadowElevation = 8.dp,
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Box {
-            Column(modifier = Modifier.padding(start = 18.dp, end = 40.dp, top = 14.dp, bottom = 14.dp)) {
-                Text("Метка", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                note.authorFio?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-                if (!note.noteText.isNullOrBlank()) {
-                    Text(note.noteText, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
-                }
-                if (!note.photoPath.isNullOrBlank()) {
-                    Text(
-                        "Есть фото",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-                note.createdAt?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-            }
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(40.dp),
-            ) {
-                Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -462,26 +618,92 @@ private fun LesnichestvoPill(
     }
 }
 
-/** Всего четыре галочки: без тематических раскрасок, легенд и настроек масштабов видимости. */
+
+/** Галочки слоёв, способ раскраски, скачивание и своя офлайн-подложка. */
 @Composable
-private fun LayersPanel(layers: MapLayers, onChange: (MapLayers) -> Unit, onDownload: () -> Unit, downloadRunning: Boolean) {
+private fun LayersPanel(
+    layers: MapLayers,
+    colorMode: ColorMode,
+    offlineBaseName: String?,
+    downloadRunning: Boolean,
+    onChange: (MapLayers) -> Unit,
+    onColorMode: (ColorMode) -> Unit,
+    onDownload: () -> Unit,
+    onRefresh: () -> Unit,
+    onImportBase: () -> Unit,
+    onRemoveBase: () -> Unit,
+) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
         shadowElevation = 4.dp,
-        modifier = Modifier.width(210.dp),
+        modifier = Modifier.width(250.dp),
     ) {
-        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Column(
+            modifier = Modifier
+                .heightIn(max = 520.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 6.dp),
+        ) {
             LayerRow("Кварталы", layers.kvartaly) { onChange(layers.copy(kvartaly = it)) }
             LayerRow("Выделы", layers.vydela) { onChange(layers.copy(vydela = it)) }
             LayerRow("Делянки", layers.lesoseki) { onChange(layers.copy(lesoseki = it)) }
+            LayerRow("Лесные культуры", layers.lesokultury) { onChange(layers.copy(lesokultury = it)) }
+            LayerRow("Мои задачи", layers.tasks) { onChange(layers.copy(tasks = it)) }
+            LayerRow("Мои метки", layers.geoNotes) { onChange(layers.copy(geoNotes = it)) }
+            LayerRow("Склады", layers.sklady) { onChange(layers.copy(sklady = it)) }
             LayerRow("Спутниковый снимок", layers.satellite) { onChange(layers.copy(satellite = it)) }
+            if (offlineBaseName != null) {
+                LayerRow("Своя подложка", layers.offlineBase) { onChange(layers.copy(offlineBase = it)) }
+            }
+
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Text(
+                "Цвет выделов",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp),
+            )
+            ColorModeRow("По видам работ", colorMode == ColorMode.WORKS) { onColorMode(ColorMode.WORKS) }
+            ColorModeRow("По статусу делянок", colorMode == ColorMode.STATUS) { onColorMode(ColorMode.STATUS) }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            TextButton(onClick = onRefresh, modifier = Modifier.padding(horizontal = 6.dp)) {
+                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("Обновить цвета и метки", modifier = Modifier.padding(start = 8.dp))
+            }
             TextButton(onClick = onDownload, enabled = !downloadRunning, modifier = Modifier.padding(horizontal = 6.dp)) {
                 Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                 Text(if (downloadRunning) "Идёт загрузка…" else "Скачать карту", modifier = Modifier.padding(start = 8.dp))
             }
+            TextButton(onClick = onImportBase, modifier = Modifier.padding(horizontal = 6.dp)) {
+                Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text(if (offlineBaseName == null) "Загрузить подложку (.mbtiles)" else "Заменить подложку", modifier = Modifier.padding(start = 8.dp))
+            }
+            if (offlineBaseName != null) {
+                Text(
+                    offlineBaseName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                TextButton(onClick = onRemoveBase, modifier = Modifier.padding(horizontal = 6.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    Text("Удалить подложку", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorModeRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(onClick = onClick, color = Color.Transparent) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp)) {
+            RadioButton(selected = selected, onClick = null, modifier = Modifier.padding(10.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -524,7 +746,14 @@ private fun StatusChip(text: String, isError: Boolean = false) {
 
 /** Карточка снизу поверх карты — не модальная: карту вокруг можно двигать, тап по пустому месту закрывает. */
 @Composable
-private fun ObjectCard(state: MapUiState, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+private fun ObjectCard(
+    state: MapUiState,
+    point: LatLon?,
+    onNavigate: (String) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selection = state.selection
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
@@ -535,7 +764,7 @@ private fun ObjectCard(state: MapUiState, onDismiss: () -> Unit, modifier: Modif
         Box {
             Column(
                 modifier = Modifier
-                    .heightIn(max = 340.dp)
+                    .heightIn(max = 420.dp)
                     .verticalScroll(rememberScrollState())
                     .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),
             ) {
@@ -561,7 +790,7 @@ private fun ObjectCard(state: MapUiState, onDismiss: () -> Unit, modifier: Modif
                         modifier = Modifier.padding(end = 40.dp, top = 4.dp, bottom = 4.dp),
                     )
 
-                    state.selectedCard != null -> VydelCardContent(state.selectedCard, state.selection?.kind)
+                    state.selectedCard != null -> VydelCardContent(state.selectedCard, selection?.kind)
 
                     state.selectedKvartalLabel != null -> {
                         Text(
@@ -577,6 +806,14 @@ private fun ObjectCard(state: MapUiState, onDismiss: () -> Unit, modifier: Modif
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
+                }
+
+                if (!state.isLoadingCard && selection != null) {
+                    val label = selection.title()
+                    if (point != null) {
+                        PointActions(point = point, label = label, onNavigate = { onNavigate(label) }, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    if (selection.vydel != null) VydelHistorySection(state.history, state.historyLoading)
                 }
             }
             IconButton(
@@ -663,37 +900,26 @@ private fun InfoRow(label: String, value: String?) {
     }
 }
 
-private val legendItems = listOf(
+/** Цвета — те же, что на сервере (app/map_features.py) и в QGIS. */
+private val workLegend = listOf(
     Color(0xFFFF4444) to "Рубка",
     Color(0xFFFFEB3B) to "Уход / осветление",
     Color(0xFF4CAF50) to "Посадка / дополнение",
     Color(0xFF8BC34A) to "Прочие работы",
-    Color(DONE_COLOR) to "Выполнено",
+    Color(DONE_COLOR) to "Выполнено (отметка в приложении)",
 )
 
-/** Одна строка поверх карты: цвет выдела — вид работ, синий — рабочий отметил выполнение. */
-@Composable
-private fun Legend() {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
-    ) {
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            legendItems.forEach { (color, label) ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(color))
-                    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                }
-            }
-        }
+/** Легенда зависит от способа раскраски; культуры и задачи — только когда они есть на карте. */
+private fun legendFor(state: MapUiState): List<Pair<Color, String>> {
+    val base = when (state.colorMode) {
+        ColorMode.WORKS -> workLegend
+        ColorMode.STATUS -> DelyankaStatus.entries.map { Color(it.color) to "Делянка: ${it.label.lowercase()}" }
     }
+    val extra = buildList {
+        if (state.layers.lesokultury && state.lesokulturyKeys.isNotEmpty()) add(Color(LESOKULTURY_COLOR) to "Лесные культуры")
+        if (state.layers.tasks && state.tasks.isNotEmpty()) add(Color(TASK_COLOR) to "Мои задачи")
+    }
+    return base + extra
 }
 
 /** Подсказка после первого тапа: участок выделен на карте, второй тап (или нажатие сюда) откроет таксацию. */

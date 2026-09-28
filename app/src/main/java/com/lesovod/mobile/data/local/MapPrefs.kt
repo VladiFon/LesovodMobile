@@ -16,7 +16,13 @@ class MapPrefs(context: Context) {
 
     fun setLastDownloadAt(lesnichestvo: String, time: Long) = prefs.edit { putLong(KEY_DOWNLOAD + lesnichestvo, time) }
 
+    /** Путь к своей офлайн-подложке (.mbtiles), см. MapViewModel.importOfflineBase. */
+    var offlineBasePath: String?
+        get() = prefs.getString(KEY_OFFLINE_BASE, null)
+        set(value) = prefs.edit { if (value == null) remove(KEY_OFFLINE_BASE) else putString(KEY_OFFLINE_BASE, value) }
+
     private companion object {
+        const val KEY_OFFLINE_BASE = "offline_base_path"
         const val KEY_DEFAULT = "default_lesnichestvo"
         const val KEY_DOWNLOAD = "download_at_"
     }

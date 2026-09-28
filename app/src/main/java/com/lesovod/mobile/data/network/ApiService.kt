@@ -8,6 +8,15 @@ import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.GeoJsonFeatureCollection
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
+import com.lesovod.mobile.data.network.dto.GeoNoteDto
+import com.lesovod.mobile.data.network.dto.LesokulturyMapDto
+import com.lesovod.mobile.data.network.dto.MapSearchResultDto
+import com.lesovod.mobile.data.network.dto.SkladDto
+import com.lesovod.mobile.data.network.dto.TrackCreateRequest
+import com.lesovod.mobile.data.network.dto.TrackCreatedDto
+import com.lesovod.mobile.data.network.dto.VydelHistoryDto
+import com.lesovod.mobile.data.network.dto.VydelLocationDto
+import com.lesovod.mobile.data.network.dto.WorkColorsDto
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.LoginResponseDto
 import com.lesovod.mobile.data.network.dto.PerevodRequest
@@ -37,6 +46,7 @@ import kotlinx.serialization.json.JsonObject
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Multipart
@@ -144,9 +154,6 @@ interface ApiService {
         @Body body: GeoNoteCreateRequest,
     ): ResponseBody
 
-    // Публичный, как остальные слои карты (kvartaly/vydela/import-layers) — без Authorization.
-    @GET("api/map/geo-notes.geojson")
-    suspend fun getGeoNotesGeoJson(): GeoJsonFeatureCollection
 
     @POST("api/uhody/proby")
     suspend fun createProba(
@@ -261,6 +268,56 @@ interface ApiService {
         @Query("vydel") vydel: String,
         @Query("lesnichestvo") lesnichestvo: String? = null,
     ): JsonObject
+
+    // Карта: метки, цвета, поиск, история, склады, треки (28.09.2026) — все с токеном рабочего.
+    @GET("api/bot/geo-notes")
+    suspend fun listMyGeoNotes(@Header("Authorization") bearerToken: String): List<GeoNoteDto>
+
+    @DELETE("api/bot/geo-notes/{id}")
+    suspend fun deleteGeoNote(@Header("Authorization") bearerToken: String, @Path("id") id: Int): ResponseBody
+
+    @GET("api/map/work-colors")
+    suspend fun getWorkColors(
+        @Header("Authorization") bearerToken: String,
+        @Query("lesnichestvo_num") lesnichestvoNum: String,
+    ): WorkColorsDto
+
+    @GET("api/map/search")
+    suspend fun searchMap(
+        @Header("Authorization") bearerToken: String,
+        @Query("q") q: String,
+        @Query("lesnichestvo_num") lesnichestvoNum: String? = null,
+    ): List<MapSearchResultDto>
+
+    @GET("api/map/lesokultury")
+    suspend fun getLesokulturyForMap(
+        @Header("Authorization") bearerToken: String,
+        @Query("lesnichestvo_num") lesnichestvoNum: String? = null,
+    ): List<LesokulturyMapDto>
+
+    @GET("api/map/vydel-history")
+    suspend fun getVydelHistory(
+        @Header("Authorization") bearerToken: String,
+        @Query("kvartal") kvartal: String,
+        @Query("vydel") vydel: String,
+        @Query("lesnichestvo_num") lesnichestvoNum: String? = null,
+    ): VydelHistoryDto
+
+    @GET("api/map/delyanka-location")
+    suspend fun getVydelLocation(
+        @Query("lesnichestvo_num") lesnichestvoNum: String,
+        @Query("kvartal") kvartal: String,
+        @Query("vydel") vydel: String,
+    ): VydelLocationDto
+
+    @GET("api/map/sklady")
+    suspend fun listSklady(): List<SkladDto>
+
+    @POST("api/bot/tracks")
+    suspend fun createTrack(
+        @Header("Authorization") bearerToken: String,
+        @Body body: TrackCreateRequest,
+    ): TrackCreatedDto
 
     // Табель — ручной ввод (app/routers/tabel.py): require_office_or_master, тот же круг
     // ролей, что и у остальных экранов руководителей мобильного приложения.

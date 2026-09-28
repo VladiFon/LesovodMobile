@@ -12,7 +12,7 @@ import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
 
 object NetworkModule {
-    private const val BASE_URL = "https://lesovodapipom.store/"
+    const val BASE_URL = "https://lesovodapipom.store/"
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -58,4 +58,7 @@ object NetworkModule {
         .build()
 
     val api: ApiService = retrofit.create()
+
+    /** Для загрузки картинок (фото меток и работ) тем же клиентом — с теми же таймаутами и выходом по 401. */
+    val httpClient: OkHttpClient get() = okHttpClient
 }
