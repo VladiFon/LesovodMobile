@@ -10,8 +10,8 @@ import java.io.InputStreamReader
  * слоёв выделов раздувало память в разы (на повторном открытии из кэша это давало зависание и вылеты).
  */
 object GeoJsonStreamParser {
-    /** layerNameContains — оставить только объекты, у которых properties.layer_name содержит подстроку. */
-    fun parse(input: InputStream, kind: ShapeKind, layerNameContains: String? = null): List<MapShape> {
+    /** layerNameContains — оставить только объекты, у которых properties.layer_name содержит одну из подстрок. */
+    fun parse(input: InputStream, kind: ShapeKind, layerNameContains: List<String>? = null): List<MapShape> {
         val shapes = ArrayList<MapShape>()
         JsonReader(InputStreamReader(input, Charsets.UTF_8).buffered(64 * 1024)).use { reader ->
             reader.isLenient = true
@@ -30,7 +30,7 @@ object GeoJsonStreamParser {
         return shapes
     }
 
-    private fun readFeature(r: JsonReader, kind: ShapeKind, layerNameContains: String?): MapShape? {
+    private fun readFeature(r: JsonReader, kind: ShapeKind, layerNameContains: List<String>?): MapShape? {
         var rings: List<DoubleArray> = emptyList()
         val props = HashMap<String, String>()
         var rawNumVds: String? = null
@@ -45,7 +45,7 @@ object GeoJsonStreamParser {
         }
         r.endObject()
 
-        if (layerNameContains != null && props["layer_name"]?.contains(layerNameContains, ignoreCase = true) != true) return null
+        if (layerNameContains != null && layerNameContains.none { props["layer_name"]?.contains(it, ignoreCase = true) == true }) return null
         return shapeFromProperties(kind, props::get, rawNumVds, rings)
     }
 

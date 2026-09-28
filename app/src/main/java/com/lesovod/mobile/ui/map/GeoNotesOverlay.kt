@@ -10,20 +10,27 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
 
-private val NOTE_COLOR = AndroidColor.parseColor("#DF964E")
-
-/** Метки рабочих (POST/GET geo-notes) — маленькие кружки поверх слоёв кварталов/выделов/делянок. */
+/**
+ * Метки рабочего (POST/GET geo-notes) — кружки цвета их типа с буквой типа внутри
+ * (ветровал — "В", пожар — "П", …), поверх слоёв кварталов/выделов/делянок.
+ */
 class GeoNotesOverlay(density: Float) : Overlay() {
     var notes: List<GeoNoteMarker> = emptyList()
     var onNoteTap: (GeoNoteMarker) -> Unit = {}
 
-    private val radiusPx = 8f * density
-    private val touchSlopPx = radiusPx * 2.5f
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = NOTE_COLOR; style = Paint.Style.FILL }
+    private val radiusPx = 11f * density
+    private val touchSlopPx = radiusPx * 2f
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.WHITE
         style = Paint.Style.STROKE
         strokeWidth = 2.5f * density
+    }
+    private val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+        textSize = 11f * density
     }
     private val point = Point()
     private val geo = GeoPoint(0.0, 0.0)
@@ -32,8 +39,16 @@ class GeoNotesOverlay(density: Float) : Overlay() {
         for (note in notes) {
             geo.setCoords(note.lat, note.lon)
             projection.toPixels(geo, point)
-            canvas.drawCircle(point.x.toFloat(), point.y.toFloat(), radiusPx, fillPaint)
-            canvas.drawCircle(point.x.toFloat(), point.y.toFloat(), radiusPx, strokePaint)
+            val x = point.x.toFloat()
+            val y = point.y.toFloat()
+            val category = note.category
+            fillPaint.color = category.color
+            canvas.drawCircle(x, y, radiusPx, fillPaint)
+            canvas.drawCircle(x, y, radiusPx, strokePaint)
+            canvas.save()
+            canvas.rotate(-projection.orientation, x, y)
+            canvas.drawText(category.glyph, x, y + glyphPaint.textSize / 3, glyphPaint)
+            canvas.restore()
         }
     }
 

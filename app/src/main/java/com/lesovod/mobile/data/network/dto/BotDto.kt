@@ -106,4 +106,6 @@ data class GeoNoteCreateRequest(
     val lon: Double,
     @SerialName("note_text") val noteText: String? = null,
     @SerialName("photo_path") val photoPath: String? = null,
+    /** Тип метки (ветровал, пожар, …) — коды см. GeoNoteCategory. */
+    val kategoriya: String? = null,
 )

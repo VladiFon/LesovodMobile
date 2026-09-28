@@ -28,6 +28,8 @@ import com.lesovod.mobile.data.network.dto.TabelDelyankaDto
 import com.lesovod.mobile.data.network.dto.TabelDaySaveRequest
 import com.lesovod.mobile.data.network.dto.TabelEntrySaveDto
 import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
+import com.lesovod.mobile.data.network.dto.TrackCreateRequest
+import com.lesovod.mobile.data.network.dto.TrackCreatedDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
 import com.lesovod.mobile.data.network.dto.VidRabotyCreateRequest
 import com.lesovod.mobile.data.network.dto.VidRabotyDto
@@ -174,14 +176,29 @@ class BotRepository(
         api.listMyNotes(requireToken())
     }
 
-    suspend fun submitGeoNote(lat: Double, lon: Double, noteText: String?, photoPath: String?): Result<Unit> {
+    suspend fun deleteGeoNote(id: Int): Result<Unit> = safeCall {
+        api.deleteGeoNote(requireToken(), id)
+        Unit
+    }
+
+    suspend fun createTrack(request: TrackCreateRequest): Result<TrackCreatedDto> = safeCall {
+        api.createTrack(requireToken(), request)
+    }
+
+    suspend fun submitGeoNote(
+        lat: Double,
+        lon: Double,
+        noteText: String?,
+        photoPath: String?,
+        kategoriya: String? = null,
+    ): Result<Unit> {
         val telegramId = sessionManager.session.value?.appIdentity
             ?: return Result.failure(Exception("Не удалось определить учётную запись для отправки — переавторизуйтесь"))
 
         return safeCall {
             api.createGeoNote(
                 requireToken(),
-                GeoNoteCreateRequest(telegramId = telegramId, lat = lat, lon = lon, noteText = noteText, photoPath = photoPath),
+                GeoNoteCreateRequest(telegramId = telegramId, lat = lat, lon = lon, noteText = noteText, photoPath = photoPath, kategoriya = kategoriya),
             )
             Unit
         }

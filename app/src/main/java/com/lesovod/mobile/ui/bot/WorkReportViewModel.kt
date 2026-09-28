@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lesovod.mobile.data.location.CurrentPlace
 import com.lesovod.mobile.data.location.getCurrentLocationOrNull
 import com.lesovod.mobile.data.location.hasLocationPermission
 import com.lesovod.mobile.data.network.ConnectivityException
@@ -58,8 +59,21 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
 
     val session = sessionManager.session
 
-    private val _uiState = MutableStateFlow(WorkReportUiState())
+    // Где человек стоит по GPS (карта определила квартал/выдел) — подставляем в ручной ввод,
+    // чтобы не набирать номера на морозе и не ошибаться в них.
+    private val place = CurrentPlace.fresh()
+
+    private val _uiState = MutableStateFlow(
+        WorkReportUiState(
+            kvartal = place?.kvartal.orEmpty(),
+            vydels = listOfNotNull(place?.vydel),
+        ),
+    )
     val uiState = _uiState.asStateFlow()
+
+    init {
+        if (place?.vydel != null) loadDelyanki()
+    }
 
     fun onTipRabotyChange(value: String) {
         _uiState.value = _uiState.value.copy(tipRaboty = value, error = null)
@@ -146,7 +160,18 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             val result = repository.getDelyankiForMap()
             _uiState.value = result.fold(
-                onSuccess = { list -> _uiState.value.copy(isLoadingDelyanki = false, delyanki = list) },
+                onSuccess = { list ->
+                    // делянка, на которой человек стоит по GPS, — выбрана сразу
+                    val here = place?.takeIf { _uiState.value.selectedDelyanka == null }?.let { p ->
+                        list.filter { it.kvartal?.trim() == p.kvartal && p.vydel != null && it.vydel?.trim() == p.vydel }
+                            .maxByOrNull { it.delyankaId }
+                    }
+                    _uiState.value.copy(
+                        isLoadingDelyanki = false,
+                        delyanki = list,
+                        selectedDelyanka = _uiState.value.selectedDelyanka ?: here,
+                    )
+                },
                 onFailure = { err ->
                     _uiState.value.copy(
                         isLoadingDelyanki = false,

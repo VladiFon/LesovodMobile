@@ -9,7 +9,12 @@ import com.lesovod.mobile.ui.map.GeoNoteMarker
 import com.lesovod.mobile.ui.map.MapShape
 import com.lesovod.mobile.ui.map.ShapeCodec
 import com.lesovod.mobile.ui.map.ShapeKind
-import com.lesovod.mobile.ui.map.toGeoNoteMarker
+import com.lesovod.mobile.ui.map.toMarker
+import com.lesovod.mobile.data.network.dto.LesokulturyMapDto
+import com.lesovod.mobile.data.network.dto.MapSearchResultDto
+import com.lesovod.mobile.data.network.dto.SkladDto
+import com.lesovod.mobile.data.network.dto.VydelHistoryDto
+import com.lesovod.mobile.data.network.dto.VydelLocationDto
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,7 +36,12 @@ enum class CellTier(val degrees: Double, val serverZoom: Double, val tag: String
  * Слои карты читаются с диска, а сеть нужна только когда файл устарел (см. [cached]):
  * карта открывается сразу и работает без интернета там, где данные уже скачаны.
  */
-class MapRepository(private val api: ApiService, private val cache: MapCache) {
+class MapRepository(
+    private val api: ApiService,
+    private val cache: MapCache,
+    /** "Bearer …" текущего рабочего — метки, цвета, поиск и история доступны только с токеном. */
+    private val bearerToken: () -> String? = { null },
+) {
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -62,14 +72,16 @@ class MapRepository(private val api: ApiService, private val cache: MapCache) {
     /**
      * Только слой лесосек из моста ГИСлесхоз. Живые данные показали, что мост называет слой
      * человекочитаемым именем вида "Лесосеки 10,09,2026", поэтому сверяемся по подстроке "лесосек".
+     * Плагин «Лесовод-мост» публиковал слой латиницей "qgis_lesoseki" — такие слои раньше
+     * отфильтровывались, и лесосеки из QGIS на телефоне не показывались вовсе.
      */
     suspend fun getLesoseki(num: Int, force: Boolean = false): Result<List<MapShape>> = cachedShapes(
-        key = "lesoseki_$num",
+        key = "lesoseki_v2_$num", // v2: после исправления фильтра по имени слоя старый пустой кэш не годится
         ttlMs = LESOSEKI_TTL_MS,
         force = force,
         fetch = {
             api.getImportLayersRaw(num.toString()).use {
-                GeoJsonStreamParser.parse(it.byteStream(), ShapeKind.LESOSEKA, layerNameContains = "лесосек")
+                GeoJsonStreamParser.parse(it.byteStream(), ShapeKind.LESOSEKA, layerNameContains = LESOSEKI_LAYER_NAMES)
             }
         },
     )
@@ -115,15 +127,89 @@ class MapRepository(private val api: ApiService, private val cache: MapCache) {
         encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
     )
 
-    /** Метки рабочих на карте — короткий TTL: список должен обновляться часто, не как лесной слой. */
+    /**
+     * Метки рабочего на карте — только свои (GET /api/bot/geo-notes, по токену). Раньше приложение
+     * ходило на GET /api/map/geo-notes.geojson, который требует токен QGIS-моста, получало ошибку и
+     * молча ничего не рисовало. Короткий TTL: список должен обновляться часто, не как лесной слой.
+     */
     suspend fun getGeoNotes(force: Boolean = false): Result<List<GeoNoteMarker>> = cached(
-        key = "geo_notes",
+        key = "geo_notes_mine",
         ttlMs = GEO_NOTES_TTL_MS,
         force = force,
-        fetch = { api.getGeoNotesGeoJson().features.mapNotNull { it.toGeoNoteMarker() } },
+        fetch = { api.listMyGeoNotes(requireToken()).map { it.toMarker() } },
         decode = { json.decodeFromString<List<GeoNoteMarker>>(it.readBytes().decodeToString()) },
         encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
     )
+
+    /**
+     * Цвета выделов по видам выполненных работ — отдельно от геометрии: геометрия лежит в кэше
+     * неделями, а цвет должен меняться, как только работу подтвердили (раньше цвет был зашит в
+     * геометрию выделов и устаревал до следующего "Скачать карту").
+     */
+    suspend fun getWorkColors(num: Int, force: Boolean = false): Result<Map<String, Int>> = cached(
+        key = "work_colors_$num",
+        ttlMs = WORK_COLORS_TTL_MS,
+        force = force,
+        fetch = {
+            api.getWorkColors(requireToken(), num.toString()).items.mapNotNull { item ->
+                val color = runCatching { android.graphics.Color.parseColor(item.color) }.getOrNull() ?: return@mapNotNull null
+                vydelKey(item.kvartal, item.vydel) to color
+            }.toMap()
+        },
+        decode = { json.decodeFromString<Map<String, Int>>(it.readBytes().decodeToString()) },
+        encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
+    )
+
+    /** Участки лесных культур лесничества (кв./выд.) — для слоя "Лесные культуры". */
+    suspend fun getLesokultury(num: Int, force: Boolean = false): Result<List<LesokulturyMapDto>> = cached(
+        key = "lesokultury_$num",
+        ttlMs = DELYANKI_TTL_MS,
+        force = force,
+        fetch = { api.getLesokulturyForMap(requireToken(), num.toString()) },
+        decode = { json.decodeFromString<List<LesokulturyMapDto>>(it.readBytes().decodeToString()) },
+        encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
+    )
+
+    /** Склады — точки на карте; меняются редко. */
+    suspend fun getSklady(force: Boolean = false): Result<List<SkladDto>> = cached(
+        key = "sklady",
+        ttlMs = DAY_MS,
+        force = force,
+        fetch = { api.listSklady() },
+        decode = { json.decodeFromString<List<SkladDto>>(it.readBytes().decodeToString()) },
+        encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
+    )
+
+    /** История выдела для карточки — кэшируется, чтобы открытая однажды работала без связи. */
+    suspend fun getVydelHistory(num: Int?, kvartal: String, vydel: String): Result<VydelHistoryDto> = cached(
+        key = "history_${num ?: 0}_${kvartal}_$vydel",
+        ttlMs = DELYANKI_TTL_MS,
+        fetch = { api.getVydelHistory(requireToken(), kvartal, vydel, num?.toString()) },
+        decode = { json.decodeFromString<VydelHistoryDto>(it.readBytes().decodeToString()) },
+        encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
+    )
+
+    /** Центр выдела (для поиска и "веди до делянки"), кэш на сутки — выделы не двигаются. */
+    suspend fun getVydelLocation(num: Int, kvartal: String, vydel: String): Result<VydelLocationDto> = cached(
+        key = "loc_${num}_${kvartal}_$vydel",
+        ttlMs = LAYER_TTL_MS * 14,
+        fetch = { api.getVydelLocation(num.toString(), kvartal, vydel) },
+        decode = { json.decodeFromString<VydelLocationDto>(it.readBytes().decodeToString()) },
+        encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
+    )
+
+    /** Поиск всегда идёт в сеть (без кэша): это ответ на только что набранный текст. */
+    suspend fun search(query: String, num: Int?): Result<List<MapSearchResultDto>> = withContext(Dispatchers.IO) {
+        try {
+            Result.success(api.searchMap(requireToken(), query, num?.toString()))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Result.failure(Exception(describe(e)))
+        }
+    }
+
+    private fun requireToken(): String = bearerToken() ?: throw IllegalStateException("Сессия истекла, войдите заново")
 
     /** Данные конкретной делянки: {delyanka, items[]}. */
     suspend fun getDelyanka(id: Int): Result<JsonObject> = cached(
@@ -180,12 +266,17 @@ class MapRepository(private val api: ApiService, private val cache: MapCache) {
         else -> e.message ?: "Не удалось связаться с сервером"
     }
 
-    private companion object {
-        const val HOUR_MS = 60 * 60 * 1000L
+    companion object {
+        val LESOSEKI_LAYER_NAMES = listOf("лесосек", "lesosek")
+
+        fun vydelKey(kvartal: String, vydel: String) = "${kvartal.trim()}|${vydel.trim()}"
+
+        private const val HOUR_MS = 60 * 60 * 1000L
         const val DAY_MS = 24 * HOUR_MS
         const val LAYER_TTL_MS = 12 * HOUR_MS
         const val LESOSEKI_TTL_MS = 3 * HOUR_MS
         const val DELYANKI_TTL_MS = HOUR_MS / 2
         const val GEO_NOTES_TTL_MS = 5 * 60 * 1000L
+        const val WORK_COLORS_TTL_MS = 5 * 60 * 1000L
     }
 }
