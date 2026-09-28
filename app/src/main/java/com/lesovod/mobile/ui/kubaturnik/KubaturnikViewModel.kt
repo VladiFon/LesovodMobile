@@ -29,13 +29,18 @@ typealias DiameterCounts = Map<Int, Int>
 
 data class KubaturnikRow(val diameter: Int, val count: Int, val volumePerLog: Double, val totalVolume: Double)
 
+enum class ThicknessRowKind { DIAMETER, GROUP, TOTAL }
+
+/** Строка сводки: отдельный диаметр, итог группы ступеней («14–24», «26 и б.») или общий итог. */
 data class ThicknessSummaryRow(
-    val rangeLabel: String,
-    val sort: String,
-    val destination: KubaturnikDestination,
+    val label: String,
     val count: Int,
     val volume: Double,
+    val kind: ThicknessRowKind,
 )
+
+/** Одна таблица «Диаметр / кол-во / Объём»: вся партия или отдельно сорт · машина/прицеп. */
+data class ThicknessSummaryTable(val title: String, val rows: List<ThicknessSummaryRow>)
 
 data class KubaturnikUiState(
     val loading: Boolean = true,
@@ -95,37 +100,72 @@ data class KubaturnikUiState(
     val totalLogCount: Int
         get() = counts.values.sumOf { byDest -> byDest.values.sumOf { byDiam -> byDiam.values.sum() } }
 
-    fun thicknessSummary(): List<ThicknessSummaryRow> {
+    /**
+     * Сводка по ступеням в виде таблиц, как в бумажной ведомости: каждая ступень отдельной строкой,
+     * после ступеней 14–24 — их итог «14–24», после 26 и толще — итог «26 и б.», в конце «Итого».
+     * Первая таблица — вся партия; если сортов/назначений несколько, ниже — по каждому отдельно.
+     */
+    fun thicknessSummary(): List<ThicknessSummaryTable> {
         val block = selectedBlock ?: return emptyList()
-        val rows = mutableMapOf<Triple<String, String, KubaturnikDestination>, Pair<Int, Double>>()
-        for ((sort, byDest) in counts) {
-            for ((dest, byDiam) in byDest) {
-                for ((diameter, count) in byDiam) {
-                    if (count <= 0) continue
-                    val range = thicknessRangeLabel(diameter)
-                    val volume = (block.volumeFor(diameter, selectedLengthIndex) ?: 0.0) * count
-                    val key = Triple(range, sort, dest)
-                    val prev = rows[key] ?: (0 to 0.0)
-                    rows[key] = (prev.first + count) to (prev.second + volume)
-                }
-            }
+        val combos = counts.flatMap { (sort, byDest) ->
+            byDest.filterValues { byDiam -> byDiam.values.any { it > 0 } }
+                .map { (dest, byDiam) -> Triple(sort, dest, byDiam) }
         }
-        return rows.entries
-            .map { (key, value) -> ThicknessSummaryRow(key.first, key.second, key.third, value.first, value.second) }
-            .sortedWith(compareBy({ THICKNESS_ORDER.indexOf(it.rangeLabel) }, { it.sort }, { it.destination.ordinal }))
+        if (combos.isEmpty()) return emptyList()
+
+        val merged = mutableMapOf<Int, Int>()
+        combos.forEach { (_, _, byDiam) -> byDiam.forEach { (d, c) -> merged[d] = (merged[d] ?: 0) + c } }
+
+        val tables = mutableListOf(ThicknessSummaryTable("Вся партия", thicknessRows(block, merged)))
+        if (combos.size > 1) {
+            combos
+                .sortedWith(compareBy({ sorts.indexOf(it.first) }, { it.second.ordinal }))
+                .forEach { (sort, dest, byDiam) ->
+                    tables += ThicknessSummaryTable("$sort · ${dest.label}", thicknessRows(block, byDiam))
+                }
+        }
+        return tables
+    }
+
+    private fun thicknessRows(block: KubaturnikBlock, byDiameter: DiameterCounts): List<ThicknessSummaryRow> {
+        val rows = mutableListOf<ThicknessSummaryRow>()
+        var totalCount = 0
+        var totalVolume = 0.0
+        val entries = byDiameter.filterValues { it > 0 }.toSortedMap()
+        for (group in ThicknessGroup.entries) {
+            val inGroup = entries.filterKeys { thicknessGroup(it) == group }
+            if (inGroup.isEmpty()) continue
+            var groupCount = 0
+            var groupVolume = 0.0
+            for ((diameter, count) in inGroup) {
+                val volume = (block.volumeFor(diameter, selectedLengthIndex) ?: 0.0) * count
+                rows += ThicknessSummaryRow(diameter.toString(), count, volume, ThicknessRowKind.DIAMETER)
+                groupCount += count
+                groupVolume += volume
+            }
+            group.totalLabel?.let { rows += ThicknessSummaryRow(it, groupCount, groupVolume, ThicknessRowKind.GROUP) }
+            totalCount += groupCount
+            totalVolume += groupVolume
+        }
+        rows += ThicknessSummaryRow("Итого", totalCount, totalVolume, ThicknessRowKind.TOTAL)
+        return rows
     }
 
     companion object {
         const val DEFAULT_SORT = "Осн."
-        val THICKNESS_ORDER = listOf("До 13", "14–24", "26 и больше")
-
-        /** Границы ступеней толщины подтверждены пользователем: до 13 / 14–24 / 26 и больше. */
-        fun thicknessRangeLabel(diameter: Int): String = when {
-            diameter <= 13 -> "До 13"
-            diameter <= 24 -> "14–24"
-            else -> "26 и больше"
-        }
     }
+}
+
+/**
+ * Границы ступеней толщины подтверждены пользователем: до 13 / 14–24 / 26 и больше.
+ * Тонкие (до 13) идут в сводке просто строками, без своей итоговой строки — как в бумажном образце.
+ */
+enum class ThicknessGroup(val totalLabel: String?) { THIN(null), MIDDLE("14–24"), THICK("26 и б.") }
+
+fun thicknessGroup(diameter: Int): ThicknessGroup = when {
+    diameter <= 13 -> ThicknessGroup.THIN
+    diameter <= 24 -> ThicknessGroup.MIDDLE
+    else -> ThicknessGroup.THICK
 }
 
 class KubaturnikViewModel(application: Application) : AndroidViewModel(application) {
