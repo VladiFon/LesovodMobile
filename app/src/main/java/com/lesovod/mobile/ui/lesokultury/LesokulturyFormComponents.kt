@@ -11,16 +11,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -35,75 +29,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lesovod.mobile.ui.components.ChipTone
+import com.lesovod.mobile.ui.components.PorodaDropdown
 import com.lesovod.mobile.ui.components.SecondaryButton
 import com.lesovod.mobile.ui.components.StatusChip
-import com.lesovod.mobile.ui.proba.LesokulturyUchastok
 import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 import kotlinx.serialization.json.JsonElement
 import java.util.Locale
-
-/** Живой фильтр списка участков по подписи (в неё уже входят квартал/выдел/порода/делянка) — регистронезависимо. */
-fun filterUchastki(uchastki: List<LesokulturyUchastok>, query: String): List<LesokulturyUchastok> {
-    val trimmed = query.trim()
-    if (trimmed.isEmpty()) return uchastki
-    return uchastki.filter { it.label.contains(trimmed, ignoreCase = true) }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun UchastokPicker(uchastki: List<LesokulturyUchastok>, selected: LesokulturyUchastok?, onSelect: (LesokulturyUchastok) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    val filtered = remember(uchastki, query) { filterUchastki(uchastki, query) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = {
-            expanded = it
-            if (!it) query = ""
-        },
-    ) {
-        OutlinedTextField(
-            value = selected?.label ?: "Выберите участок",
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Участок лесных культур") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false; query = "" },
-        ) {
-            if (uchastki.size > 1) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("Поиск: квартал, выдел, порода…") },
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = Spacing.m, vertical = Spacing.xs),
-                )
-            }
-            if (filtered.isEmpty()) {
-                DropdownMenuItem(text = { Text("Ничего не найдено") }, onClick = {}, enabled = false)
-            }
-            filtered.forEach { uchastok ->
-                DropdownMenuItem(
-                    text = { Text(uchastok.label) },
-                    onClick = { onSelect(uchastok); expanded = false; query = "" },
-                )
-            }
-        }
-    }
-}
 
 @Composable
 fun GodPicker(god: Int, onSelect: (Int) -> Unit) {
@@ -182,6 +114,7 @@ fun RezultatySection(
     onUndo: (String) -> Unit,
     onVysazhenoChange: (poroda: String, value: String) -> Unit,
     onRemove: (String) -> Unit,
+    onAdd: (String) -> Unit,
 ) {
     var tab by remember { mutableStateOf(PorodyTab.VVOD) }
     val totalRazmer = remember(proby) { totalRazmerM2(proby) }
@@ -226,6 +159,7 @@ fun RezultatySection(
                 onUndo = onUndo,
                 onVysazhenoChange = onVysazhenoChange,
                 onRemove = onRemove,
+                onAdd = onAdd,
             )
             PorodyTab.ITOG -> PorodyItogTab(rezultaty = rezultaty, multiplier = multiplier)
         }
@@ -241,15 +175,28 @@ private fun PorodyVvodTab(
     onUndo: (String) -> Unit,
     onVysazhenoChange: (poroda: String, value: String) -> Unit,
     onRemove: (String) -> Unit,
+    onAdd: (String) -> Unit,
 ) {
+    // Показываем только те породы, что реально растут на участке: остальные добавляются вручную,
+    // а не висят длинным списком из всего справочника.
+    var newPoroda by remember { mutableStateOf("") }
+    val available = remember(porody, rezultaty) { porody.filter { p -> rezultaty.none { it.poroda.equals(p, ignoreCase = true) } } }
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-        Text(
-            "«+» — прижилось ещё одно, «−» — отменить последнее",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        porody.forEach { poroda ->
-            val rezultat = rezultaty.firstOrNull { it.poroda == poroda }
+        if (rezultaty.isEmpty()) {
+            Text(
+                "Добавьте породы, которые растут на участке",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(
+                "«+» — прижилось ещё одно, «−» — отменить последнее",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        rezultaty.forEach { rezultat ->
+            val poroda = rezultat.poroda
             PorodaInputRow(
                 poroda = poroda,
                 rezultat = rezultat,
@@ -259,6 +206,33 @@ private fun PorodyVvodTab(
                 onVysazhenoChange = { onVysazhenoChange(poroda, it) },
                 onRemove = { onRemove(poroda) },
             )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PorodaDropdown(
+                value = newPoroda,
+                porody = available,
+                onValueChange = { value ->
+                    val picked = available.firstOrNull { it.equals(value.trim(), ignoreCase = true) }
+                    if (picked != null) {
+                        onAdd(picked)
+                        newPoroda = ""
+                    } else {
+                        newPoroda = value
+                    }
+                },
+                enabled = enabled,
+                label = "Добавить породу",
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                onClick = {
+                    onAdd(newPoroda.trim())
+                    newPoroda = ""
+                },
+                enabled = enabled && newPoroda.isNotBlank(),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Добавить породу")
+            }
         }
     }
 }
@@ -389,9 +363,27 @@ fun PreviewCard(preview: LesokulturyPreview) {
 fun ServerResultCard(result: JsonElement, title: String, onNewCard: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         StatusChip(text = title, tone = ChipTone.OK)
+        Text(
+            "Сохранено на сервере. На сайте: Лесные культуры → участок → Журнал мероприятий",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         result.toDisplayRows().forEach { (key, value) ->
             Text("$key: $value", style = MaterialTheme.typography.bodyMedium)
         }
+        SecondaryButton(text = "Новая карточка", onClick = onNewCard)
+    }
+}
+
+/** Карточка ушла в очередь без сети — отправится сама, когда появится связь (как отчёты и пробы). */
+@Composable
+fun QueuedOfflineCard(onNewCard: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+        StatusChip(text = "Нет сети — сохранено на телефоне", tone = ChipTone.WARN)
+        Text(
+            "Карточка отправится на сервер автоматически, когда появится связь.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
         SecondaryButton(text = "Новая карточка", onClick = onNewCard)
     }
 }

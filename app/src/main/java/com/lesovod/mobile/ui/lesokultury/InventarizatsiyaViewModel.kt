@@ -3,9 +3,12 @@ package com.lesovod.mobile.ui.lesokultury
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lesovod.mobile.data.local.PendingLesokulturyPayload
+import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.repository.BotRepository
+import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.proba.LesokulturyUchastok
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,12 +27,15 @@ data class InventarizatsiyaUiState(
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val result: JsonElement? = null,
+    /** Нет сети — карточка сохранена на телефоне и уйдёт на сервер сама, когда появится связь. */
+    val queuedOffline: Boolean = false,
 ) {
     val preview: LesokulturyPreview get() = computePreview(proby, rezultaty, selectedUchastok?.ploshad)
 }
 
 class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = BotRepository(NetworkModule.api, SessionManager.getInstance(application))
+    private val queueManager = OfflineQueueManager.getInstance(application)
 
     private val _uiState = MutableStateFlow(InventarizatsiyaUiState())
     val uiState = _uiState.asStateFlow()
@@ -52,7 +58,7 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
         }
     }
 
-    fun selectUchastok(uchastok: LesokulturyUchastok) {
+    fun selectUchastok(uchastok: LesokulturyUchastok?) {
         _uiState.value = _uiState.value.copy(selectedUchastok = uchastok, error = null)
     }
 
@@ -107,6 +113,15 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
         )
     }
 
+    /** Добавить породу в карточку вручную — в списке ввода только те породы, что есть на участке. */
+    fun addPoroda(poroda: String) {
+        val name = poroda.trim()
+        if (name.isEmpty()) return
+        val rezultaty = _uiState.value.rezultaty
+        if (rezultaty.any { it.poroda.equals(name, ignoreCase = true) }) return
+        _uiState.value = _uiState.value.copy(rezultaty = rezultaty + RezultatEntry(poroda = name), error = null)
+    }
+
     fun removeRezultat(poroda: String) {
         _uiState.value = _uiState.value.copy(rezultaty = _uiState.value.rezultaty.filterNot { it.poroda == poroda })
     }
@@ -128,6 +143,11 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
                 god = state.god,
             )
             val result = repository.submitInventarizatsiya(uchastok.id, request)
+            if (result.exceptionOrNull() is ConnectivityException) {
+                queueManager.enqueueLesokultury(PendingLesokulturyPayload(uchastok.id, inventarizatsiya = request))
+                _uiState.value = _uiState.value.copy(isSubmitting = false, queuedOffline = true)
+                return@launch
+            }
             _uiState.value = result.fold(
                 onSuccess = { _uiState.value.copy(isSubmitting = false, result = it) },
                 onFailure = { _uiState.value.copy(isSubmitting = false, error = it.message ?: "Не удалось сохранить инвентаризацию") },

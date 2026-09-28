@@ -9,6 +9,7 @@ import com.lesovod.mobile.data.local.PendingActionType
 import com.lesovod.mobile.data.local.PendingAttendancePayload
 import com.lesovod.mobile.data.local.PendingBreakdownPayload
 import com.lesovod.mobile.data.local.PendingNotePayload
+import com.lesovod.mobile.data.local.PendingLesokulturyPayload
 import com.lesovod.mobile.data.local.PendingProbaPayload
 import com.lesovod.mobile.data.local.ProbaHistoryStore
 import com.lesovod.mobile.data.local.PendingReportPayload
@@ -115,6 +116,10 @@ class OfflineQueueManager private constructor(context: Context) {
     fun enqueueTrelevka(otkuda: String, kuda: String, obyom: Double, delyankaItemId: Int?) {
         val payload = PendingTrelevkaPayload(otkuda, kuda, obyom, delyankaItemId)
         enqueue(UUID.randomUUID().toString(), PendingActionType.TRELEVKA, json.encodeToString(payload), null)
+    }
+
+    fun enqueueLesokultury(payload: PendingLesokulturyPayload) {
+        enqueue(UUID.randomUUID().toString(), PendingActionType.LESOKULTURY, json.encodeToString(payload), null)
     }
 
     fun enqueueNote(text: String, recipientId: Int?) {
@@ -227,6 +232,7 @@ class OfflineQueueManager private constructor(context: Context) {
         PendingActionType.TRELEVKA -> processTrelevka(action)
         PendingActionType.PROBA -> processProba(action)
         PendingActionType.NOTE -> processNote(action)
+        PendingActionType.LESOKULTURY -> processLesokultury(action)
     }
 
     private suspend fun processReport(action: PendingAction): FlushOutcome {
@@ -295,6 +301,17 @@ class OfflineQueueManager private constructor(context: Context) {
         val payload = decode<PendingTrelevkaPayload>(action.payload)
             ?: return FlushOutcome.Failed("Повреждённые данные действия")
         val result = repository.submitTrelevka(payload.otkuda, payload.kuda, payload.obyom, payload.delyankaItemId)
+        return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
+    }
+
+    private suspend fun processLesokultury(action: PendingAction): FlushOutcome {
+        val payload = decode<PendingLesokulturyPayload>(action.payload)
+            ?: return FlushOutcome.Failed("Повреждённые данные действия")
+        val result = when {
+            payload.inventarizatsiya != null -> repository.submitInventarizatsiya(payload.uchastokId, payload.inventarizatsiya)
+            payload.perevod != null -> repository.submitPerevod(payload.uchastokId, payload.perevod)
+            else -> return FlushOutcome.Failed("Повреждённые данные действия")
+        }
         return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
     }
 

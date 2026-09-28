@@ -12,15 +12,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -28,12 +33,30 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.components.UchastokSelector
 import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 
 @Composable
 fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
+    var confirmPerevod by remember { mutableStateOf(false) }
+
+    if (confirmPerevod) {
+        val label = state.selectedUchastok?.label.orEmpty()
+        AlertDialog(
+            onDismissRequest = { confirmPerevod = false },
+            title = { Text("Перевести участок?") },
+            text = { Text("Решение «Перевести» по участку «$label» сразу меняет его статус на сервере.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmPerevod = false
+                    viewModel.submit()
+                }) { Text("Перевести") }
+            },
+            dismissButton = { TextButton(onClick = { confirmPerevod = false }) { Text("Отмена") } },
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -59,9 +82,27 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
                 ServerResultCard(result = result, title = "Решение отправлено", onNewCard = viewModel::newCard)
                 return@Column
             }
+            if (state.queuedOffline) {
+                QueuedOfflineCard(onNewCard = viewModel::newCard)
+                return@Column
+            }
 
             if (state.isLoadingReference) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                return@Column
+            }
+
+            // Шаг 1 — выбрать участок (поиск + фильтр по году создания); шаг 2 — сама карточка.
+            UchastokSelector(
+                uchastki = state.uchastki,
+                selected = state.selectedUchastok,
+                onSelect = viewModel::selectUchastok,
+                enabled = !state.isSubmitting,
+            )
+            if (state.selectedUchastok == null) {
+                if (state.error != null) {
+                    StatusChip(text = state.error.orEmpty(), tone = ChipTone.ERROR)
+                }
                 return@Column
             }
 
@@ -69,8 +110,6 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
                 verticalArrangement = Arrangement.spacedBy(Spacing.m),
                 modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
             ) {
-                UchastokPicker(uchastki = state.uchastki, selected = state.selectedUchastok, onSelect = viewModel::selectUchastok)
-
                 Text("Год обследования", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 GodPicker(god = state.god, onSelect = viewModel::selectGod)
 
@@ -93,6 +132,7 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
                 onUndo = viewModel::undoPoroda,
                 onVysazhenoChange = viewModel::onVysazhenoChange,
                 onRemove = viewModel::removeRezultat,
+                onAdd = viewModel::addPoroda,
             )
 
             PreviewCard(preview = state.preview)
@@ -126,7 +166,9 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
 
             PrimaryButton(
                 text = "Отправить",
-                onClick = viewModel::submit,
+                onClick = {
+                    if (state.reshenie == PerevodReshenie.PEREVESTI) confirmPerevod = true else viewModel.submit()
+                },
                 enabled = !state.isSubmitting,
                 modifier = Modifier.padding(bottom = Spacing.xl),
                 icon = if (state.isSubmitting) {

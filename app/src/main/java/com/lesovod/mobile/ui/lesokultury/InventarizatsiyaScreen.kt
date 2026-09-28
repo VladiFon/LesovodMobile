@@ -27,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.components.UchastokSelector
 import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 
@@ -58,9 +59,27 @@ fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewMo
                 ServerResultCard(result = result, title = "Инвентаризация сохранена", onNewCard = viewModel::newCard)
                 return@Column
             }
+            if (state.queuedOffline) {
+                QueuedOfflineCard(onNewCard = viewModel::newCard)
+                return@Column
+            }
 
             if (state.isLoadingReference) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                return@Column
+            }
+
+            // Шаг 1 — выбрать участок (поиск + фильтр по году создания); шаг 2 — сама карточка.
+            UchastokSelector(
+                uchastki = state.uchastki,
+                selected = state.selectedUchastok,
+                onSelect = viewModel::selectUchastok,
+                enabled = !state.isSubmitting,
+            )
+            if (state.selectedUchastok == null) {
+                if (state.error != null) {
+                    StatusChip(text = state.error.orEmpty(), tone = ChipTone.ERROR)
+                }
                 return@Column
             }
 
@@ -68,8 +87,6 @@ fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewMo
                 verticalArrangement = Arrangement.spacedBy(Spacing.m),
                 modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
             ) {
-                UchastokPicker(uchastki = state.uchastki, selected = state.selectedUchastok, onSelect = viewModel::selectUchastok)
-
                 Text("Год обследования", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 GodPicker(god = state.god, onSelect = viewModel::selectGod)
 
@@ -92,6 +109,7 @@ fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewMo
                 onUndo = viewModel::undoPoroda,
                 onVysazhenoChange = viewModel::onVysazhenoChange,
                 onRemove = viewModel::removeRezultat,
+                onAdd = viewModel::addPoroda,
             )
 
             PreviewCard(preview = state.preview)
