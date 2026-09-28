@@ -1,11 +1,13 @@
 package com.lesovod.mobile.data.local
 
 import com.lesovod.mobile.data.network.dto.ProbaRowRequest
+import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
+import com.lesovod.mobile.data.network.dto.PerevodRequest
 import kotlinx.serialization.Serializable
 
 /** Виды действий, которые можно выполнить офлайн и отправить позже. */
 enum class PendingActionType {
-    REPORT, BREAKDOWN, ATTENDANCE, TASK_COMPLETE, TRELEVKA, PROBA, NOTE
+    REPORT, BREAKDOWN, ATTENDANCE, TASK_COMPLETE, TRELEVKA, PROBA, NOTE, LESOKULTURY
 }
 
 /**
@@ -34,6 +36,8 @@ data class PendingReportPayload(
     val photoPath: String? = null,
     val lat: Double? = null,
     val lon: Double? = null,
+    val delyankaId: Int? = null,
+    val lesokulturyUchastokId: Int? = null,
 )
 
 @Serializable
@@ -83,4 +87,12 @@ data class PendingProbaPayload(
 data class PendingNotePayload(
     val text: String,
     val recipientId: Int? = null,
+)
+
+/** Карточка инвентаризации или перевода лесных культур, сохранённая без сети — ровно одно из двух тел. */
+@Serializable
+data class PendingLesokulturyPayload(
+    val uchastokId: Int,
+    val inventarizatsiya: InventarizatsiyaRequest? = null,
+    val perevod: PerevodRequest? = null,
 )

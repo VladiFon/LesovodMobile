@@ -21,7 +21,9 @@ import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
+import com.lesovod.mobile.data.network.dto.TabelBrigadaDto
 import com.lesovod.mobile.data.network.dto.TabelDayEntryDto
+import com.lesovod.mobile.data.network.dto.TabelDelyankaDto
 import com.lesovod.mobile.data.network.dto.TabelDaySaveRequest
 import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
@@ -124,7 +126,9 @@ interface ApiService {
         @Body body: NoteCreateRequest,
     ): ResponseBody
 
-    @GET("api/notes")
+    // Со слешем на конце: без него сервер отвечал 307-редиректом на http://,
+    // Android его блокировал и экран показывал «Нет соединения с интернетом».
+    @GET("api/notes/")
     suspend fun listNotes(
         @Header("Authorization") bearerToken: String,
     ): List<NoteDto>
@@ -150,6 +154,11 @@ interface ApiService {
         @Body body: ProbaSaveRequest,
     ): ProbaResponse
 
+    @GET("api/uhody/proby/mine")
+    suspend fun listMyProby(
+        @Header("Authorization") bearerToken: String,
+    ): List<ProbaResponse>
+
     @GET("api/lesokultury/uchastki")
     suspend fun listLesokulturyUchastki(
         @Header("Authorization") bearerToken: String,
@@ -173,7 +182,7 @@ interface ApiService {
     @GET("api/uhody/porody")
     suspend fun listPorody(): PorodySpravochnikDto
 
-    @GET("api/notifications")
+    @GET("api/notifications/")
     suspend fun listNotifications(
         @Header("Authorization") bearerToken: String,
     ): List<JsonObject>
@@ -277,6 +286,18 @@ interface ApiService {
         @Header("Authorization") bearerToken: String,
         @Body body: VidRabotyCreateRequest,
     ): VidRabotyDto
+
+    @GET("api/tabel/delyanki")
+    suspend fun searchTabelDelyanki(
+        @Header("Authorization") bearerToken: String,
+        @Query("search") search: String? = null,
+    ): List<TabelDelyankaDto>
+
+    @GET("api/tabel/brigady")
+    suspend fun listTabelBrigady(
+        @Header("Authorization") bearerToken: String,
+        @Query("data") data: String,
+    ): List<TabelBrigadaDto>
 
     @GET("api/tabel/lesokultury-uchastki")
     suspend fun listTabelLesokulturyUchastki(

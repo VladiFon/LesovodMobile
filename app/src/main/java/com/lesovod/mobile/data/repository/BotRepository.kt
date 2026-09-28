@@ -22,7 +22,9 @@ import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
+import com.lesovod.mobile.data.network.dto.TabelBrigadaDto
 import com.lesovod.mobile.data.network.dto.TabelDayEntryDto
+import com.lesovod.mobile.data.network.dto.TabelDelyankaDto
 import com.lesovod.mobile.data.network.dto.TabelDaySaveRequest
 import com.lesovod.mobile.data.network.dto.TabelEntrySaveDto
 import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
@@ -90,6 +92,8 @@ class BotRepository(
         photoPath: String?,
         lat: Double? = null,
         lon: Double? = null,
+        delyankaId: Int? = null,
+        lesokulturyUchastokId: Int? = null,
     ): Result<Unit> {
         val telegramId = sessionManager.session.value?.appIdentity
             ?: return Result.failure(Exception("Не удалось определить учётную запись для отправки — переавторизуйтесь"))
@@ -106,6 +110,8 @@ class BotRepository(
                     opisanie = opisanie?.takeIf { it.isNotBlank() },
                     lat = lat,
                     lon = lon,
+                    delyankaId = delyankaId,
+                    lesokulturyUchastokId = lesokulturyUchastokId,
                 ),
             )
             Unit
@@ -185,6 +191,10 @@ class BotRepository(
         api.createProba(requireToken(), request)
     }
 
+    suspend fun listMyProby(): Result<List<ProbaResponse>> = safeCall {
+        api.listMyProby(requireToken())
+    }
+
     suspend fun listLesokulturyUchastki(): Result<List<LesokulturyUchastok>> = safeCall {
         api.listLesokulturyUchastki(requireToken()).map { it.toLesokulturyUchastok() }
     }
@@ -237,6 +247,14 @@ class BotRepository(
     /** Создаёт новый вид работы (или возвращает уже существующий с таким названием). */
     suspend fun createVidRaboty(nazvanie: String): Result<VidRabotyDto> = safeCall {
         api.createVidRaboty(requireToken(), VidRabotyCreateRequest(nazvanie))
+    }
+
+    suspend fun searchTabelDelyanki(search: String?): Result<List<TabelDelyankaDto>> = safeCall {
+        api.searchTabelDelyanki(requireToken(), search?.takeIf { it.isNotBlank() })
+    }
+
+    suspend fun listTabelBrigady(data: String): Result<List<TabelBrigadaDto>> = safeCall {
+        api.listTabelBrigady(requireToken(), data)
     }
 
     suspend fun listTabelLesokulturyUchastki(search: String? = null): Result<List<TabelLesokulturyUchastokDto>> = safeCall {

@@ -9,7 +9,9 @@ import com.lesovod.mobile.data.local.PendingActionType
 import com.lesovod.mobile.data.local.PendingAttendancePayload
 import com.lesovod.mobile.data.local.PendingBreakdownPayload
 import com.lesovod.mobile.data.local.PendingNotePayload
+import com.lesovod.mobile.data.local.PendingLesokulturyPayload
 import com.lesovod.mobile.data.local.PendingProbaPayload
+import com.lesovod.mobile.data.local.ProbaHistoryStore
 import com.lesovod.mobile.data.local.PendingReportPayload
 import com.lesovod.mobile.data.local.PendingTaskCompletePayload
 import com.lesovod.mobile.data.local.PendingTrelevkaPayload
@@ -87,10 +89,14 @@ class OfflineQueueManager private constructor(context: Context) {
         uploadedPhotoPath: String?,
         lat: Double? = null,
         lon: Double? = null,
+        delyankaId: Int? = null,
+        lesokulturyUchastokId: Int? = null,
     ) {
         val id = UUID.randomUUID().toString()
         val localPhotoPath = photoUri?.let { copyUriToLocalFile(id, it) }
-        val payload = PendingReportPayload(tipRaboty, kvartal, vydels, opisanie, uploadedPhotoPath, lat, lon)
+        val payload = PendingReportPayload(
+            tipRaboty, kvartal, vydels, opisanie, uploadedPhotoPath, lat, lon, delyankaId, lesokulturyUchastokId,
+        )
         enqueue(id, PendingActionType.REPORT, json.encodeToString(payload), localPhotoPath)
     }
 
@@ -114,6 +120,10 @@ class OfflineQueueManager private constructor(context: Context) {
     fun enqueueTrelevka(otkuda: String, kuda: String, obyom: Double, delyankaItemId: Int?) {
         val payload = PendingTrelevkaPayload(otkuda, kuda, obyom, delyankaItemId)
         enqueue(UUID.randomUUID().toString(), PendingActionType.TRELEVKA, json.encodeToString(payload), null)
+    }
+
+    fun enqueueLesokultury(payload: PendingLesokulturyPayload) {
+        enqueue(UUID.randomUUID().toString(), PendingActionType.LESOKULTURY, json.encodeToString(payload), null)
     }
 
     fun enqueueNote(text: String, recipientId: Int?) {
@@ -226,6 +236,7 @@ class OfflineQueueManager private constructor(context: Context) {
         PendingActionType.TRELEVKA -> processTrelevka(action)
         PendingActionType.PROBA -> processProba(action)
         PendingActionType.NOTE -> processNote(action)
+        PendingActionType.LESOKULTURY -> processLesokultury(action)
     }
 
     private suspend fun processReport(action: PendingAction): FlushOutcome {
@@ -244,6 +255,7 @@ class OfflineQueueManager private constructor(context: Context) {
         }
         val result = repository.submitReport(
             payload.tipRaboty, payload.kvartal, payload.vydels, payload.opisanie, photoPath, payload.lat, payload.lon,
+            payload.delyankaId, payload.lesokulturyUchastokId,
         )
         return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
     }
@@ -297,6 +309,17 @@ class OfflineQueueManager private constructor(context: Context) {
         return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
     }
 
+    private suspend fun processLesokultury(action: PendingAction): FlushOutcome {
+        val payload = decode<PendingLesokulturyPayload>(action.payload)
+            ?: return FlushOutcome.Failed("Повреждённые данные действия")
+        val result = when {
+            payload.inventarizatsiya != null -> repository.submitInventarizatsiya(payload.uchastokId, payload.inventarizatsiya)
+            payload.perevod != null -> repository.submitPerevod(payload.uchastokId, payload.perevod)
+            else -> return FlushOutcome.Failed("Повреждённые данные действия")
+        }
+        return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
+    }
+
     private suspend fun processNote(action: PendingAction): FlushOutcome {
         val payload = decode<PendingNotePayload>(action.payload)
             ?: return FlushOutcome.Failed("Повреждённые данные действия")
@@ -345,13 +368,20 @@ class OfflineQueueManager private constructor(context: Context) {
                 ploshadVydela = payload.ploshadVydela,
                 dataZamera = payload.dataZamera,
                 rows = payload.rows,
-                form = ProbaFormRequest(payload.kolPloshadok, payload.ploshadPloshadki),
+                form = ProbaFormRequest(payload.kolPloshadok, payload.ploshadPloshadki, payload.ploshadVydela),
                 lesokulturyUchastokIds = payload.lesokulturyUchastokIds,
                 fotoStolbDelyanki = fotoStolbDelyanki,
                 fotoStolbProby = fotoStolbProby,
             ),
         )
-        return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
+        return result.fold(
+            onSuccess = {
+                // Расчёт пробы, отправленной из очереди, тоже попадает в «Мои пробы».
+                ProbaHistoryStore(appContext).add(it)
+                FlushOutcome.Sent
+            },
+            onFailure = { toOutcome(it) },
+        )
     }
 
     private suspend fun uploadLocalPhoto(path: String): PhotoOutcome {

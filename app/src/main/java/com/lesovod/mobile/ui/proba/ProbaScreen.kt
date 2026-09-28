@@ -2,7 +2,7 @@ package com.lesovod.mobile.ui.proba
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -25,12 +24,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,7 +40,8 @@ import com.lesovod.mobile.ui.components.PhotoPickerField
 import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.SecondaryButton
 import com.lesovod.mobile.ui.components.StatusChip
-import com.lesovod.mobile.ui.lesokultury.filterUchastki
+import com.lesovod.mobile.ui.components.PorodaDropdown
+import com.lesovod.mobile.ui.components.UchastokSelector
 import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 import java.util.Calendar
@@ -72,27 +70,65 @@ fun ProbaScreen(onBack: () -> Unit, viewModel: ProbaViewModel = viewModel()) {
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.l, vertical = Spacing.m),
         ) {
-            if (state.result != null) {
-                ProbaResultCard(result = state.result, onNewProba = viewModel::newProba)
-            } else if (state.queuedOffline) {
-                ProbaQueuedOfflineCard(onNewProba = viewModel::newProba)
-            } else {
-                ProbaForm(state = state, viewModel = viewModel)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ProbaTab.entries.forEach { tab ->
+                    FilterChip(
+                        selected = state.tab == tab,
+                        onClick = { viewModel.selectTab(tab) },
+                        label = { Text(tab.label) },
+                    )
+                }
+            }
+            val result = state.result
+            when {
+                state.tab == ProbaTab.HISTORY -> ProbaHistory(state = state, viewModel = viewModel)
+                result != null -> ProbaResultCard(
+                    result = result,
+                    title = "Проба сохранена",
+                    buttonText = "Новая проба",
+                    onButton = viewModel::newProba,
+                )
+                state.queuedOffline -> ProbaQueuedOfflineCard(onNewProba = viewModel::newProba)
+                else -> ProbaForm(state = state, viewModel = viewModel)
             }
         }
     }
 }
 
 @Composable
-private fun ProbaResultCard(result: ProbaResponse?, onNewProba: () -> Unit) {
-    if (result == null) return
+private fun ProbaResultCard(result: ProbaResponse, title: String, buttonText: String, onButton: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
-        StatusChip(text = "Проба сохранена", tone = ChipTone.OK)
+        StatusChip(text = title, tone = ChipTone.OK)
+        Text(
+            listOfNotNull(
+                "кв. ${result.kvartal.orEmpty()} / выд. ${result.vydel.orEmpty()}",
+                result.dataZamera,
+            ).joinToString(" · "),
+            style = MaterialTheme.typography.titleMedium,
+        )
 
-        ResultRow("Запас на укладках", result.obyomSkladTotal)
-        ResultRow("Запас пробы", result.zapasProbyTotal)
-        ResultRow("Запас на 1 га", result.zapasNa1Ga)
-        ResultRow("Запас на лесосеке", result.zapasNaLesoseke)
+        Column(
+            modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+        ) {
+            Text("Расчёт", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            ResultRow("Всего на пробе", result.zapasProbyTotal, "м³")
+            ResultRow("На 1 га", result.zapasNa1Ga, "м³/га")
+            val ploshad = result.ploshadLesoseki
+            ResultRow(
+                if (ploshad != null && ploshad > 0) "На всю площадь (%s га)".format(Locale.US, ploshad.toString()) else "На всю площадь",
+                result.zapasNaLesoseke?.takeIf { ploshad != null && ploshad > 0 },
+                "м³",
+            )
+            if (ploshad == null || ploshad <= 0) {
+                Text(
+                    "Площадь не указана — расчёт на всю площадь не выполнен",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            ResultRow("Складочный объём укладок", result.obyomSkladTotal, "м³")
+        }
 
         if (result.rows.isNotEmpty()) {
             Text("По укладкам", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -106,7 +142,50 @@ private fun ProbaResultCard(result: ProbaResponse?, onNewProba: () -> Unit) {
             }
         }
 
-        SecondaryButton(text = "Новая проба", onClick = onNewProba)
+        SecondaryButton(text = buttonText, onClick = onButton)
+    }
+}
+
+@Composable
+private fun ProbaHistory(state: ProbaUiState, viewModel: ProbaViewModel) {
+    val opened = state.openedHistory
+    if (opened != null) {
+        ProbaResultCard(result = opened, title = "Проба №${opened.id}", buttonText = "К списку", onButton = { viewModel.openHistory(null) })
+        return
+    }
+    if (state.isLoadingHistory) {
+        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+    }
+    state.historyError?.let { StatusChip(text = it, tone = ChipTone.WARN) }
+    if (state.history.isEmpty() && !state.isLoadingHistory) {
+        Text(
+            "Отправленных проб пока нет",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    state.history.forEach { proba ->
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .softCard()
+                .clickable { viewModel.openHistory(proba) }
+                .padding(Spacing.m),
+        ) {
+            Text(
+                "кв. ${proba.kvartal.orEmpty()} / выд. ${proba.vydel.orEmpty()}" + (if (proba.completedAt != null) " ✓" else ""),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                listOfNotNull(
+                    proba.dataZamera,
+                    proba.zapasNa1Ga?.let { "%.1f м³/га".format(Locale.US, it) },
+                    proba.zapasNaLesoseke?.takeIf { it > 0 }?.let { "на площадь %.1f м³".format(Locale.US, it) },
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -124,10 +203,10 @@ private fun ProbaQueuedOfflineCard(onNewProba: () -> Unit) {
 }
 
 @Composable
-private fun ResultRow(label: String, value: Double?) {
+private fun ResultRow(label: String, value: Double?, unit: String) {
     if (value == null) return
     Text(
-        "$label: %.3f".format(Locale.US, value),
+        "$label: %.3f $unit".format(Locale.US, value),
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.padding(top = 4.dp),
     )
@@ -137,28 +216,42 @@ private fun ResultRow(label: String, value: Double?) {
 private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
     val context = LocalContext.current
 
-    OutlinedTextField(
-        value = state.kvartal,
-        onValueChange = viewModel::onKvartalChange,
-        label = { Text("Квартал") },
-        singleLine = true,
-        enabled = !state.isSubmitting,
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-        modifier = Modifier.fillMaxWidth(),
-    )
-    OutlinedTextField(
-        value = state.vydel,
-        onValueChange = viewModel::onVydelChange,
-        label = { Text("Выдел") },
-        singleLine = true,
-        enabled = !state.isSubmitting,
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-        modifier = Modifier.fillMaxWidth(),
-    )
+    if (!state.manualPlace) {
+        UchastokSelector(
+            uchastki = state.lesokulturyUchastki,
+            selected = state.selectedUchastok,
+            onSelect = viewModel::selectUchastok,
+            enabled = !state.isSubmitting,
+            title = "Участок лесных культур",
+        )
+    } else {
+        Text("Место пробы", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        OutlinedTextField(
+            value = state.kvartal,
+            onValueChange = viewModel::onKvartalChange,
+            label = { Text("Квартал") },
+            singleLine = true,
+            enabled = !state.isSubmitting,
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = state.vydel,
+            onValueChange = viewModel::onVydelChange,
+            label = { Text("Выдел") },
+            singleLine = true,
+            enabled = !state.isSubmitting,
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    TextButton(onClick = { viewModel.setManualPlace(!state.manualPlace) }, enabled = !state.isSubmitting) {
+        Text(if (state.manualPlace) "Выбрать участок лесных культур из списка" else "Проба не на участке л/к — ввести квартал и выдел")
+    }
     OutlinedTextField(
         value = state.ploshadVydela,
         onValueChange = viewModel::onPloshadVydelaChange,
-        label = { Text("Площадь выдела, га (необязательно)") },
+        label = { Text("Площадь, га — для расчёта на всю площадь") },
         singleLine = true,
         enabled = !state.isSubmitting,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -205,6 +298,7 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
     state.rows.forEach { row ->
         ProbaRowCard(
             row = row,
+            porody = state.porody,
             canRemove = state.rows.size > 1,
             enabled = !state.isSubmitting,
             onPorodaChange = { viewModel.onRowPorodaChange(row.id, it) },
@@ -261,51 +355,6 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
         label = "Фото столба пробной площадки",
     )
 
-    if (state.lesokulturyUchastki.isNotEmpty()) {
-        var uchastokQuery by remember { mutableStateOf("") }
-        val filteredUchastki = remember(state.lesokulturyUchastki, uchastokQuery) {
-            filterUchastki(state.lesokulturyUchastki, uchastokQuery)
-        }
-
-        Text(
-            "Участок лесных культур (если работа велась на нём)",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        if (state.lesokulturyUchastki.size > 1) {
-            OutlinedTextField(
-                value = uchastokQuery,
-                onValueChange = { uchastokQuery = it },
-                placeholder = { Text("Поиск: квартал, выдел, порода…") },
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        if (filteredUchastki.isEmpty()) {
-            Text(
-                "Ничего не найдено",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-            ) {
-                filteredUchastki.forEach { uchastok ->
-                    FilterChip(
-                        selected = uchastok.id in state.selectedLesokulturyIds,
-                        onClick = { viewModel.toggleLesokulturyUchastok(uchastok.id) },
-                        label = { Text(uchastok.label) },
-                    )
-                }
-            }
-        }
-    }
-
     if (state.error != null) {
         StatusChip(text = state.error, tone = ChipTone.ERROR)
     }
@@ -325,6 +374,7 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
 @Composable
 private fun ProbaRowCard(
     row: ProbaRowInput,
+    porody: List<String>,
     canRemove: Boolean,
     enabled: Boolean,
     onPorodaChange: (String) -> Unit,
@@ -335,13 +385,11 @@ private fun ProbaRowCard(
 ) {
     Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m), verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
+                PorodaDropdown(
                     value = row.poroda,
+                    porody = porody,
                     onValueChange = onPorodaChange,
-                    label = { Text("Порода") },
-                    singleLine = true,
                     enabled = enabled,
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.weight(1f),
                 )
                 if (canRemove) {

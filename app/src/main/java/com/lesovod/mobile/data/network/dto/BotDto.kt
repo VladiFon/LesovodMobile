@@ -13,6 +13,8 @@ data class RawReportRequest(
     val opisanie: String? = null,
     val lat: Double? = null,
     val lon: Double? = null,
+    @SerialName("delyanka_id") val delyankaId: Int? = null,
+    @SerialName("lesokultury_uchastok_id") val lesokulturyUchastokId: Int? = null,
 )
 
 @Serializable
@@ -81,7 +83,8 @@ data class RecipientDto(
 data class NoteDto(
     val id: Int,
     val text: String,
-    @SerialName("author_fio") val authorFio: String? = null,
+    /** Сервер отдаёт автора заметки как sotrudnik_fio (webext.list_worker_notes). */
+    @SerialName("sotrudnik_fio") val authorFio: String? = null,
     @SerialName("created_at") val createdAt: String,
 )
 
