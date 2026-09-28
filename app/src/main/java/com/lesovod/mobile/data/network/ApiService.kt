@@ -21,7 +21,9 @@ import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
+import com.lesovod.mobile.data.network.dto.TabelBrigadaDto
 import com.lesovod.mobile.data.network.dto.TabelDayEntryDto
+import com.lesovod.mobile.data.network.dto.TabelDelyankaDto
 import com.lesovod.mobile.data.network.dto.TabelDaySaveRequest
 import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
 import com.lesovod.mobile.data.network.dto.TrelevkaRequest
@@ -284,6 +286,18 @@ interface ApiService {
         @Header("Authorization") bearerToken: String,
         @Body body: VidRabotyCreateRequest,
     ): VidRabotyDto
+
+    @GET("api/tabel/delyanki")
+    suspend fun searchTabelDelyanki(
+        @Header("Authorization") bearerToken: String,
+        @Query("search") search: String? = null,
+    ): List<TabelDelyankaDto>
+
+    @GET("api/tabel/brigady")
+    suspend fun listTabelBrigady(
+        @Header("Authorization") bearerToken: String,
+        @Query("data") data: String,
+    ): List<TabelBrigadaDto>
 
     @GET("api/tabel/lesokultury-uchastki")
     suspend fun listTabelLesokulturyUchastki(

@@ -4,7 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.network.NetworkModule
+import com.lesovod.mobile.data.network.dto.TabelBrigadaDto
 import com.lesovod.mobile.data.network.dto.TabelDayEntryDto
+import com.lesovod.mobile.data.network.dto.TabelDelyankaDto
 import com.lesovod.mobile.data.network.dto.TabelEntrySaveDto
 import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
 import com.lesovod.mobile.data.network.dto.VidRabotyDto
@@ -50,6 +52,8 @@ data class TabelRowState(
     val vidRabotyNazvanie: String?,
     val kommentariy: String,
     val dirty: Boolean,
+    val brigadaNazvanie: String? = null,
+    val isBrigadir: Boolean = false,
 ) {
     companion object {
         fun fromDto(dto: TabelDayEntryDto): TabelRowState {
@@ -74,9 +78,28 @@ data class TabelRowState(
                 vidRabotyNazvanie = dto.vidRabotyNazvanie,
                 kommentariy = dto.kommentariy.orEmpty(),
                 dirty = false,
+                brigadaNazvanie = dto.brigadaNazvanie,
+                isBrigadir = dto.isBrigadir,
             )
         }
     }
+}
+
+/** Что отметить члену бригады в окне «По бригаде». */
+enum class BrigadaChoice(val displayName: String) {
+    WITH_BRIGADA("С бригадой"),
+    ELSEWHERE("В другом месте"),
+    DAY_OFF("Выходной"),
+    SICK("Больничный"),
+    VACATION("Отпуск"),
+    NOT_WORKED("Не работал"),
+}
+
+sealed class DelyankaSearchState {
+    data object Loading : DelyankaSearchState()
+    data object Empty : DelyankaSearchState()
+    data class Error(val message: String) : DelyankaSearchState()
+    data class Results(val items: List<TabelDelyankaDto>) : DelyankaSearchState()
 }
 
 /** Состояние поиска лесных культур в диалоге «Место работы» — экран-как-в-прототипе. */
@@ -263,6 +286,80 @@ class TabelViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ---------- делянки: поиск выдела для места работы (GET /api/tabel/delyanki) ----------
+
+    private val _delyankaSearch = MutableStateFlow<DelyankaSearchState>(DelyankaSearchState.Loading)
+    val delyankaSearch = _delyankaSearch.asStateFlow()
+    private var delyankaJob: Job? = null
+
+    /** Пустой запрос — последние делянки; иначе «12/5», лесосека, название, лесничество. */
+    fun searchDelyanki(query: String) {
+        delyankaJob?.cancel()
+        _delyankaSearch.value = DelyankaSearchState.Loading
+        delyankaJob = viewModelScope.launch {
+            delay(300)
+            repository.searchTabelDelyanki(query.trim()).fold(
+                onSuccess = { list ->
+                    _delyankaSearch.value = if (list.isEmpty()) DelyankaSearchState.Empty else DelyankaSearchState.Results(list)
+                },
+                onFailure = { _delyankaSearch.value = DelyankaSearchState.Error(it.message ?: "Не удалось загрузить делянки") },
+            )
+        }
+    }
+
+    // ---------- «По бригаде»: весь состав на дату — «работал» с местом бригады ----------
+
+    private val _brigady = MutableStateFlow<List<TabelBrigadaDto>?>(null)
+    val brigady = _brigady.asStateFlow()
+    private val _brigadyError = MutableStateFlow<String?>(null)
+    val brigadyError = _brigadyError.asStateFlow()
+
+    fun loadBrigady() {
+        _brigady.value = null
+        _brigadyError.value = null
+        val date = _uiState.value.date
+        viewModelScope.launch {
+            repository.listTabelBrigady(dateKey(date)).fold(
+                onSuccess = { _brigady.value = it },
+                onFailure = { _brigadyError.value = it.message ?: "Не удалось загрузить бригады" },
+            )
+        }
+    }
+
+    fun applyBrigada(
+        brigada: TabelBrigadaDto,
+        mesto: TabelDelyankaDto?,
+        vid: VidRabotyDto?,
+        choices: Map<Int, BrigadaChoice>,
+    ) {
+        brigada.sostav.forEach { member ->
+            if (_uiState.value.rows.none { it.sotrudnikId == member.sotrudnikId }) return@forEach
+            when (choices[member.sotrudnikId] ?: BrigadaChoice.WITH_BRIGADA) {
+                BrigadaChoice.WITH_BRIGADA -> updateRow(member.sotrudnikId) {
+                    it.copy(
+                        status = TabelStatus.WORKED,
+                        place = mesto?.let { m -> TabelPlace.Delyanka(m.itemId, m.label) },
+                        vidRabotyId = vid?.id,
+                        vidRabotyNazvanie = vid?.nazvanie,
+                        dirty = true,
+                    )
+                }
+                BrigadaChoice.ELSEWHERE -> updateRow(member.sotrudnikId) {
+                    it.copy(status = TabelStatus.WORKED, place = null, kommentariy = "работал не с бригадой — укажите место", dirty = true)
+                }
+                BrigadaChoice.DAY_OFF -> setAbsent(member.sotrudnikId, TabelStatus.DAY_OFF)
+                BrigadaChoice.SICK -> setAbsent(member.sotrudnikId, TabelStatus.SICK)
+                BrigadaChoice.VACATION -> setAbsent(member.sotrudnikId, TabelStatus.VACATION)
+                BrigadaChoice.NOT_WORKED -> setAbsent(member.sotrudnikId, TabelStatus.NOT_WORKED)
+            }
+        }
+        _uiState.value = _uiState.value.copy(saveMessage = "Заполнено по бригаде «${brigada.nazvanie}» — проверьте и сохраните")
+    }
+
+    private fun setAbsent(sotrudnikId: Int, status: TabelStatus) = updateRow(sotrudnikId) {
+        it.copy(status = status, place = null, vidRabotyId = null, vidRabotyNazvanie = null, dirty = true)
+    }
+
     // ---------- поиск участков лесных культур для пикера «Место работы» ----------
 
     private val _lesokulturySearch = MutableStateFlow<LesokulturySearchState>(LesokulturySearchState.Idle)
@@ -296,25 +393,5 @@ class TabelViewModel(application: Application) : AndroidViewModel(application) {
     fun resetLesokulturySearch() {
         searchJob?.cancel()
         _lesokulturySearch.value = LesokulturySearchState.Idle
-    }
-
-    /**
-     * Поиск делянок по кварталу/выделу — client-side фильтр уже загруженного списка
-     * GET /api/delyanki/for-map. ВАЖНО: этот справочник отдаёт delyanka_id (id самой
-     * делянки), а не id конкретного delyanka_item (выдела) — см. докстринг
-     * list_delyanka_items_for_map на бэкенде (SELECT ... i.delyanka_id ..., без i.id).
-     * tabel_zapis.delyanka_item_id ссылается именно на delyanka_item.id, которого этот
-     * список не содержит, поэтому подставлять сюда delyankaId было бы записью в чужой
-     * внешний ключ — вместо этого результаты показываются только для справки, а выбор
-     * (запись delyanka_item_id) в этой вкладке отключён. См. отчёт по задаче.
-     */
-    suspend fun searchDelyankiForMapLabelsOnly(query: String): List<String> {
-        val q = query.trim()
-        if (q.isEmpty()) return emptyList()
-        val all = repository.getDelyankiForMap().getOrNull().orEmpty()
-        return all.filter {
-            listOfNotNull(it.kvartal, it.vydel, it.lesnichestvo, it.nazvanie)
-                .any { field -> field.contains(q, ignoreCase = true) }
-        }.map { "кв. ${it.kvartal.orEmpty()} · выд. ${it.vydel.orEmpty()} · ${it.nazvanie.orEmpty()}" }
     }
 }

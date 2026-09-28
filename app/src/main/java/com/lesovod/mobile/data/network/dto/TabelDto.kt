@@ -29,6 +29,48 @@ data class TabelDayEntryDto(
     @SerialName("lku_glavnaya_poroda") val lkuGlavnayaPoroda: String? = null,
     @SerialName("vid_raboty_id") val vidRabotyId: Int? = null,
     @SerialName("vid_raboty_nazvanie") val vidRabotyNazvanie: String? = null,
+    @SerialName("brigada_id") val brigadaId: Int? = null,
+    @SerialName("brigada_nazvanie") val brigadaNazvanie: String? = null,
+    @SerialName("is_brigadir") val isBrigadir: Boolean = false,
+)
+
+/** Выдел делянки для места работы (GET /api/tabel/delyanki) — itemId и сохраняется в табель. */
+@Serializable
+data class TabelDelyankaDto(
+    @SerialName("item_id") val itemId: Int,
+    @SerialName("delyanka_id") val delyankaId: Int? = null,
+    val nazvanie: String? = null,
+    val lesnichestvo: String? = null,
+    val kvartal: String? = null,
+    val vydel: String? = null,
+    @SerialName("lesoseka_nomer") val lesosekaNomer: String? = null,
+    val status: String? = null,
+) {
+    val label: String
+        get() = listOfNotNull(
+            "кв. ${kvartal.orEmpty()} · выд. ${vydel.orEmpty()}",
+            lesosekaNomer?.takeIf { it.isNotBlank() }?.let { "лесосека $it" },
+            nazvanie?.takeIf { it.isNotBlank() },
+        ).joinToString(" · ")
+}
+
+@Serializable
+data class TabelBrigadaMemberDto(
+    @SerialName("sotrudnik_id") val sotrudnikId: Int,
+    val fio: String,
+    val dolzhnost: String? = null,
+)
+
+/** Бригада на дату (GET /api/tabel/brigady) — состав, бригадир и выделы делянки из назначения. */
+@Serializable
+data class TabelBrigadaDto(
+    val id: Int,
+    val nazvanie: String,
+    @SerialName("brigadir_sotrudnik_id") val brigadirSotrudnikId: Int? = null,
+    @SerialName("brigadir_fio") val brigadirFio: String? = null,
+    val sostav: List<TabelBrigadaMemberDto> = emptyList(),
+    @SerialName("delyanka_nazvanie") val delyankaNazvanie: String? = null,
+    val mesta: List<TabelDelyankaDto> = emptyList(),
 )
 
 /** Одна строка пакетного сохранения — см. TabelEntryIn на бэкенде. */

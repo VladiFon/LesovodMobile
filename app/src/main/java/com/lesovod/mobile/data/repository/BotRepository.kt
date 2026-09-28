@@ -22,7 +22,9 @@ import com.lesovod.mobile.data.network.dto.RawReportRequest
 import com.lesovod.mobile.data.network.dto.RecipientDto
 import com.lesovod.mobile.data.network.dto.RemainingResponseDto
 import com.lesovod.mobile.data.network.dto.SentNoteDto
+import com.lesovod.mobile.data.network.dto.TabelBrigadaDto
 import com.lesovod.mobile.data.network.dto.TabelDayEntryDto
+import com.lesovod.mobile.data.network.dto.TabelDelyankaDto
 import com.lesovod.mobile.data.network.dto.TabelDaySaveRequest
 import com.lesovod.mobile.data.network.dto.TabelEntrySaveDto
 import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
@@ -241,6 +243,14 @@ class BotRepository(
     /** Создаёт новый вид работы (или возвращает уже существующий с таким названием). */
     suspend fun createVidRaboty(nazvanie: String): Result<VidRabotyDto> = safeCall {
         api.createVidRaboty(requireToken(), VidRabotyCreateRequest(nazvanie))
+    }
+
+    suspend fun searchTabelDelyanki(search: String?): Result<List<TabelDelyankaDto>> = safeCall {
+        api.searchTabelDelyanki(requireToken(), search?.takeIf { it.isNotBlank() })
+    }
+
+    suspend fun listTabelBrigady(data: String): Result<List<TabelBrigadaDto>> = safeCall {
+        api.listTabelBrigady(requireToken(), data)
     }
 
     suspend fun listTabelLesokulturyUchastki(search: String? = null): Result<List<TabelLesokulturyUchastokDto>> = safeCall {

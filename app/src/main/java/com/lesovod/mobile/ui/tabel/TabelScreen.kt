@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,7 +45,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +52,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.data.network.dto.TabelBrigadaDto
+import com.lesovod.mobile.data.network.dto.TabelDelyankaDto
 import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
+import com.lesovod.mobile.data.network.dto.VidRabotyDto
 import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.EmptyState
 import com.lesovod.mobile.ui.components.ErrorState
@@ -63,7 +68,6 @@ import com.lesovod.mobile.ui.theme.softCard
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlinx.coroutines.launch
 
 /** Экран «Табель — ручной ввод» (см. reference-прототип задачи) — заполнение табеля мастером/лесничим на рядовых рабочих. */
 @Composable
@@ -74,6 +78,7 @@ fun TabelScreen(
     val state by viewModel.uiState.collectAsState()
     var placeSheetFor by remember { mutableStateOf<TabelRowState?>(null) }
     var workSheetFor by remember { mutableStateOf<TabelRowState?>(null) }
+    var brigadaSheetOpen by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(Spacing.xs)) {
@@ -96,6 +101,13 @@ fun TabelScreen(
         }
 
         DateNavRow(date = state.date, isToday = state.isToday, onPrev = viewModel::goToPreviousDay, onNext = viewModel::goToNextDay)
+
+        SecondaryButton(
+            text = "Заполнить по бригаде",
+            onClick = { viewModel.loadBrigady(); brigadaSheetOpen = true },
+            enabled = state.rows.isNotEmpty(),
+            modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.xs),
+        )
 
         OutlinedTextField(
             value = state.query,
@@ -156,6 +168,18 @@ fun TabelScreen(
             onDismiss = { placeSheetFor = null },
             onSelect = { place -> viewModel.setPlace(row.sotrudnikId, place); placeSheetFor = null },
             onClear = { viewModel.setPlace(row.sotrudnikId, null); placeSheetFor = null },
+        )
+    }
+
+    if (brigadaSheetOpen) {
+        BrigadaSheet(
+            viewModel = viewModel,
+            vidyRabot = state.vidyRabot,
+            onDismiss = { brigadaSheetOpen = false },
+            onApply = { brigada, mesto, vid, choices ->
+                viewModel.applyBrigada(brigada, mesto, vid, choices)
+                brigadaSheetOpen = false
+            },
         )
     }
 
@@ -253,6 +277,13 @@ private fun EmployeeCard(
     ) {
         Text(row.fio, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Text(row.dolzhnost, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        row.brigadaNazvanie?.let {
+            Text(
+                "Бригада: $it" + if (row.isBrigadir) " · бригадир" else "",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
             TabelStatus.entries.forEach { status ->
@@ -343,16 +374,17 @@ private fun PlaceOfWorkSheet(
     onClear: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
-    var tab by remember { mutableStateOf(PlaceTab.LESOKULTURY) }
+    var tab by remember { mutableStateOf(if (row.place is TabelPlace.Lesokultury) PlaceTab.LESOKULTURY else PlaceTab.DELYANKA) }
     var delyankaQuery by remember { mutableStateOf("") }
-    var delyankaResults by remember { mutableStateOf<List<String>>(emptyList()) }
+    val delyankaState by viewModel.delyankaSearch.collectAsState()
+    var selectedDelyanka by remember { mutableStateOf<TabelDelyankaDto?>(null) }
     var lesokulturyQuery by remember { mutableStateOf("") }
     val lesokulturyState by viewModel.lesokulturySearch.collectAsState()
     var selectedLesokultury by remember { mutableStateOf<TabelLesokulturyUchastokDto?>(null) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.resetLesokulturySearch()
+        viewModel.searchDelyanki("")
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -367,15 +399,15 @@ private fun PlaceOfWorkSheet(
 
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
                 FilterChip(
-                    selected = tab == PlaceTab.LESOKULTURY,
-                    onClick = { tab = PlaceTab.LESOKULTURY },
-                    label = { Text("Лесные культуры") },
-                    modifier = Modifier.weight(1f),
-                )
-                FilterChip(
                     selected = tab == PlaceTab.DELYANKA,
                     onClick = { tab = PlaceTab.DELYANKA },
                     label = { Text("Делянка") },
+                    modifier = Modifier.weight(1f),
+                )
+                FilterChip(
+                    selected = tab == PlaceTab.LESOKULTURY,
+                    onClick = { tab = PlaceTab.LESOKULTURY },
+                    label = { Text("Лесные культуры") },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -443,38 +475,64 @@ private fun PlaceOfWorkSheet(
                     }
                 }
                 PlaceTab.DELYANKA -> {
-                    // Ограничение: GET /api/delyanki/for-map отдаёт delyanka_id (id всей делянки),
-                    // а не id конкретного delyanka_item (выдела), который требуется полю
-                    // tabel_zapis.delyanka_item_id. Показываем найденные делянки только для справки,
-                    // выбор через эту вкладку отключён, чтобы не отправить на сервер неверный id.
                     OutlinedTextField(
                         value = delyankaQuery,
                         onValueChange = {
                             delyankaQuery = it
-                            scope.launch { delyankaResults = viewModel.searchDelyankiForMapLabelsOnly(it) }
+                            selectedDelyanka = null
+                            viewModel.searchDelyanki(it)
                         },
                         singleLine = true,
-                        placeholder = { Text("Квартал, выдел или название делянки") },
+                        placeholder = { Text("12/5, лесосека, название, лесничество") },
                         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(Spacing.s))
-                    Text(
-                        "Выбор делянки временно недоступен: приложению нужен id конкретного выдела " +
-                            "(delyanka_item_id), а этот справочник отдаёт только id всей делянки. " +
-                            "Используйте вкладку «Лесные культуры» или оставьте место пустым.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(Spacing.s))
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                        delyankaResults.forEach { label ->
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.s),
-                            )
+                    when (val d = delyankaState) {
+                        is DelyankaSearchState.Loading -> Column(
+                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        ) { repeat(3) { SkeletonBlock() } }
+                        is DelyankaSearchState.Empty -> Text(
+                            "Ничего не найдено. Место можно оставить пустым.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        is DelyankaSearchState.Error -> Text(
+                            d.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        is DelyankaSearchState.Results -> Column(
+                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                            modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                        ) {
+                            d.items.forEach { item ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .softCard()
+                                        .clickable { selectedDelyanka = item }
+                                        .padding(Spacing.s),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Кв. ${item.kvartal.orEmpty()} · выд. ${item.vydel.orEmpty()}" +
+                                                (item.lesosekaNomer?.takeIf { it.isNotBlank() }?.let { " · лесосека $it" } ?: ""),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                        Text(
+                                            listOfNotNull(item.nazvanie, item.lesnichestvo, item.status).joinToString(" · "),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    if (selectedDelyanka?.itemId == item.itemId) StatusChip(text = "Выбрано", tone = ChipTone.OK)
+                                }
+                            }
                         }
                     }
                 }
@@ -486,16 +544,20 @@ private fun PlaceOfWorkSheet(
                 PrimaryButton(
                     text = "Выбрать",
                     onClick = {
-                        selectedLesokultury?.let {
-                            onSelect(
-                                TabelPlace.Lesokultury(
-                                    it.id,
-                                    "кв. ${it.kvartal.orEmpty()} · выд. ${it.vydel.orEmpty()} · культуры",
-                                ),
-                            )
+                        if (tab == PlaceTab.DELYANKA) {
+                            selectedDelyanka?.let { onSelect(TabelPlace.Delyanka(it.itemId, it.label)) }
+                        } else {
+                            selectedLesokultury?.let {
+                                onSelect(
+                                    TabelPlace.Lesokultury(
+                                        it.id,
+                                        "кв. ${it.kvartal.orEmpty()} · выд. ${it.vydel.orEmpty()} · культуры",
+                                    ),
+                                )
+                            }
                         }
                     },
-                    enabled = selectedLesokultury != null,
+                    enabled = if (tab == PlaceTab.DELYANKA) selectedDelyanka != null else selectedLesokultury != null,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -587,3 +649,129 @@ private fun WorkTypeSheet(
     }
 }
 
+
+// ---------- «Заполнить по бригаде» ----------
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun BrigadaSheet(
+    viewModel: TabelViewModel,
+    vidyRabot: List<VidRabotyDto>,
+    onDismiss: () -> Unit,
+    onApply: (TabelBrigadaDto, TabelDelyankaDto?, VidRabotyDto?, Map<Int, BrigadaChoice>) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val brigady by viewModel.brigady.collectAsState()
+    val error by viewModel.brigadyError.collectAsState()
+    var selected by remember { mutableStateOf<TabelBrigadaDto?>(null) }
+    var mesto by remember { mutableStateOf<TabelDelyankaDto?>(null) }
+    var vid by remember { mutableStateOf<VidRabotyDto?>(null) }
+    var choices by remember { mutableStateOf<Map<Int, BrigadaChoice>>(emptyMap()) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = Spacing.l, vertical = Spacing.s)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s),
+        ) {
+            Text("Заполнить по бригаде", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Весь состав бригады на этот день отметится «Работал» с местом бригады. Кого не было — отметьте причину.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val list = brigady
+            when {
+                error != null -> Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                list == null -> repeat(3) { SkeletonBlock() }
+                list.isEmpty() -> Text("Бригад нет — их заводят на вебе, экран «Распределение бригад».")
+                else -> {
+                    Text("Бригадир", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    list.forEach { b ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .softCard()
+                                .clickable {
+                                    selected = b
+                                    mesto = b.mesta.firstOrNull()
+                                    choices = b.sostav.associate { it.sotrudnikId to BrigadaChoice.WITH_BRIGADA }
+                                }
+                                .padding(Spacing.s),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(b.brigadirFio ?: b.nazvanie, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                Text(
+                                    listOfNotNull(b.nazvanie.takeIf { b.brigadirFio != null }, "${b.sostav.size} чел.", b.delyankaNazvanie)
+                                        .joinToString(" · "),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (selected?.id == b.id) StatusChip(text = "Выбрано", tone = ChipTone.OK)
+                        }
+                    }
+                }
+            }
+
+            selected?.let { b ->
+                Text("Где работали", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                if (b.mesta.isEmpty()) {
+                    Text(
+                        "У бригады нет назначения на этот день — место можно указать в строках.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                        b.mesta.forEach { m ->
+                            FilterChip(selected = mesto?.itemId == m.itemId, onClick = { mesto = m }, label = { Text(m.label) })
+                        }
+                        FilterChip(selected = mesto == null, onClick = { mesto = null }, label = { Text("Не указывать") })
+                    }
+                }
+                Text("Вид работы", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    vidyRabot.forEach { v ->
+                        FilterChip(selected = vid?.id == v.id, onClick = { vid = if (vid?.id == v.id) null else v }, label = { Text(v.nazvanie) })
+                    }
+                }
+                Text("Состав", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                if (b.sostav.isEmpty()) Text("В бригаде на этот день никого нет.")
+                b.sostav.forEach { member ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.s),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    ) {
+                        Text(
+                            member.fio + if (member.sotrudnikId == b.brigadirSotrudnikId) " · бригадир" else "",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            BrigadaChoice.entries.forEach { c ->
+                                FilterChip(
+                                    selected = (choices[member.sotrudnikId] ?: BrigadaChoice.WITH_BRIGADA) == c,
+                                    onClick = { choices = choices + (member.sotrudnikId to c) },
+                                    label = { Text(c.displayName, style = MaterialTheme.typography.labelSmall) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
+                SecondaryButton(text = "Отмена", onClick = onDismiss, modifier = Modifier.weight(1f))
+                PrimaryButton(
+                    text = "Заполнить",
+                    onClick = { selected?.let { onApply(it, mesto, vid, choices) } },
+                    enabled = selected != null,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(Spacing.m))
+        }
+    }
+}

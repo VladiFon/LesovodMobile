@@ -79,10 +79,11 @@ fun ProbaScreen(onBack: () -> Unit, viewModel: ProbaViewModel = viewModel()) {
                     )
                 }
             }
+            val result = state.result
             when {
                 state.tab == ProbaTab.HISTORY -> ProbaHistory(state = state, viewModel = viewModel)
-                state.result != null -> ProbaResultCard(
-                    result = state.result,
+                result != null -> ProbaResultCard(
+                    result = result,
                     title = "Проба сохранена",
                     buttonText = "Новая проба",
                     onButton = viewModel::newProba,
