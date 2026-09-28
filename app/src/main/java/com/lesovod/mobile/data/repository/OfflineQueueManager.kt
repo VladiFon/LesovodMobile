@@ -10,6 +10,7 @@ import com.lesovod.mobile.data.local.PendingAttendancePayload
 import com.lesovod.mobile.data.local.PendingBreakdownPayload
 import com.lesovod.mobile.data.local.PendingNotePayload
 import com.lesovod.mobile.data.local.PendingProbaPayload
+import com.lesovod.mobile.data.local.ProbaHistoryStore
 import com.lesovod.mobile.data.local.PendingReportPayload
 import com.lesovod.mobile.data.local.PendingTaskCompletePayload
 import com.lesovod.mobile.data.local.PendingTrelevkaPayload
@@ -345,13 +346,20 @@ class OfflineQueueManager private constructor(context: Context) {
                 ploshadVydela = payload.ploshadVydela,
                 dataZamera = payload.dataZamera,
                 rows = payload.rows,
-                form = ProbaFormRequest(payload.kolPloshadok, payload.ploshadPloshadki),
+                form = ProbaFormRequest(payload.kolPloshadok, payload.ploshadPloshadki, payload.ploshadVydela),
                 lesokulturyUchastokIds = payload.lesokulturyUchastokIds,
                 fotoStolbDelyanki = fotoStolbDelyanki,
                 fotoStolbProby = fotoStolbProby,
             ),
         )
-        return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
+        return result.fold(
+            onSuccess = {
+                // Расчёт пробы, отправленной из очереди, тоже попадает в «Мои пробы».
+                ProbaHistoryStore(appContext).add(it)
+                FlushOutcome.Sent
+            },
+            onFailure = { toOutcome(it) },
+        )
     }
 
     private suspend fun uploadLocalPhoto(path: String): PhotoOutcome {

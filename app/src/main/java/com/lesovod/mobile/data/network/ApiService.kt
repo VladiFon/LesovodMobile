@@ -152,6 +152,11 @@ interface ApiService {
         @Body body: ProbaSaveRequest,
     ): ProbaResponse
 
+    @GET("api/uhody/proby/mine")
+    suspend fun listMyProby(
+        @Header("Authorization") bearerToken: String,
+    ): List<ProbaResponse>
+
     @GET("api/lesokultury/uchastki")
     suspend fun listLesokulturyUchastki(
         @Header("Authorization") bearerToken: String,

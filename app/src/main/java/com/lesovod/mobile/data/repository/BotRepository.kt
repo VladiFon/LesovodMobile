@@ -185,6 +185,10 @@ class BotRepository(
         api.createProba(requireToken(), request)
     }
 
+    suspend fun listMyProby(): Result<List<ProbaResponse>> = safeCall {
+        api.listMyProby(requireToken())
+    }
+
     suspend fun listLesokulturyUchastki(): Result<List<LesokulturyUchastok>> = safeCall {
         api.listLesokulturyUchastki(requireToken()).map { it.toLesokulturyUchastok() }
     }
