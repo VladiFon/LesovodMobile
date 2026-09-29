@@ -98,7 +98,8 @@ fun ForestMapView(
     colorMode: ColorMode,
     workColors: Map<String, Int>,
     delyankaStatusColors: Map<String, Int>,
-    lesokulturyKeys: Set<String>,
+    lesokulturyKeys: Map<String, Int>,
+    lesokulturyKontury: List<MapShape>,
     taskKeys: Set<String>,
     sklady: List<SkladDto>,
     tool: MapTool,
@@ -323,6 +324,7 @@ fun ForestMapView(
                 if (featuresOverlay.workColors !== workColors) { featuresOverlay.workColors = workColors; dirty = true }
                 if (featuresOverlay.delyankaStatusColors !== delyankaStatusColors) { featuresOverlay.delyankaStatusColors = delyankaStatusColors; dirty = true }
                 if (featuresOverlay.lesokulturyKeys !== lesokulturyKeys) { featuresOverlay.lesokulturyKeys = lesokulturyKeys; dirty = true }
+                if (featuresOverlay.lesokulturyKontury !== lesokulturyKontury) { featuresOverlay.lesokulturyKontury = lesokulturyKontury; dirty = true }
                 if (featuresOverlay.taskKeys != taskKeys) { featuresOverlay.taskKeys = taskKeys; dirty = true }
 
                 val rulerActive = tool == MapTool.RULER

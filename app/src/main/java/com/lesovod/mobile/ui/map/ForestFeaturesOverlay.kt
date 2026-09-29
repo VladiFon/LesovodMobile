@@ -21,8 +21,13 @@ val DONE_COLOR: Int = AndroidColor.parseColor("#2196F3")
 private val HIGHLIGHT_COLOR = AndroidColor.parseColor("#DF964E")
 val LESOKULTURY_COLOR: Int = AndroidColor.parseColor("#00E5FF")
 val TASK_COLOR: Int = AndroidColor.parseColor("#E040FB")
+/** Делянка без вида рубки / вида пользования (как на сервере, app/vidy.py). */
+val NEIZVESTNO_COLOR: Int = AndroidColor.parseColor("#9E9E9E")
 
-enum class ColorMode { WORKS, STATUS }
+/** WORKS — по видам работ; остальные — по делянкам: статус, вид рубки, вид пользования. */
+enum class ColorMode { WORKS, STATUS, VID_RUBKI, GRUPPA }
+
+fun parseColorOrNull(hex: String?): Int? = hex?.let { runCatching { AndroidColor.parseColor(it.trim()) }.getOrNull() }
 
 /** Статусы делянок — те же цвета, что на сервере (map_features.DELYANKA_STATUSES) и в QGIS. */
 enum class DelyankaStatus(val code: String, val label: String, val color: Int) {
@@ -61,11 +66,13 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
     /** "кв|выд" -> цвет по видам работ (GET /api/map/work-colors, свежее цвета в кэше геометрии). */
     var workColors: Map<String, Int> = emptyMap()
 
-    /** "кв|выд" -> цвет статуса делянки (ожидает / в работе / выполнено). */
+    /** "кв|выд" -> цвет делянки для текущего режима (статус / вид рубки / вид пользования). */
     var delyankaStatusColors: Map<String, Int> = emptyMap()
 
-    /** Выделы с участками лесных культур и с задачами рабочего на сегодня — поверх обычного стиля. */
-    var lesokulturyKeys: Set<String> = emptySet()
+    /** Выделы с участками лесных культур ("кв|выд" -> цвет вида культур) и с задачами рабочего на сегодня — поверх обычного стиля. */
+    var lesokulturyKeys: Map<String, Int> = emptyMap()
+    /** Контуры участков культур, занимающих часть выдела, — рисуются поверх выделов. */
+    var lesokulturyKontury: List<MapShape> = emptyList()
     var taskKeys: Set<String> = emptySet()
 
     /** Приблизительные прямоугольники вместо настоящих контуров делянок не выбираем — тап уходит в выдел под ними. */
@@ -85,6 +92,10 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
         color = LESOKULTURY_COLOR
         strokeWidth = 3f * density
         pathEffect = DashPathEffect(floatArrayOf(10f * density, 6f * density), 0f)
+    }
+    private val lesokulturyFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = AndroidColor.argb(70, 0, 229, 255)
     }
     private val taskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -118,7 +129,18 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
         val view = View(canvas, projection, south, north, west, east, pxPerDegree, zoom)
         if (layers.kvartaly) kvartaly.forEach { drawShape(it, view) }
         if (layers.vydela) vydela.forEach { drawShape(it, view) }
+        if (layers.lesokultury) lesokulturyKontury.forEach { drawKontur(it, view) }
         if (layers.lesoseki) lesoseki.forEach { drawShape(it, view) }
+    }
+
+    private fun drawKontur(shape: MapShape, v: View) {
+        if (shape.maxLat < v.south || shape.minLat > v.north || shape.maxLon < v.west || shape.minLon > v.east) return
+        buildPath(shape, v.projection)
+        val color = shape.statusColor ?: LESOKULTURY_COLOR
+        lesokulturyFillPaint.color = withAlpha(color, 70)
+        lesokulturyPaint.color = color
+        v.canvas.drawPath(path, lesokulturyFillPaint)
+        v.canvas.drawPath(path, lesokulturyPaint)
     }
 
     private class View(
@@ -145,7 +167,11 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
         v.canvas.drawPath(path, strokePaint)
         if (shape.kind == ShapeKind.VYDEL && shape.vydel != null) {
             val key = CompletedWorkStore.key(shape.kvartal, shape.vydel)
-            if (layers.lesokultury && key in lesokulturyKeys) v.canvas.drawPath(path, lesokulturyPaint)
+            val lkColor = lesokulturyKeys[key]
+            if (layers.lesokultury && lkColor != null) {
+                lesokulturyPaint.color = lkColor
+                v.canvas.drawPath(path, lesokulturyPaint)
+            }
             if (layers.tasks && key in taskKeys) v.canvas.drawPath(path, taskPaint)
         }
 
@@ -179,7 +205,7 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
                     // Цвет из свежего запроса; если его ещё нет (нет связи с первого запуска) —
                     // тот, что пришёл вместе с геометрией.
                     ColorMode.WORKS -> if (done) DONE_COLOR else workColors[key] ?: shape.statusColor.takeIf { workColors.isEmpty() }
-                    ColorMode.STATUS -> delyankaStatusColors[key]
+                    else -> delyankaStatusColors[key]
                 }
                 if (base != null) {
                     fillPaint.color = withAlpha(base, 110)
@@ -197,8 +223,10 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
                 }
             }
             ShapeKind.LESOSEKA -> {
-                // контур делянки — цветом её статуса (ожидает / в работе / выполнено)
+                // контур делянки — цветом её статуса / вида рубки / вида пользования; лесосека
+                // ГИСлесхоза без делянки в Лесоводе — цветом вида рубки из её же атрибутов
                 val status = delyankaStatusColors[CompletedWorkStore.key(shape.kvartal, shape.vydel.orEmpty())]
+                    ?: shape.statusColor.takeIf { colorMode == ColorMode.VID_RUBKI }
                 strokePaint.strokeWidth = if (selected) 8f else 5f
                 strokePaint.color = when {
                     selected -> HIGHLIGHT_COLOR
@@ -209,7 +237,7 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
                 fillPaint.color = when {
                     selected -> withAlpha(HIGHLIGHT_COLOR, SELECTED_FILL_ALPHA)
                     done -> withAlpha(DONE_COLOR, 140)
-                    colorMode == ColorMode.STATUS && status != null -> withAlpha(status, 110)
+                    colorMode != ColorMode.WORKS && status != null -> withAlpha(status, 110)
                     else -> AndroidColor.TRANSPARENT
                 }
             }

@@ -81,6 +81,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.ui.components.PhotoPickerField
 import com.lesovod.mobile.ui.map.ColorMode
+import com.lesovod.mobile.ui.map.NEIZVESTNO_COLOR
 import com.lesovod.mobile.ui.map.DONE_COLOR
 import com.lesovod.mobile.ui.map.DelyankaCard
 import com.lesovod.mobile.ui.map.DelyankaStatus
@@ -201,7 +202,8 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
             colorMode = state.colorMode,
             workColors = state.workColors,
             delyankaStatusColors = state.delyankaStatusColors,
-            lesokulturyKeys = if (state.layers.lesokultury) state.lesokulturyKeys else emptySet(),
+            lesokulturyKeys = if (state.layers.lesokultury) state.lesokulturyKeys else emptyMap(),
+            lesokulturyKontury = if (state.layers.lesokultury) state.lesokulturyKontury else emptyList(),
             taskKeys = if (state.layers.tasks) viewModel.taskKeys(state) else emptySet(),
             sklady = if (state.layers.sklady) state.sklady else emptyList(),
             tool = state.tool,
@@ -667,6 +669,8 @@ private fun LayersPanel(
             )
             ColorModeRow("По видам работ", colorMode == ColorMode.WORKS) { onColorMode(ColorMode.WORKS) }
             ColorModeRow("По статусу делянок", colorMode == ColorMode.STATUS) { onColorMode(ColorMode.STATUS) }
+            ColorModeRow("По виду рубки (ССР, УЗ…)", colorMode == ColorMode.VID_RUBKI) { onColorMode(ColorMode.VID_RUBKI) }
+            ColorModeRow("По виду пользования", colorMode == ColorMode.GRUPPA) { onColorMode(ColorMode.GRUPPA) }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             TextButton(onClick = onRefresh, modifier = Modifier.padding(horizontal = 6.dp)) {
@@ -914,9 +918,14 @@ private fun legendFor(state: MapUiState): List<Pair<Color, String>> {
     val base = when (state.colorMode) {
         ColorMode.WORKS -> workLegend
         ColorMode.STATUS -> DelyankaStatus.entries.map { Color(it.color) to "Делянка: ${it.label.lowercase()}" }
+        ColorMode.VID_RUBKI, ColorMode.GRUPPA -> state.delyankaLegend.map { (color, label) -> Color(color) to label }
+            .ifEmpty { listOf(Color(NEIZVESTNO_COLOR) to "Делянок с видом рубки нет (обновите сервер)") }
     }
     val extra = buildList {
-        if (state.layers.lesokultury && state.lesokulturyKeys.isNotEmpty()) add(Color(LESOKULTURY_COLOR) to "Лесные культуры")
+        if (state.layers.lesokultury && (state.lesokulturyKeys.isNotEmpty() || state.lesokulturyKontury.isNotEmpty())) {
+            state.lesokulturyLegend.ifEmpty { listOf(LESOKULTURY_COLOR to "Лесные культуры") }
+                .forEach { (color, label) -> add(Color(color) to "Л/к: ${label.removePrefix("Лесные культуры").trim().ifEmpty { "обычные" }}") }
+        }
         if (state.layers.tasks && state.tasks.isNotEmpty()) add(Color(TASK_COLOR) to "Мои задачи")
     }
     return base + extra

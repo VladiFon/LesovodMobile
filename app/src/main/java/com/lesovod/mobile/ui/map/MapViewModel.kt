@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.local.CompletedWorkStore
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
+import com.lesovod.mobile.data.network.dto.LesokulturyMapDto
 import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.repository.CellTier
 import com.lesovod.mobile.data.repository.DownloadState
@@ -98,8 +99,18 @@ data class MapUiState(
     // --- раскраска ---
     val colorMode: ColorMode = ColorMode.WORKS,
     val workColors: Map<String, Int> = emptyMap(),
+    /** Цвета делянок для текущего режима раскраски (статус / вид рубки / вид пользования). */
     val delyankaStatusColors: Map<String, Int> = emptyMap(),
-    val lesokulturyKeys: Set<String> = emptySet(),
+    /** Делянки с сервера — из них цвета пересчитываются при смене режима без запроса. */
+    val delyankaRefs: List<DelyankaMapRefDto> = emptyList(),
+    /** Легенда по делянкам для режимов «вид рубки» / «вид пользования»: только то, что есть на карте. */
+    val delyankaLegend: List<Pair<Int, String>> = emptyList(),
+    /** "кв|выд" -> цвет вида культур (выделы без своего контура). */
+    val lesokulturyKeys: Map<String, Int> = emptyMap(),
+    /** Виды культур, что есть на карте, — для легенды. */
+    val lesokulturyLegend: List<Pair<Int, String>> = emptyList(),
+    /** Собственные контуры участков лесных культур (если загружены на сайте). */
+    val lesokulturyKontury: List<MapShape> = emptyList(),
 
     // --- мои задачи и склады ---
     val tasks: List<WorkPlanItemDto> = emptyList(),
@@ -255,22 +266,24 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             repository.getDelyankiForMap().onSuccess { refs ->
-                val lesnichestvo = _uiState.value.selectedLesnichestvo
-                val colors = HashMap<String, Int>()
-                // на одном выделе может быть несколько делянок (архивная и новая) — берём последнюю
-                refs.filter { lesnichestvoMatches(it.lesnichestvo, lesnichestvo) }
-                    .sortedBy { it.delyankaId }
-                    .forEach { ref ->
-                        val kv = ref.kvartal?.trim().orEmpty()
-                        val vd = ref.vydel?.trim().orEmpty()
-                        if (kv.isNotEmpty() && vd.isNotEmpty()) colors[MapRepository.vydelKey(kv, vd)] = DelyankaStatus.fromCode(ref.statusRabot).color
-                    }
-                _uiState.value = _uiState.value.copy(delyankaStatusColors = colors)
+                _uiState.value = withDelyankaColors(_uiState.value.copy(delyankaRefs = refs))
             }
         }
         viewModelScope.launch {
             repository.getLesokultury(num, force).onSuccess { list ->
-                _uiState.value = _uiState.value.copy(lesokulturyKeys = list.map { MapRepository.vydelKey(it.kvartal, it.vydel) }.toSet())
+                // выдел подсвечиваем целиком, только если у участка нет своего контура
+                val kontury = list.mapNotNull { lk ->
+                    val rings = lk.geometry?.let { g -> runCatching { g.toOuterRings() }.getOrNull() }.orEmpty()
+                    if (rings.isEmpty()) null
+                    else buildShape(ShapeKind.VYDEL, lk.kvartal, lk.vydel, lkColor(lk), rings.map { ring ->
+                        DoubleArray(ring.size * 2).also { arr -> ring.forEachIndexed { i, p -> arr[2 * i] = p.latitude; arr[2 * i + 1] = p.longitude } }
+                    })
+                }
+                _uiState.value = _uiState.value.copy(
+                    lesokulturyKeys = list.filter { !it.hasKontur }.associate { MapRepository.vydelKey(it.kvartal, it.vydel) to lkColor(it) },
+                    lesokulturyKontury = kontury,
+                    lesokulturyLegend = list.map { lkColor(it) to (it.vidKultur ?: "Лесные культуры") }.distinct(),
+                )
             }
         }
     }
@@ -285,7 +298,33 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setColorMode(mode: ColorMode) {
-        _uiState.value = _uiState.value.copy(colorMode = mode)
+        _uiState.value = withDelyankaColors(_uiState.value.copy(colorMode = mode))
+    }
+
+    private fun lkColor(lk: LesokulturyMapDto): Int = parseColorOrNull(lk.vidKulturColor) ?: LESOKULTURY_COLOR
+
+    /** Цвета делянок "кв|выд" -> цвет для режима раскраски и легенда к ним. */
+    private fun withDelyankaColors(state: MapUiState): MapUiState {
+        val colors = HashMap<String, Int>()
+        val legend = LinkedHashMap<Int, String>()
+        // на одном выделе может быть несколько делянок (архивная и новая) — берём последнюю
+        state.delyankaRefs.filter { lesnichestvoMatches(it.lesnichestvo, state.selectedLesnichestvo) }
+            .sortedBy { it.delyankaId }
+            .forEach { ref ->
+                val kv = ref.kvartal?.trim().orEmpty()
+                val vd = ref.vydel?.trim().orEmpty()
+                if (kv.isEmpty() || vd.isEmpty()) return@forEach
+                val (color, label) = when (state.colorMode) {
+                    ColorMode.VID_RUBKI -> (parseColorOrNull(ref.vidRubkiColor) ?: NEIZVESTNO_COLOR) to
+                        (ref.vidRubkiKod?.takeIf { it.isNotBlank() }?.let { "$it — ${ref.vidRubki}" } ?: "Вид рубки не указан")
+                    ColorMode.GRUPPA -> (parseColorOrNull(ref.gruppaColor) ?: NEIZVESTNO_COLOR) to
+                        (ref.gruppaLabel ?: "Вид пользования не указан")
+                    else -> DelyankaStatus.fromCode(ref.statusRabot).color to ""
+                }
+                colors[MapRepository.vydelKey(kv, vd)] = color
+                if (label.isNotEmpty()) legend[color] = label
+            }
+        return state.copy(delyankaStatusColors = colors, delyankaLegend = legend.map { it.key to it.value })
     }
 
     private fun currentNum(): Int? = _uiState.value.selectedLesnichestvo?.let { _uiState.value.lesnichestva[it] }

@@ -65,7 +65,7 @@ fun shapeFromProperties(kind: ShapeKind, prop: (String) -> String?, rawNumVds: S
             val kv = prop("kvartal") ?: prop("num_kv") ?: return null
             val vd = prop("vydel")?.takeIf { it.isNotBlank() } ?: rawNumVds?.substringBefore(',')?.trim()
             if (vd.isNullOrBlank()) return null
-            buildShape(kind, kv, vd, null, rings)
+            buildShape(kind, kv, vd, parseColorOrNull(prop("vid_rubki_color")), rings)
         }
     }
 }
