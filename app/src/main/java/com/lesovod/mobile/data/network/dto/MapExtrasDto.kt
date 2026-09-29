@@ -58,6 +58,10 @@ data class LesokulturyMapDto(
     @SerialName("god_sozdaniya") val godSozdaniya: String? = null,
     val ploshad: Double? = null,
     val status: String? = null,
+    /** У участка загружен свой контур (схема-чертёж) — рисуем его, а не весь выдел. */
+    @SerialName("has_kontur") val hasKontur: Boolean = false,
+    /** Контур участка в WGS84; приходит только в первой записи участка. */
+    val geometry: GeoJsonGeometry? = null,
 )
 
 /** GET /api/map/delyanka-location — центр выдела. */

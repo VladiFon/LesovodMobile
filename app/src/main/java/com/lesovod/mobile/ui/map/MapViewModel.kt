@@ -100,6 +100,8 @@ data class MapUiState(
     val workColors: Map<String, Int> = emptyMap(),
     val delyankaStatusColors: Map<String, Int> = emptyMap(),
     val lesokulturyKeys: Set<String> = emptySet(),
+    /** Собственные контуры участков лесных культур (если загружены на сайте). */
+    val lesokulturyKontury: List<MapShape> = emptyList(),
 
     // --- мои задачи и склады ---
     val tasks: List<WorkPlanItemDto> = emptyList(),
@@ -270,7 +272,18 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             repository.getLesokultury(num, force).onSuccess { list ->
-                _uiState.value = _uiState.value.copy(lesokulturyKeys = list.map { MapRepository.vydelKey(it.kvartal, it.vydel) }.toSet())
+                // выдел подсвечиваем целиком, только если у участка нет своего контура
+                val kontury = list.mapNotNull { lk ->
+                    val rings = lk.geometry?.let { g -> runCatching { g.toOuterRings() }.getOrNull() }.orEmpty()
+                    if (rings.isEmpty()) null
+                    else buildShape(ShapeKind.VYDEL, lk.kvartal, lk.vydel, null, rings.map { ring ->
+                        DoubleArray(ring.size * 2).also { arr -> ring.forEachIndexed { i, p -> arr[2 * i] = p.latitude; arr[2 * i + 1] = p.longitude } }
+                    })
+                }
+                _uiState.value = _uiState.value.copy(
+                    lesokulturyKeys = list.filter { !it.hasKontur }.map { MapRepository.vydelKey(it.kvartal, it.vydel) }.toSet(),
+                    lesokulturyKontury = kontury,
+                )
             }
         }
     }

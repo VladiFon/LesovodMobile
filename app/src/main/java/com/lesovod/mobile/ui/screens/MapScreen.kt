@@ -202,6 +202,7 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
             workColors = state.workColors,
             delyankaStatusColors = state.delyankaStatusColors,
             lesokulturyKeys = if (state.layers.lesokultury) state.lesokulturyKeys else emptySet(),
+            lesokulturyKontury = if (state.layers.lesokultury) state.lesokulturyKontury else emptyList(),
             taskKeys = if (state.layers.tasks) viewModel.taskKeys(state) else emptySet(),
             sklady = if (state.layers.sklady) state.sklady else emptyList(),
             tool = state.tool,
@@ -916,7 +917,7 @@ private fun legendFor(state: MapUiState): List<Pair<Color, String>> {
         ColorMode.STATUS -> DelyankaStatus.entries.map { Color(it.color) to "Делянка: ${it.label.lowercase()}" }
     }
     val extra = buildList {
-        if (state.layers.lesokultury && state.lesokulturyKeys.isNotEmpty()) add(Color(LESOKULTURY_COLOR) to "Лесные культуры")
+        if (state.layers.lesokultury && (state.lesokulturyKeys.isNotEmpty() || state.lesokulturyKontury.isNotEmpty())) add(Color(LESOKULTURY_COLOR) to "Лесные культуры")
         if (state.layers.tasks && state.tasks.isNotEmpty()) add(Color(TASK_COLOR) to "Мои задачи")
     }
     return base + extra

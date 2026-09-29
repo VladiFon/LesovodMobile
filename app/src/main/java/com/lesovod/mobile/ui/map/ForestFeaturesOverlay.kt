@@ -66,6 +66,8 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
 
     /** Выделы с участками лесных культур и с задачами рабочего на сегодня — поверх обычного стиля. */
     var lesokulturyKeys: Set<String> = emptySet()
+    /** Контуры участков культур, занимающих часть выдела, — рисуются поверх выделов. */
+    var lesokulturyKontury: List<MapShape> = emptyList()
     var taskKeys: Set<String> = emptySet()
 
     /** Приблизительные прямоугольники вместо настоящих контуров делянок не выбираем — тап уходит в выдел под ними. */
@@ -85,6 +87,10 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
         color = LESOKULTURY_COLOR
         strokeWidth = 3f * density
         pathEffect = DashPathEffect(floatArrayOf(10f * density, 6f * density), 0f)
+    }
+    private val lesokulturyFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = AndroidColor.argb(70, 0, 229, 255)
     }
     private val taskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -118,7 +124,15 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
         val view = View(canvas, projection, south, north, west, east, pxPerDegree, zoom)
         if (layers.kvartaly) kvartaly.forEach { drawShape(it, view) }
         if (layers.vydela) vydela.forEach { drawShape(it, view) }
+        if (layers.lesokultury) lesokulturyKontury.forEach { drawKontur(it, view) }
         if (layers.lesoseki) lesoseki.forEach { drawShape(it, view) }
+    }
+
+    private fun drawKontur(shape: MapShape, v: View) {
+        if (shape.maxLat < v.south || shape.minLat > v.north || shape.maxLon < v.west || shape.minLon > v.east) return
+        buildPath(shape, v.projection)
+        v.canvas.drawPath(path, lesokulturyFillPaint)
+        v.canvas.drawPath(path, lesokulturyPaint)
     }
 
     private class View(
