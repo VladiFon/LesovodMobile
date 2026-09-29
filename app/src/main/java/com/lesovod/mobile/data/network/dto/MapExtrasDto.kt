@@ -62,6 +62,9 @@ data class LesokulturyMapDto(
     @SerialName("has_kontur") val hasKontur: Boolean = false,
     /** Контур участка в WGS84; приходит только в первой записи участка. */
     val geometry: GeoJsonGeometry? = null,
+    /** Вид культур (обычные, под пологом, плантационные…) и его цвет — сервер 29.09.2026+. */
+    @SerialName("vid_kultur") val vidKultur: String? = null,
+    @SerialName("vid_kultur_color") val vidKulturColor: String? = null,
 )
 
 /** GET /api/map/delyanka-location — центр выдела. */

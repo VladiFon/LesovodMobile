@@ -98,7 +98,7 @@ fun ForestMapView(
     colorMode: ColorMode,
     workColors: Map<String, Int>,
     delyankaStatusColors: Map<String, Int>,
-    lesokulturyKeys: Set<String>,
+    lesokulturyKeys: Map<String, Int>,
     lesokulturyKontury: List<MapShape>,
     taskKeys: Set<String>,
     sklady: List<SkladDto>,
