@@ -77,6 +77,7 @@ interface ApiService {
         @Query("kvartal") kvartal: String,
         @Query("vydel") vydel: String,
         @Query("lesoseka") lesoseka: String? = null,
+        @Query("delyanka_id") delyankaId: Int? = null,
     ): RemainingResponseDto
 
     @Multipart

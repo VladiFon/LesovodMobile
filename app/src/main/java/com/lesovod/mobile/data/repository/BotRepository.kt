@@ -68,8 +68,13 @@ class BotRepository(
         api.getDelyankiForMap()
     }
 
-    suspend fun getRemaining(kvartal: String, vydel: String, lesoseka: String?): Result<RemainingResponseDto> = safeCall {
-        api.getRemaining(requireToken(), kvartal, vydel, lesoseka?.takeIf { it.isNotBlank() })
+    suspend fun getRemaining(
+        kvartal: String,
+        vydel: String,
+        lesoseka: String?,
+        delyankaId: Int? = null,
+    ): Result<RemainingResponseDto> = safeCall {
+        api.getRemaining(requireToken(), kvartal, vydel, lesoseka?.takeIf { it.isNotBlank() }, delyankaId)
     }
 
     suspend fun uploadPhoto(context: Context, uri: Uri): Result<String> = safeCall {
