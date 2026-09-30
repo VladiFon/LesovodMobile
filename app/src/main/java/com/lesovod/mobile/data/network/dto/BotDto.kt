@@ -33,6 +33,9 @@ data class PhotoUploadResponseDto(
 data class DelyankaDto(
     val vydel: String,
     @SerialName("lesoseka_nomer") val lesosekaNomer: String? = null,
+    /** С сервера новее 2026-09-30: остаток спрашивается по всей делянке (как на вебе). */
+    @SerialName("delyanka_id") val delyankaId: Int? = null,
+    val nazvanie: String? = null,
 )
 
 @Serializable
@@ -50,12 +53,22 @@ data class PorodaRemainingDto(
 )
 
 @Serializable
+data class UnresolvedSkladDto(
+    val sklad: String,
+    val how: String? = null,
+)
+
+@Serializable
 data class RemainingResponseDto(
     val found: Boolean = false,
     @SerialName("item_ids") val itemIds: List<Int>? = null,
     val grouped: Map<String, PorodaRemainingDto>? = null,
     @SerialName("last_update") val lastUpdate: String? = null,
     @SerialName("egais_imported_at") val egaisImportedAt: String? = null,
+    /** Склады ЕГАИС, не привязанные однозначно — их объём не входит в факт ЕГАИС. */
+    @SerialName("unresolved_sklady") val unresolvedSklady: List<UnresolvedSkladDto>? = null,
+    @SerialName("delyanka_nazvanie") val delyankaNazvanie: String? = null,
+    val vydely: List<String?>? = null,
 )
 
 /** Подтверждённая схема сервера: { otkuda, kuda, obyom, delyanka_item_id }. */

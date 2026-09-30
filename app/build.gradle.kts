@@ -12,8 +12,8 @@ android {
         applicationId = "com.lesovod.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "0.5.2"
+        versionCode = 11
+        versionName = "0.5.3"
     }
 
     // Фиксированный debug-ключ в репозитории (keystore/debug.keystore) вместо

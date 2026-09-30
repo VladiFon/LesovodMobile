@@ -16,6 +16,8 @@ data class StockUiState(
     val kvartal: String = "",
     val vydel: String = "",
     val lesoseka: String = "",
+    /** Выбранная кнопкой делянка — остаток по ней целиком; null — ручной ввод выдела. */
+    val delyankaId: Int? = null,
     val delyanki: List<DelyankaDto> = emptyList(),
     val isLoadingDelyanki: Boolean = false,
     val isLoadingRemaining: Boolean = false,
@@ -31,15 +33,15 @@ class StockViewModel(application: Application) : AndroidViewModel(application) {
     val uiState = _uiState.asStateFlow()
 
     fun onKvartalChange(value: String) {
-        _uiState.value = _uiState.value.copy(kvartal = value, delyanki = emptyList(), error = null)
+        _uiState.value = _uiState.value.copy(kvartal = value, delyanki = emptyList(), delyankaId = null, error = null)
     }
 
     fun onVydelChange(value: String) {
-        _uiState.value = _uiState.value.copy(vydel = value)
+        _uiState.value = _uiState.value.copy(vydel = value, delyankaId = null)
     }
 
     fun onLesosekaChange(value: String) {
-        _uiState.value = _uiState.value.copy(lesoseka = value)
+        _uiState.value = _uiState.value.copy(lesoseka = value, delyankaId = null)
     }
 
     fun loadDelyanki() {
@@ -63,6 +65,7 @@ class StockViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(
             vydel = delyanka.vydel,
             lesoseka = delyanka.lesosekaNomer.orEmpty(),
+            delyankaId = delyanka.delyankaId,
         )
         loadRemaining()
     }
@@ -71,14 +74,14 @@ class StockViewModel(application: Application) : AndroidViewModel(application) {
         val state = _uiState.value
         val kvartal = state.kvartal.trim()
         val vydel = state.vydel.trim()
-        if (kvartal.isEmpty() || vydel.isEmpty()) {
+        if (state.delyankaId == null && (kvartal.isEmpty() || vydel.isEmpty())) {
             _uiState.value = state.copy(error = "Укажите квартал и выдел")
             return
         }
 
         _uiState.value = state.copy(isLoadingRemaining = true, error = null)
         viewModelScope.launch {
-            val result = repository.getRemaining(kvartal, vydel, state.lesoseka)
+            val result = repository.getRemaining(kvartal, vydel, state.lesoseka, state.delyankaId)
             _uiState.value = result.fold(
                 onSuccess = { _uiState.value.copy(isLoadingRemaining = false, remaining = it) },
                 onFailure = { _uiState.value.copy(isLoadingRemaining = false, error = it.message, remaining = null) },
