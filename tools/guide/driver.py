@@ -139,6 +139,22 @@ def login(user, pin, name_prefix=None):
     dismiss_dialogs()
 
 
+def to_nav():
+    """Вернуться на экран с нижней панелью (не выходя из приложения)."""
+    for _ in range(3):
+        if find(text="Остатки") is not None and find(text="Заметки") is not None:
+            return
+        back()
+    if find(text="Заметки") is None:
+        log("relaunch")
+        start_app()
+
+
+def nav(tab, wait=2.0):
+    to_nav()
+    return tap(tab, wait=wait)
+
+
 def safe(fn):
     try:
         fn()
@@ -158,10 +174,10 @@ def master_flow():
     shot("m02-smena")
     swipe_up(); shot("m02b-smena-niz")
     # отметка на смене
-    if tap(contains="Отметиться"):
-        shot("m03-otmetka"); back()
+    if tap("Отметиться", wait=2.5):
+        shot("m03-otmetka")
     # остатки
-    if tap("Остатки"):
+    if nav("Остатки"):
         shot("m04-ostatki-pusto")
         type_into("Квартал", "43"); hide_kb()
         tap("Делянки", idx=0, wait=3)
@@ -172,8 +188,7 @@ def master_flow():
         swipe_up(); shot("m07-ostatki-porody")
         swipe_up(); shot("m08-ostatki-porody2")
     # перерубленная делянка
-    if tap("Остатки"):
-        n = find(text="Квартал")
+    if nav("Остатки"):
         type_into("Квартал", "")  # фокус
         for _ in range(4):
             sh("shell", "input", "keyevent", "67")
@@ -182,26 +197,25 @@ def master_flow():
         tap(contains="кв.35 выд.7", wait=1.5)
         tap("Проверить остаток", wait=4)
         shot("m09-ostatki-pererub")
-    if tap("Кубатурник"):
+    if nav("Кубатурник"):
         shot("m10-kubaturnik")
-    if tap("Карта", wait=10):
+    if nav("Карта", wait=10):
         dismiss_dialogs(); time.sleep(6)
         shot("m11-karta")
         if tap(contains="Слои") or tap(desc="Слои"):
             shot("m12-karta-sloi"); back()
         if tap(contains="Инструменты") or tap(desc="Инструменты"):
             shot("m13-karta-instrumenty"); back()
-    if tap("Заметки"):
+    if nav("Заметки"):
         shot("m14-zametki")
-    if tap("Ещё"):
-        shot("m15-eshche")
-        for t, nm in (("Отчёт", "m16-otchet"), ("Инвентаризация лесных культур", "m17-inventarizatsiya"),
-                      ("Перевод лесных культур", "m18-perevod"), ("Табель — ручной ввод", "m19-tabel"),
-                      ("Уведомления", "m20-uvedomleniya"), ("Профиль", "m21-profil")):
-            if tap(t, wait=3):
-                shot(nm); back()
-            if find(text="Ещё") is None:
-                tap("Ещё")
+    for t, nm in (("Отчёт", "m16-otchet"), ("Инвентаризация лесных культур", "m17-inventarizatsiya"),
+                  ("Перевод лесных культур", "m18-perevod"), ("Табель — ручной ввод", "m19-tabel"),
+                  ("Уведомления", "m20-uvedomleniya"), ("Профиль", "m21-profil")):
+        if nav("Ещё"):
+            if nm == "m16-otchet":
+                shot("m15-eshche")
+            if tap(t, wait=3) or (swipe_up() or tap(t, wait=3)):
+                shot(nm)
 
 
 def worker_flow():
@@ -211,8 +225,8 @@ def worker_flow():
     if tap("Ещё"):
         shot("w02-eshche-valshik")
         if tap("Проба рубок ухода", wait=3):
-            shot("w03-proba"); back()
-        if tap("Отчёт", wait=3):
+            shot("w03-proba")
+        if nav("Ещё") and tap("Отчёт", wait=3):
             shot("w04-otchet")
 
 
