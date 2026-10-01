@@ -1,0 +1,75 @@
+name: Guide screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/project-thread-ubolgv]
+    paths: ["tools/guide/**", ".github/workflows/guide-screenshots.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: VladiFon/Lesovod_pom
+          ref: claude/blissful-davinci-ifdpff
+          path: server
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Demo backend
+        run: |
+          pip install -q -r server/backend/requirements.txt
+          mkdir -p /tmp/demo/templates /tmp/demo/storage
+          cp -r server/backend/legacy/templates/* /tmp/demo/templates/
+          cp tools/guide/demo.db /tmp/demo/lesovod.db
+          python tools/guide/genmap.py /tmp/demo/templates
+          cd server/backend
+          LESOVOD_APP_DIR=/tmp/demo LESOVOD_RESOURCE_DIR=/tmp/demo/templates LESOVOD_DB_PATH=/tmp/demo/lesovod.db LESOVOD_STORAGE_DIR=/tmp/demo/storage \
+            nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/demo/backend.log 2>&1 &
+          sleep 8
+          curl -sf http://127.0.0.1:8000/api/health
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - name: Build APK against demo backend
+        run: |
+          sed -i 's#https://lesovodapipom.store/#http://10.0.2.2:8000/#' app/src/main/java/com/lesovod/mobile/data/network/NetworkModule.kt
+          sed -i 's#<application#<application android:usesCleartextTraffic="true"#' app/src/main/AndroidManifest.xml
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon -q
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run emulator and take screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -change-locale ru-RU
+          script: |
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            python3 tools/guide/driver.py tools/guide/out
+      - name: Commit screenshots
+        if: always()
+        run: |
+          cp /tmp/demo/backend.log tools/guide/out/_backend.log || true
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add tools/guide/out
+          git commit -m "guide: скриншоты приложения [skip ci]" || exit 0
+          git push
