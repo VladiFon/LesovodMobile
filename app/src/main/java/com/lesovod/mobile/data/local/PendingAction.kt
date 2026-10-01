@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 
 /** Виды действий, которые можно выполнить офлайн и отправить позже. */
 enum class PendingActionType {
-    REPORT, BREAKDOWN, ATTENDANCE, TASK_COMPLETE, TRELEVKA, PROBA, NOTE, LESOKULTURY
+    REPORT, BREAKDOWN, ATTENDANCE, TASK_COMPLETE, TRELEVKA, PROBA, NOTE, LESOKULTURY, GEO_NOTE
 }
 
 /**
@@ -97,4 +97,14 @@ data class PendingLesokulturyPayload(
     val inventarizatsiya: InventarizatsiyaRequest? = null,
     val perevod: PerevodRequest? = null,
     val polya: UchastokPolyaRequest? = null,
+)
+
+/** Метка на карте (точка + текст/тип/фото), поставленная без сети. Фото лежит в photoLocalPath действия. */
+@Serializable
+data class PendingGeoNotePayload(
+    val lat: Double,
+    val lon: Double,
+    val noteText: String? = null,
+    val kategoriya: String? = null,
+    val photoPath: String? = null,
 )

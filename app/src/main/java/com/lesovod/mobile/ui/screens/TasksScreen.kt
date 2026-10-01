@@ -98,7 +98,8 @@ fun TasksScreen(
                 actions = {
                     SkyStatusPill(
                         state = skyState,
-                        onClick = { /* очередь отправки видна баннером ниже — отдельный лист будет добавлен вместе с экраном «Профиль» */ },
+                        // «Не отправлено: N» — нажатие сразу пробует отправить очередь
+                        onClick = queueManager::retryNow,
                         modifier = Modifier.padding(end = Spacing.s),
                     )
                     BadgedBox(badge = { if (unreadCount > 0) Badge { Text("${unreadCount.coerceAtMost(99)}") } }) {

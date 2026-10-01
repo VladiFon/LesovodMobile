@@ -286,7 +286,7 @@ private fun PendingSyncBanner(count: Int, onRetryNow: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Нет сети: $count " + pluralActionsRu(count) + " ждут отправки",
+                text = "Не отправлено: $count — отправится само, когда появится связь",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -295,16 +295,5 @@ private fun PendingSyncBanner(count: Int, onRetryNow: () -> Unit) {
                 Text("Повторить")
             }
         }
-    }
-}
-
-private fun pluralActionsRu(count: Int): String {
-    val mod100 = count % 100
-    val mod10 = count % 10
-    return when {
-        mod100 in 11..14 -> "действий"
-        mod10 == 1 -> "действие"
-        mod10 in 2..4 -> "действия"
-        else -> "действий"
     }
 }

@@ -30,7 +30,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.FilterChip
+import com.lesovod.mobile.data.local.PendingActionType
 import com.lesovod.mobile.data.local.ThemeMode
+import com.lesovod.mobile.data.repository.OfflineQueueManager
+import com.lesovod.mobile.ui.components.SendStatusChip
 import com.lesovod.mobile.data.local.ThemePrefs
 import com.lesovod.mobile.BuildConfig
 import com.lesovod.mobile.data.update.AppUpdateManager
@@ -127,6 +130,8 @@ fun ProfileScreen(
 
             ThemeCard()
 
+            QueueCard()
+
             MapSettingsCard()
 
             UpdateCard()
@@ -141,6 +146,72 @@ fun ProfileScreen(
             )
         }
     }
+}
+
+/**
+ * «Не отправлено: N» — сколько действий (отчёты, заметки, метки, отметки…) лежит в офлайн-очереди,
+ * с кнопкой «Отправить сейчас». Пустая очередь — короткая строка «Всё отправлено».
+ */
+@Composable
+private fun QueueCard() {
+    val context = LocalContext.current
+    val queueManager = remember { OfflineQueueManager.getInstance(context) }
+    val pending by queueManager.pending.collectAsState()
+    val isSyncing by queueManager.isSyncing.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .softCard()
+            .padding(Spacing.l)
+            .padding(top = Spacing.l),
+    ) {
+        Text("Отправка данных", style = MaterialTheme.typography.titleSmall)
+        if (pending.isEmpty()) {
+            SendStatusChip(pending = false, modifier = Modifier.padding(top = Spacing.m))
+            Text(
+                "Всё отправлено на сервер",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+        } else {
+            StatusChip(text = "Не отправлено: ${pending.size}", tone = ChipTone.WARN, modifier = Modifier.padding(top = Spacing.m))
+            val byType = pending.groupingBy { it.type.labelRu() }.eachCount()
+            Text(
+                byType.entries.joinToString(", ") { "${it.key}: ${it.value}" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+            pending.mapNotNull { it.lastError }.lastOrNull()?.let {
+                Text(
+                    "Последняя ошибка: $it",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = Spacing.xs),
+                )
+            }
+            PrimaryButton(
+                text = if (isSyncing) "Отправляем…" else "Отправить сейчас",
+                onClick = queueManager::retryNow,
+                enabled = !isSyncing,
+                modifier = Modifier.padding(top = Spacing.m),
+            )
+        }
+    }
+}
+
+private fun PendingActionType.labelRu(): String = when (this) {
+    PendingActionType.REPORT -> "отчёты"
+    PendingActionType.BREAKDOWN -> "поломки"
+    PendingActionType.ATTENDANCE -> "отметки"
+    PendingActionType.TASK_COMPLETE -> "задачи"
+    PendingActionType.TRELEVKA -> "трелёвка"
+    PendingActionType.PROBA -> "пробы"
+    PendingActionType.NOTE -> "заметки"
+    PendingActionType.LESOKULTURY -> "лесные культуры"
+    PendingActionType.GEO_NOTE -> "метки на карте"
 }
 
 /** Выбор темы: «Тёмная» (по умолчанию) / «Светлая» / «Как в системе» — применяется сразу. */

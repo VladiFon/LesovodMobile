@@ -49,6 +49,7 @@ import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.components.SecondaryButton
+import com.lesovod.mobile.ui.components.SendStatusChip
 import com.lesovod.mobile.ui.components.StatusChip
 import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
@@ -90,7 +91,8 @@ fun NotesScreen(viewModel: NotesViewModel = viewModel()) {
             SendNoteSection(state = state, viewModel = viewModel)
 
             HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.m))
-            SentNotesSection(state = state)
+            val pendingNotes by viewModel.pendingNotes.collectAsState()
+            SentNotesSection(state = state, pendingNotes = pendingNotes)
 
             if (state.canViewInbox) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.m))
@@ -190,15 +192,18 @@ private fun SendNoteSection(state: NotesUiState, viewModel: NotesViewModel) {
 }
 
 @Composable
-private fun SentNotesSection(state: NotesUiState) {
+private fun SentNotesSection(state: NotesUiState, pendingNotes: List<PendingNoteView>) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
         Text("Мои заметки", style = MaterialTheme.typography.titleSmall)
+
+        // сначала то, что ещё не ушло (лежит в офлайн-очереди)
+        pendingNotes.forEach { note -> PendingNoteCard(note) }
 
         if (state.isLoadingSent) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
         } else if (state.sentError != null) {
             Text(state.sentError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        } else if (state.sentNotes.isEmpty()) {
+        } else if (state.sentNotes.isEmpty() && pendingNotes.isEmpty()) {
             Text("Вы ещё не отправляли заметок", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         } else {
             state.sentNotes.forEach { note -> SentNoteCard(note) }
@@ -216,6 +221,21 @@ private fun SentNoteCard(note: SentNoteDto) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = Spacing.xs),
         )
+        SendStatusChip(pending = false, modifier = Modifier.padding(top = Spacing.xs))
+    }
+}
+
+@Composable
+private fun PendingNoteCard(note: PendingNoteView) {
+    Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m)) {
+        Text(note.text, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            note.createdAt,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
+        SendStatusChip(pending = true, modifier = Modifier.padding(top = Spacing.xs))
     }
 }
 

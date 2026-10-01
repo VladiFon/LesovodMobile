@@ -187,6 +187,9 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
         }
     }
 
+    // Отправленные метки + метки из офлайн-очереди (тот же список, пока ни одна из частей не поменялась).
+    val allGeoNotes = remember(state.geoNotes, state.pendingGeoNotes) { state.geoNotes + state.pendingGeoNotes }
+
     // Карта на весь экран — всё остальное лежит поверх неё полупрозрачными элементами.
     Box(modifier = Modifier.fillMaxSize()) {
         ForestMapView(
@@ -198,7 +201,7 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
             completed = state.completed,
             fitToken = state.fitToken,
             lesosekiTappable = !state.usedFallbackRectangles,
-            geoNotes = if (state.layers.geoNotes) state.geoNotes else emptyList(),
+            geoNotes = if (state.layers.geoNotes) allGeoNotes else emptyList(),
             colorMode = state.colorMode,
             workColors = state.workColors,
             delyankaStatusColors = state.delyankaStatusColors,

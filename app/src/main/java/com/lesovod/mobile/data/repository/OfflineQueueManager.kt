@@ -8,6 +8,7 @@ import com.lesovod.mobile.data.local.PendingActionStore
 import com.lesovod.mobile.data.local.PendingActionType
 import com.lesovod.mobile.data.local.PendingAttendancePayload
 import com.lesovod.mobile.data.local.PendingBreakdownPayload
+import com.lesovod.mobile.data.local.PendingGeoNotePayload
 import com.lesovod.mobile.data.local.PendingNotePayload
 import com.lesovod.mobile.data.local.PendingLesokulturyPayload
 import com.lesovod.mobile.data.local.PendingProbaPayload
@@ -44,7 +45,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * Офлайн-очередь для действий бота (отчёт, поломка, отметка времени, задачи, трелёвка, проба,
- * заметка): пока нет сети, действие сохраняется на устройстве и отправляется автоматически, как
+ * заметка, метка на карте): пока нет сети, действие сохраняется на устройстве и отправляется автоматически, как
  * только связь появится. Экраны узнают о постановке в очередь и об успешной отправке через
  * [pending] и [completed].
  */
@@ -124,6 +125,24 @@ class OfflineQueueManager private constructor(context: Context) {
 
     fun enqueueLesokultury(payload: PendingLesokulturyPayload) {
         enqueue(UUID.randomUUID().toString(), PendingActionType.LESOKULTURY, json.encodeToString(payload), null)
+    }
+
+    /**
+     * Метка на карте без сети. Фото копируется в личную папку приложения (pending_photos), чтобы
+     * не потерять доступ к нему, когда галерея/камера отзовут разрешение на исходный Uri.
+     */
+    suspend fun enqueueGeoNote(
+        lat: Double,
+        lon: Double,
+        noteText: String?,
+        kategoriya: String?,
+        photoUri: Uri?,
+        uploadedPhotoPath: String?,
+    ) {
+        val id = UUID.randomUUID().toString()
+        val localPhotoPath = photoUri?.let { copyUriToLocalFile(id, it) }
+        val payload = PendingGeoNotePayload(lat, lon, noteText, kategoriya, uploadedPhotoPath)
+        enqueue(id, PendingActionType.GEO_NOTE, json.encodeToString(payload), localPhotoPath)
     }
 
     fun enqueueNote(text: String, recipientId: Int?) {
@@ -237,6 +256,25 @@ class OfflineQueueManager private constructor(context: Context) {
         PendingActionType.PROBA -> processProba(action)
         PendingActionType.NOTE -> processNote(action)
         PendingActionType.LESOKULTURY -> processLesokultury(action)
+        PendingActionType.GEO_NOTE -> processGeoNote(action)
+    }
+
+    private suspend fun processGeoNote(action: PendingAction): FlushOutcome {
+        val payload = decode<PendingGeoNotePayload>(action.payload)
+            ?: return FlushOutcome.Failed("Повреждённые данные действия")
+        var photoPath = payload.photoPath
+        if (photoPath == null && action.photoLocalPath != null) {
+            when (val photoOutcome = uploadLocalPhoto(action.photoLocalPath)) {
+                is PhotoOutcome.Uploaded -> {
+                    photoPath = photoOutcome.path
+                    store.update(action.copy(payload = json.encodeToString(payload.copy(photoPath = photoPath))))
+                }
+                PhotoOutcome.StillOffline -> return FlushOutcome.StillOffline
+                is PhotoOutcome.Failed -> return FlushOutcome.Failed(photoOutcome.message)
+            }
+        }
+        val result = repository.submitGeoNote(payload.lat, payload.lon, payload.noteText, photoPath, payload.kategoriya)
+        return result.fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
     }
 
     private suspend fun processReport(action: PendingAction): FlushOutcome {

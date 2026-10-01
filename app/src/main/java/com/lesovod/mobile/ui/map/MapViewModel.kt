@@ -5,6 +5,12 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.local.CompletedWorkStore
+import com.lesovod.mobile.data.local.PendingActionType
+import com.lesovod.mobile.data.local.PendingGeoNotePayload
+import com.lesovod.mobile.data.network.ConnectivityException
+import com.lesovod.mobile.data.repository.OfflineQueueManager
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.LesokulturyMapDto
@@ -95,6 +101,8 @@ data class MapUiState(
     /** Метка, по которой тапнули — маленькая карточка с текстом. */
     val selectedGeoNote: GeoNoteMarker? = null,
     val geoNotesError: String? = null,
+    /** Метки, поставленные без сети и ждущие отправки, — рисуются на карте вместе с отправленными. */
+    val pendingGeoNotes: List<GeoNoteMarker> = emptyList(),
 
     // --- раскраска ---
     val colorMode: ColorMode = ColorMode.WORKS,
@@ -191,12 +199,15 @@ private const val WALK_MIN_STEP_M = 3.0
 private const val WALK_MAX_ACCURACY_M = 30f
 private const val PLACE_MIN_MOVE_M = 15.0
 private const val SEARCH_DEBOUNCE_MS = 350L
+private const val GEO_NOTE_QUEUED_MESSAGE = "Нет сети — метка сохранена на устройстве и отправится сама"
 
 class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val hub = MapDataHub.getInstance(application)
     private val repository = hub.repository
     private val completedStore = CompletedWorkStore(application)
     private val botRepository = BotRepository(NetworkModule.api, SessionManager.getInstance(application))
+    private val queueManager = OfflineQueueManager.getInstance(application)
+    private val queueJson = Json { ignoreUnknownKeys = true }
 
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState = _uiState.asStateFlow()
@@ -231,6 +242,28 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         )
         loadLesnichestva()
         loadGeoNotes()
+        // Метки из офлайн-очереди — сразу на карте; как только очередь их отправит, перечитываем свои метки.
+        viewModelScope.launch {
+            queueManager.pending.collect { pending ->
+                val markers = pending.filter { it.type == PendingActionType.GEO_NOTE }.mapNotNull { action ->
+                    runCatching { queueJson.decodeFromString<PendingGeoNotePayload>(action.payload) }.getOrNull()?.let {
+                        GeoNoteMarker(
+                            lat = it.lat,
+                            lon = it.lon,
+                            noteText = it.noteText,
+                            kategoriya = it.kategoriya,
+                            createdAt = java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale("ru"))
+                                .format(java.util.Date(action.createdAt)),
+                            pending = true,
+                        )
+                    }
+                }
+                _uiState.value = _uiState.value.copy(pendingGeoNotes = markers)
+            }
+        }
+        viewModelScope.launch {
+            queueManager.completed.collect { if (it.type == PendingActionType.GEO_NOTE) loadGeoNotes(force = true) }
+        }
         loadTasks()
         loadSklady()
     }
@@ -381,9 +414,15 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
         _uiState.value = _uiState.value.copy(noteDraft = draft.copy(isSubmitting = true, error = null))
         viewModelScope.launch {
+            val noteText = draft.text.trim().takeIf { it.isNotBlank() }
             var photoPath: String? = null
             if (draft.photoUri != null) {
                 val uploadResult = botRepository.uploadPhoto(getApplication<Application>(), draft.photoUri)
+                if (uploadResult.exceptionOrNull() is ConnectivityException) {
+                    queueManager.enqueueGeoNote(draft.lat, draft.lon, noteText, draft.category.code, draft.photoUri, null)
+                    _uiState.value = _uiState.value.copy(noteDraft = null, message = GEO_NOTE_QUEUED_MESSAGE)
+                    return@launch
+                }
                 uploadResult.onFailure { err ->
                     _uiState.value.noteDraft?.let {
                         _uiState.value = _uiState.value.copy(
@@ -394,9 +433,12 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 photoPath = uploadResult.getOrNull()
             }
-            val result = botRepository.submitGeoNote(
-                draft.lat, draft.lon, draft.text.trim().takeIf { it.isNotBlank() }, photoPath, draft.category.code,
-            )
+            val result = botRepository.submitGeoNote(draft.lat, draft.lon, noteText, photoPath, draft.category.code)
+            if (result.exceptionOrNull() is ConnectivityException) {
+                queueManager.enqueueGeoNote(draft.lat, draft.lon, noteText, draft.category.code, null, photoPath)
+                _uiState.value = _uiState.value.copy(noteDraft = null, message = GEO_NOTE_QUEUED_MESSAGE)
+                return@launch
+            }
             result.fold(
                 onSuccess = {
                     _uiState.value = _uiState.value.copy(noteDraft = null, message = "Метка сохранена")

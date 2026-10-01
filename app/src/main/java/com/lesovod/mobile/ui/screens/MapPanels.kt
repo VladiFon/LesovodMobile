@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lesovod.mobile.ui.components.SendStatusChip
 import com.lesovod.mobile.ui.theme.LocalIsDarkTheme
 import com.lesovod.mobile.data.network.dto.SkladDto
 import com.lesovod.mobile.data.network.dto.VydelHistoryDto
@@ -450,6 +451,7 @@ internal fun GeoNoteDetails(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
                 )
+                SendStatusChip(pending = note.pending, modifier = Modifier.padding(top = 6.dp))
                 if (!note.noteText.isNullOrBlank()) {
                     Text(note.noteText, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
                 }
