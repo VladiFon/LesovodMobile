@@ -1,0 +1,24 @@
+shot m01-vhod
+shot m01-vhod-zapolnen
+tap Войти
+shot m02-smena
+shot m02b-smena-niz
+tap Отметиться
+shot m03-otmetka
+NOT FOUND Остатки
+NOT FOUND Остатки
+NOT FOUND Кубатурник
+NOT FOUND Карта
+NOT FOUND Заметки
+NOT FOUND Ещё
+tap Войти
+shot w01-smena-valshik
+tap Ещё
+shot w02-eshche-valshik
+tap Проба рубок ухода
+shot w03-proba
+tap Отчёт
+shot w04-otchet
+tap Войти
+shot t01-smena-traktorist
+done
