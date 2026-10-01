@@ -103,7 +103,7 @@ private fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .background(containerColor, MaterialTheme.shapes.medium)
-            .softCard()
+            .softCard(filled = false)
             .clickable(onClick = onClick)
             .padding(Spacing.m),
         verticalAlignment = Alignment.CenterVertically,

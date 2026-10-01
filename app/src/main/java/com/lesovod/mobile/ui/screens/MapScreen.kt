@@ -549,7 +549,7 @@ private fun GeoNoteDraftCard(
                     modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
                 ) {
                     if (draft.isSubmitting) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                     } else {
                         Text("Сохранить метку")
                     }

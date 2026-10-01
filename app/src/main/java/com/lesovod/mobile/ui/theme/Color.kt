@@ -42,19 +42,34 @@ private val SunbeamLight = Color(0xFFF2A93B)
 private val OnSunbeamLight = Color(0xFF241A02)
 private val ErrorLight = Color(0xFFC33B2A)
 
+private val SecondaryLight = Color(0xFF4F6354)
+private val SecondaryContainerLight = Color(0xFFD3E8D7)
+private val ErrorContainerLight = Color(0xFFFFDAD4)
+private val OnErrorContainerLight = Color(0xFF410002)
+
 private val OkLight = Color(0xFF0E7A4B)
 private val WarnContainerLight = Color(0xFFFCE3A8)
 private val WarnOnContainerLight = Color(0xFF241A02)
 private val SkyLight = Color(0xFF2F6493)
 
-// ---- Тёмная тема («Поляна вечером») ----
-private val DuskDark = Color(0xFF1C1B17)
-private val SurfaceDark = Color(0xFF242320)
-private val SurfaceVariantDark = Color(0xFF2E2C27)
+// ---- Тёмная тема («Поляна вечером») — тема по умолчанию с версии 0.6.0 ----
+// Карточки (surface) заметно светлее фона, а рамки (outlineVariant) различимы — иначе
+// в тёмной теме границы карточек терялись и экран выглядел «кривым».
+private val DuskDark = Color(0xFF1A1916)
+private val SurfaceDark = Color(0xFF26251F)
+private val SurfaceVariantDark = Color(0xFF312F29)
 private val InkDark = Color(0xFFF2EFE8)
-private val MutedDark = Color(0xFFB7B2A3)
-private val OutlineDark = Color(0xFF5B5A50)
-private val OutlineVariantDark = Color(0xFF3A382F)
+private val MutedDark = Color(0xFFBDB8A9)
+private val OutlineDark = Color(0xFF6B695E)
+private val OutlineVariantDark = Color(0xFF45433A)
+private val SecondaryDark = Color(0xFFA9C7B0)
+private val OnSecondaryDark = Color(0xFF15291C)
+private val SecondaryContainerDark = Color(0xFF2F4A38)
+private val OnSecondaryContainerDark = Color(0xFFDCEFE2)
+private val TertiaryContainerDark = Color(0xFF4A3A14)
+private val OnTertiaryContainerDark = Color(0xFFFFDDA0)
+private val ErrorContainerDark = Color(0xFF4D1D16)
+private val OnErrorContainerDark = Color(0xFFFFDAD3)
 private val LeafDark = Color(0xFF6FCB93)
 private val OnLeafDark = Color(0xFF0E2415)
 private val LeafContainerDark = Color(0xFF25402F)
@@ -75,8 +90,14 @@ val PolyanaLightColors = lightColorScheme(
     onPrimary = Color.White,
     primaryContainer = LeafContainerLight,
     onPrimaryContainer = InkLight,
+    secondary = SecondaryLight,
+    onSecondary = Color.White,
+    secondaryContainer = SecondaryContainerLight,
+    onSecondaryContainer = InkLight,
     tertiary = SunbeamLight,
     onTertiary = OnSunbeamLight,
+    tertiaryContainer = WarnContainerLight,
+    onTertiaryContainer = WarnOnContainerLight,
     background = PaperLight,
     onBackground = InkLight,
     surface = SurfaceLight,
@@ -87,6 +108,18 @@ val PolyanaLightColors = lightColorScheme(
     outlineVariant = OutlineVariantLight,
     error = ErrorLight,
     onError = Color.White,
+    errorContainer = ErrorContainerLight,
+    onErrorContainer = OnErrorContainerLight,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF7F6F0),
+    surfaceContainer = Color(0xFFF2F1EA),
+    surfaceContainerHigh = Color(0xFFECEBE4),
+    surfaceContainerHighest = Color(0xFFE6E5DE),
+    surfaceBright = PaperLight,
+    surfaceDim = Color(0xFFE0DFD8),
+    inverseSurface = Color(0xFF2A2925),
+    inverseOnSurface = Color(0xFFF2EFE8),
+    inversePrimary = LeafDark,
 )
 
 val PolyanaDarkColors = darkColorScheme(
@@ -94,8 +127,14 @@ val PolyanaDarkColors = darkColorScheme(
     onPrimary = OnLeafDark,
     primaryContainer = LeafContainerDark,
     onPrimaryContainer = InkDark,
+    secondary = SecondaryDark,
+    onSecondary = OnSecondaryDark,
+    secondaryContainer = SecondaryContainerDark,
+    onSecondaryContainer = OnSecondaryContainerDark,
     tertiary = SunbeamDark,
     onTertiary = OnSunbeamDark,
+    tertiaryContainer = TertiaryContainerDark,
+    onTertiaryContainer = OnTertiaryContainerDark,
     background = DuskDark,
     onBackground = InkDark,
     surface = SurfaceDark,
@@ -106,9 +145,27 @@ val PolyanaDarkColors = darkColorScheme(
     outlineVariant = OutlineVariantDark,
     error = ErrorDark,
     onError = OnErrorDark,
+    errorContainer = ErrorContainerDark,
+    onErrorContainer = OnErrorContainerDark,
+    // Контейнеры M3 (нижняя панель, диалоги, листы, меню) — без них брались базовые
+    // фиолетовые оттенки Material и тёмная тема выглядела чужой.
+    surfaceContainerLowest = Color(0xFF141310),
+    surfaceContainerLow = Color(0xFF201F1A),
+    surfaceContainer = Color(0xFF26251F),
+    surfaceContainerHigh = Color(0xFF302E28),
+    surfaceContainerHighest = Color(0xFF3A3832),
+    surfaceBright = Color(0xFF403E37),
+    surfaceDim = DuskDark,
+    surfaceTint = SurfaceDark,
+    inverseSurface = InkDark,
+    inverseOnSurface = Color(0xFF2A2925),
+    inversePrimary = LeafLight,
 )
 
-/** Цвета, которых нет в стандартной M3 ColorScheme: успех, контейнер предупреждения, «небо» (офлайн). */
+/**
+ * Цвета, которых нет в стандартной M3 ColorScheme: успех, контейнер предупреждения, «небо» (офлайн)
+ * и уровни освоения делянки (90% — «внимание», 100% — «лимит выбран»; переруб >110% — error).
+ */
 @Immutable
 data class SemanticColors(
     val ok: Color,
@@ -116,6 +173,10 @@ data class SemanticColors(
     val onWarnContainer: Color,
     val sky: Color,
     val onSky: Color,
+    val vnimanieContainer: Color,
+    val onVnimanie: Color,
+    val preduprezhdenieContainer: Color,
+    val onPreduprezhdenie: Color,
 )
 
 val LightSemanticColors = SemanticColors(
@@ -124,6 +185,10 @@ val LightSemanticColors = SemanticColors(
     onWarnContainer = WarnOnContainerLight,
     sky = SkyLight,
     onSky = Color.White,
+    vnimanieContainer = Color(0xFFFDF1D6),
+    onVnimanie = Color(0xFF7A5200),
+    preduprezhdenieContainer = Color(0xFFFDE2CC),
+    onPreduprezhdenie = Color(0xFF8A3F00),
 )
 
 val DarkSemanticColors = SemanticColors(
@@ -132,6 +197,10 @@ val DarkSemanticColors = SemanticColors(
     onWarnContainer = WarnOnContainerDark,
     sky = SkyDark,
     onSky = OnSkyDark,
+    vnimanieContainer = Color(0xFF3F3413),
+    onVnimanie = Color(0xFFFFD679),
+    preduprezhdenieContainer = Color(0xFF4A2B10),
+    onPreduprezhdenie = Color(0xFFFFB46B),
 )
 
-val LocalSemanticColors = staticCompositionLocalOf { LightSemanticColors }
+val LocalSemanticColors = staticCompositionLocalOf { DarkSemanticColors }

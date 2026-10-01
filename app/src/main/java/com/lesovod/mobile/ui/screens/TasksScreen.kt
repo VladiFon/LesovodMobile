@@ -188,7 +188,7 @@ private fun HeroCard(onClick: () -> Unit) {
                 ),
                 RoundedCornerShape(28.dp),
             )
-            .softCard(RoundedCornerShape(28.dp))
+            .softCard(RoundedCornerShape(28.dp), filled = false)
             .padding(Spacing.l),
         verticalArrangement = Arrangement.spacedBy(Spacing.s),
     ) {

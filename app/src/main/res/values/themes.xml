@@ -1,7 +1,8 @@
 <resources>
-    <style name="Theme.Lesovod" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">#FCF9F2</item>
-        <item name="android:windowBackground">#FCF9F2</item>
-        <item name="android:windowLightStatusBar">true</item>
+    <!-- Тёмная тема по умолчанию (0.6.0): тёмный фон окна, чтобы при запуске не мелькал белый экран. -->
+    <style name="Theme.Lesovod" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#1A1916</item>
+        <item name="android:windowBackground">#1A1916</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

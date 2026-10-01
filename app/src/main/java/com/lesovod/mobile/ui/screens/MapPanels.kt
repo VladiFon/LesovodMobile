@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lesovod.mobile.ui.theme.LocalIsDarkTheme
 import com.lesovod.mobile.data.network.dto.SkladDto
 import com.lesovod.mobile.data.network.dto.VydelHistoryDto
 import com.lesovod.mobile.data.network.dto.WorkPlanItemDto
@@ -254,7 +255,7 @@ private fun searchKindLabel(kind: String) = when (kind) {
 }
 
 private fun searchKindColor(kind: String) = when (kind) {
-    "kvartal" -> Color(0xFFFFFFFF)
+    "kvartal" -> Color(0xFF9E9E9E)
     "vydel" -> Color(0xFF8BC34A)
     "delyanka" -> Color(0xFFFF9800)
     "lesokultury" -> Color(0xFF00E5FF)
@@ -392,7 +393,7 @@ internal fun WalkSaveDialog(walk: WalkState, defaultName: String, onSave: (Strin
         },
         confirmButton = {
             Button(onClick = { onSave(name, note) }, enabled = !walk.saving) {
-                if (walk.saving) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White) else Text("Сохранить")
+                if (walk.saving) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary) else Text("Сохранить")
             }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !walk.saving) { Text("Отмена") } },
@@ -571,7 +572,7 @@ internal fun VydelHistorySection(history: VydelHistoryDto?, loading: Boolean) {
                     Text(
                         "Лесные культуры: ${listOfNotNull(u.glavnayaPoroda, u.godSozdaniya, u.ploshad?.let { "$it га" }).joinToString(", ")}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF00897B),
+                        color = if (LocalIsDarkTheme.current) Color(0xFF4DD0C1) else Color(0xFF00796B),
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 }

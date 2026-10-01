@@ -57,6 +57,7 @@ import com.lesovod.mobile.ui.components.SecondaryButton
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.components.StatusChip
 import com.lesovod.mobile.ui.theme.Spacing
+import com.lesovod.mobile.ui.theme.semanticColors
 import com.lesovod.mobile.ui.theme.softCard
 
 /** Экран 7 редизайна «Поляна» (docs/SCREENS.md) — «Остатки по делянке». */
@@ -260,8 +261,8 @@ private enum class BannerTone { WARNING, ERROR, INFO }
 @Composable
 private fun levelColors(level: OsvoenieLevel): Pair<Color, Color> = when (level) {
     OsvoenieLevel.PERERUB -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.error
-    OsvoenieLevel.PREDUPREZHDENIE -> Color(0xFFFDE7D2) to Color(0xFF9A4D06)
-    OsvoenieLevel.VNIMANIE -> Color(0xFFFDF1E4) to Color(0xFFA8681F)
+    OsvoenieLevel.PREDUPREZHDENIE -> MaterialTheme.semanticColors.preduprezhdenieContainer to MaterialTheme.semanticColors.onPreduprezhdenie
+    OsvoenieLevel.VNIMANIE -> MaterialTheme.semanticColors.vnimanieContainer to MaterialTheme.semanticColors.onVnimanie
     OsvoenieLevel.NORMA -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.primary
     OsvoenieLevel.NET_LIMITA -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
 }
@@ -442,7 +443,7 @@ private fun RemainderBox(label: String, value: Double, modifier: Modifier = Modi
 private fun WarningBanner(text: String, tone: BannerTone) {
     val (bg, fg) = when (tone) {
         BannerTone.ERROR -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.error
-        BannerTone.WARNING -> Color(0xFFFDF1E4) to Color(0xFF9A4D06)
+        BannerTone.WARNING -> MaterialTheme.semanticColors.preduprezhdenieContainer to MaterialTheme.semanticColors.onPreduprezhdenie
         BannerTone.INFO -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Row(

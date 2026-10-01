@@ -28,6 +28,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.FilterChip
+import com.lesovod.mobile.data.local.ThemeMode
+import com.lesovod.mobile.data.local.ThemePrefs
 import com.lesovod.mobile.BuildConfig
 import com.lesovod.mobile.data.update.AppUpdateManager
 import com.lesovod.mobile.data.update.UpdateState
@@ -121,6 +125,8 @@ fun ProfileScreen(
                 ProfileRow("Должность", session?.dolzhnost?.takeIf { it.isNotBlank() } ?: "—")
             }
 
+            ThemeCard()
+
             MapSettingsCard()
 
             UpdateCard()
@@ -134,6 +140,44 @@ fun ProfileScreen(
                 modifier = Modifier.padding(top = Spacing.xl, bottom = Spacing.xl),
             )
         }
+    }
+}
+
+/** Выбор темы: «Тёмная» (по умолчанию) / «Светлая» / «Как в системе» — применяется сразу. */
+@Composable
+private fun ThemeCard() {
+    val context = LocalContext.current
+    val themePrefs = remember { ThemePrefs.getInstance(context) }
+    val mode by themePrefs.mode.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .softCard()
+            .padding(Spacing.l)
+            .padding(top = Spacing.l),
+    ) {
+        Text("Тема", style = MaterialTheme.typography.titleSmall)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s),
+            modifier = Modifier
+                .padding(top = Spacing.m)
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            ThemeMode.entries.forEach { option ->
+                FilterChip(
+                    selected = mode == option,
+                    onClick = { themePrefs.setMode(option) },
+                    label = { Text(option.label) },
+                )
+            }
+        }
+        Text(
+            "Тёмная тема лучше читается в лесу и бережёт батарею",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
     }
 }
 

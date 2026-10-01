@@ -56,7 +56,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.local.KubaturnikCalculation
 import com.lesovod.mobile.data.local.TilesSide
 import com.lesovod.mobile.ui.components.ScreenTitle
-import com.lesovod.mobile.ui.theme.ForestAccent
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -468,7 +467,7 @@ private fun KubaturnikHistory(state: KubaturnikUiState, viewModel: KubaturnikVie
                     viewModel.deleteCalculation(calculation.id)
                     if (selected?.id == calculation.id) selected = null
                     pendingDelete = null
-                }) { Text("Удалить", color = ForestAccent) }
+                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Отмена") } },
         )
@@ -552,7 +551,7 @@ private fun ResetConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         title = { Text("Новая партия?") },
         text = { Text("Текущий расчёт сохранится в «Истории», а счётчики на экране очистятся для новой партии.") },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Сохранить и начать новую", color = ForestAccent) }
+            TextButton(onClick = onConfirm) { Text("Сохранить и начать новую", color = MaterialTheme.colorScheme.primary) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
