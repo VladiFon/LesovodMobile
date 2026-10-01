@@ -13,6 +13,7 @@ import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
+import com.lesovod.mobile.data.network.dto.MyDelyankaDto
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.PerevodRequest
 import com.lesovod.mobile.data.network.dto.UchastokPolyaRequest
@@ -58,6 +59,16 @@ class BotRepository(
 
     suspend fun listDelyanki(kvartal: String): Result<List<DelyankaDto>> = safeCall {
         api.listDelyanki(requireToken(), kvartal)
+    }
+
+    /** «Мои делянки»: свои (moya) первыми, затем все активные, у каждой — освоение лимита. */
+    suspend fun listMyDelyanki(): Result<List<MyDelyankaDto>> = safeCall {
+        api.listMyDelyanki(requireToken())
+    }
+
+    /** Остаток по делянке целиком — по её id, без квартала/выдела. */
+    suspend fun getRemainingByDelyanka(delyankaId: Int): Result<RemainingResponseDto> = safeCall {
+        api.getRemaining(requireToken(), "", "", null, delyankaId)
     }
 
     /**

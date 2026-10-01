@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Refresh
@@ -79,6 +80,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import com.lesovod.mobile.data.session.SessionManager
+import com.lesovod.mobile.data.session.canSeeStock
 import com.lesovod.mobile.ui.components.PhotoPickerField
 import com.lesovod.mobile.ui.map.ColorMode
 import com.lesovod.mobile.ui.map.NEIZVESTNO_COLOR
@@ -100,8 +104,13 @@ import com.lesovod.mobile.ui.map.VydelCard
 import kotlinx.coroutines.delay
 
 @Composable
-fun MapScreen(viewModel: MapViewModel = viewModel()) {
+fun MapScreen(
+    onOpenStock: (Int) -> Unit = {},
+    viewModel: MapViewModel = viewModel(),
+) {
     val state by viewModel.uiState.collectAsState()
+    val session by SessionManager.getInstance(LocalContext.current).session.collectAsState()
+    val canSeeStock = session?.role?.canSeeStock == true
     val density = LocalDensity.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -350,6 +359,7 @@ fun MapScreen(viewModel: MapViewModel = viewModel()) {
                 point = viewModel.selectedPoint(),
                 onNavigate = { label -> viewModel.navigateToSelected(label) },
                 onDismiss = viewModel::closeCard,
+                onOpenStock = if (canSeeStock) onOpenStock else null,
                 modifier = measureBottom,
             )
         }
@@ -758,6 +768,7 @@ private fun ObjectCard(
     point: LatLon?,
     onNavigate: (String) -> Unit,
     onDismiss: () -> Unit,
+    onOpenStock: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val selection = state.selection
@@ -788,7 +799,10 @@ private fun ObjectCard(
                         modifier = Modifier.padding(end = 40.dp, top = 4.dp, bottom = 4.dp),
                     )
 
-                    state.selectedDelyanka != null -> DelyankaCardContent(state.selectedDelyanka)
+                    state.selectedDelyanka != null -> DelyankaCardContent(
+                        card = state.selectedDelyanka,
+                        onOpenStock = onOpenStock?.let { open -> state.selectedDelyanka.delyankaId.let { id -> { open(id) } } },
+                    )
 
                     state.cardNotice != null -> Text(
                         state.cardNotice,
@@ -971,7 +985,7 @@ private fun MapSelection.title(): String = when (kind) {
 
 /** Данные самой делянки (лесосеки) из документа МДО — не общая таксация выдела. */
 @Composable
-private fun DelyankaCardContent(card: DelyankaCard) {
+private fun DelyankaCardContent(card: DelyankaCard, onOpenStock: (() -> Unit)? = null) {
     Text(
         "Делянка" + (card.nazvanie?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
         style = MaterialTheme.typography.titleLarge,
@@ -1012,4 +1026,18 @@ private fun DelyankaCardContent(card: DelyankaCard) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 8.dp),
     )
+    // Остаток лимита по этой делянке — сразу, без выбора квартала/делянки (мастер/пом./лесничий)
+    if (onOpenStock != null) {
+        Button(
+            onClick = onOpenStock,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        ) {
+            Icon(Icons.Filled.Inventory2, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text("Остатки", modifier = Modifier.padding(start = 8.dp))
+        }
+    }
 }

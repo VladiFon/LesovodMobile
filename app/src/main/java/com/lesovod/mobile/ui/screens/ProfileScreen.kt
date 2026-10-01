@@ -30,7 +30,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.FilterChip
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.MenuBook
 import com.lesovod.mobile.data.local.PendingActionType
+import com.lesovod.mobile.data.network.NetworkModule
+import com.lesovod.mobile.data.repository.FieldPrepManager
 import com.lesovod.mobile.data.local.ThemeMode
 import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.ui.components.SendStatusChip
@@ -133,6 +140,8 @@ fun ProfileScreen(
             QueueCard()
 
             MapSettingsCard()
+
+            GuideCard()
 
             UpdateCard()
 
@@ -257,6 +266,35 @@ private fun ProfileRow(label: String, value: String) {
     Column(modifier = Modifier.padding(vertical = Spacing.xs)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** «Руководство» — открывает руководство пользователя на сайте (<сервер>/guide/index.html) в браузере. */
+@Composable
+private fun GuideCard() {
+    val context = LocalContext.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .padding(top = Spacing.l)
+            .fillMaxWidth()
+            .softCard()
+            .clickable {
+                val uri = Uri.parse(NetworkModule.BASE_URL.trimEnd('/') + "/guide/index.html")
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+            }
+            .padding(Spacing.l),
+    ) {
+        Icon(Icons.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Column(modifier = Modifier.weight(1f).padding(start = Spacing.m)) {
+            Text("Руководство", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Как пользоваться приложением — откроется в браузере",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -419,6 +457,12 @@ private fun MapSettingsCard(viewModel: MapSettingsViewModel = viewModel()) {
                 modifier = Modifier.padding(top = Spacing.l),
             )
         }
+
+        // Всё для работы без связи разом: делянки, остатки, задачи и границы карты
+        val context = LocalContext.current
+        val prepManager = remember { FieldPrepManager.getInstance(context) }
+        val prep by prepManager.state.collectAsState()
+        PrepareForTripButton(prep = prep, onPrepare = prepManager::prepare, modifier = Modifier.padding(top = Spacing.s))
 
         state.lastDownloadAt?.let {
             Text(

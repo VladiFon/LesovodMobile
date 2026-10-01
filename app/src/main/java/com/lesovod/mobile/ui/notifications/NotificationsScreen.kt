@@ -20,7 +20,10 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Forest
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -83,7 +86,7 @@ fun NotificationsScreen(
                         item = item,
                         onClick = {
                             viewModel.markRead(item.id)
-                            if (item.type == NotificationType.NOTE) onOpenNote()
+                            if (item.type == NotificationType.NOTE || item.type == NotificationType.OTVET_NA_ZAMETKU) onOpenNote()
                         },
                     )
                 }
@@ -118,6 +121,9 @@ private fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
             Icon(item.type.icon(), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
+            item.type.title()?.let {
+                Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
             Text(item.text.ifBlank { "Уведомление" }, style = MaterialTheme.typography.bodyLarge)
             item.createdAt?.let {
                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
@@ -129,10 +135,21 @@ private fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
     }
 }
 
+/** Подпись над текстом для новых типов событий — чтобы было видно, о чём уведомление. */
+private fun NotificationType.title(): String? = when (this) {
+    NotificationType.OSVOENIE -> "Освоение делянки"
+    NotificationType.SROK -> "Срок"
+    NotificationType.OTVET_NA_ZAMETKU -> "Ответ на заметку"
+    else -> null
+}
+
 private fun NotificationType.icon(): ImageVector = when (this) {
     NotificationType.BREAKDOWN -> Icons.Filled.Build
     NotificationType.NOTE -> Icons.Filled.Message
     NotificationType.PROBA -> Icons.Filled.Forest
     NotificationType.TRELEVKA -> Icons.Filled.LocalShipping
+    NotificationType.OSVOENIE -> Icons.Filled.Warning
+    NotificationType.SROK -> Icons.Filled.Schedule
+    NotificationType.OTVET_NA_ZAMETKU -> Icons.Filled.Forum
     NotificationType.OTHER -> Icons.Filled.Info
 }

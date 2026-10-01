@@ -1,8 +1,23 @@
 package com.lesovod.mobile.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.IconButton
+import com.lesovod.mobile.data.network.dto.MyDelyankaDto
+import com.lesovod.mobile.data.repository.FieldPrepState
+import com.lesovod.mobile.ui.bot.StockUiState
+import com.lesovod.mobile.ui.bot.filterByQuery
+import com.lesovod.mobile.ui.bot.title
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,12 +61,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
 import kotlin.math.roundToInt
-import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.PorodaRemainingDto
 import com.lesovod.mobile.data.network.dto.VolumeBreakdownDto
 import com.lesovod.mobile.ui.bot.StockViewModel
 import com.lesovod.mobile.ui.components.ChipTone
-import com.lesovod.mobile.ui.components.PrimaryButton
 import com.lesovod.mobile.ui.components.SecondaryButton
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.components.StatusChip
@@ -60,18 +72,205 @@ import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.semanticColors
 import com.lesovod.mobile.ui.theme.softCard
 
-/** Экран 7 редизайна «Поляна» (docs/SCREENS.md) — «Остатки по делянке». */
+/**
+ * Экран 7 редизайна «Поляна» (docs/SCREENS.md) — «Остатки». С 0.6.0 начинается со списка
+ * «Мои делянки» (свои сверху, у каждой — % освоения и сколько ещё можно до 110%); нажатие на
+ * делянку сразу открывает остаток по ней. Без связи — последние сохранённые данные с пометкой.
+ */
 @Composable
 fun StockScreen(viewModel: StockViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
+    val prep by viewModel.prepState.collectAsState()
 
+    BackHandler(enabled = state.selectedId != null) { viewModel.closeDelyanka() }
+
+    if (state.selectedId == null) {
+        MyDelyankiList(
+            state = state,
+            prep = prep,
+            onQueryChange = viewModel::onQueryChange,
+            onRefresh = viewModel::loadList,
+            onOpen = viewModel::openDelyanka,
+            onPrepare = viewModel::prepareForTrip,
+        )
+    } else {
+        RemainingDetail(state = state, onBack = viewModel::closeDelyanka, onRetry = viewModel::loadRemaining)
+    }
+}
+
+@Composable
+private fun MyDelyankiList(
+    state: StockUiState,
+    prep: FieldPrepState,
+    onQueryChange: (String) -> Unit,
+    onRefresh: () -> Unit,
+    onOpen: (Int) -> Unit,
+    onPrepare: () -> Unit,
+) {
+    val filtered = state.delyanki.filterByQuery(state.query)
+    val moi = filtered.filter { it.moya }
+    val vse = filtered.filterNot { it.moya }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(bottom = Spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s),
+    ) {
+        item { ScreenTitle("Мои делянки") }
+
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Spacing.s),
+                modifier = Modifier.padding(horizontal = Spacing.l),
+            ) {
+                OutlinedTextField(
+                    value = state.query,
+                    onValueChange = onQueryChange,
+                    label = { Text("Квартал или название") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                state.listStamp?.let { StatusChip(text = it, tone = ChipTone.WARN, icon = Icons.Filled.CloudOff) }
+                PrepareForTripButton(prep = prep, onPrepare = onPrepare)
+            }
+        }
+
+        when {
+            state.isLoadingList && state.delyanki.isEmpty() -> item {
+                Box(modifier = Modifier.fillMaxWidth().padding(Spacing.xl), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+            state.listError != null && state.delyanki.isEmpty() -> item {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(Spacing.s),
+                    modifier = Modifier.padding(horizontal = Spacing.l),
+                ) {
+                    StatusChip(text = state.listError.orEmpty(), tone = ChipTone.ERROR)
+                    SecondaryButton(text = "Повторить", onClick = onRefresh)
+                }
+            }
+            filtered.isEmpty() -> item {
+                Text(
+                    if (state.query.isBlank()) "Активных делянок нет" else "Ничего не найдено по «${state.query.trim()}»",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.m),
+                )
+            }
+            else -> {
+                if (moi.isNotEmpty()) {
+                    item { SectionHeader("Мои") }
+                    items(moi, key = { "m${it.delyankaId}" }) { MyDelyankaRow(it, onClick = { onOpen(it.delyankaId) }) }
+                }
+                if (vse.isNotEmpty()) {
+                    item { SectionHeader("Все активные") }
+                    items(vse, key = { "a${it.delyankaId}" }) { MyDelyankaRow(it, onClick = { onOpen(it.delyankaId) }) }
+                }
+            }
+        }
+    }
+}
+
+/** «Подготовиться к выезду» + строка результата («Готово: N делянок, данные на чч:мм»). */
+@Composable
+fun PrepareForTripButton(prep: FieldPrepState, onPrepare: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        SecondaryButton(
+            text = if (prep.running) "Сохраняем данные…" else "Подготовиться к выезду",
+            onClick = onPrepare,
+            enabled = !prep.running,
+            icon = if (prep.running) {
+                { CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) }
+            } else {
+                { Icon(Icons.Filled.CloudDownload, contentDescription = null) }
+            },
+        )
+        prep.result?.let { StatusChip(text = it, tone = ChipTone.OK) }
+        prep.error?.let { StatusChip(text = it, tone = ChipTone.ERROR) }
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, top = Spacing.m),
+    )
+}
+
+/** Строка делянки: название, кв./выд., цветной % освоения и «до 110%: N м³». */
+@Composable
+private fun MyDelyankaRow(d: MyDelyankaDto, onClick: () -> Unit) {
+    val level = levelOfWire(d.level, d.pct)
+    val (chipBg, chipFg) = levelColors(level)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.m),
+        modifier = Modifier
+            .padding(horizontal = Spacing.l)
+            .fillMaxWidth()
+            .softCard()
+            .clickable(onClick = onClick)
+            .padding(Spacing.m),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(d.title(), style = MaterialTheme.typography.titleSmall)
+            val place = listOfNotNull(
+                d.kvartal?.takeIf { it.isNotBlank() }?.let { "кв. $it" },
+                d.vydel?.takeIf { it.isNotBlank() }?.let { "выд. $it" },
+                d.lesosekaNomer?.takeIf { it.isNotBlank() }?.let { "лесосека $it" },
+            ).joinToString(" · ")
+            if (place.isNotBlank() && place != d.title()) {
+                Text(place, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            d.mozhnoDo110?.let {
+                Text(
+                    "до 110%: ${it.fmt()} м³",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (it < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = Spacing.xs),
+                )
+            }
+        }
+        Text(
+            d.pct?.let { "${it.pct()}%" } ?: "нет лимита",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = chipFg,
+            modifier = Modifier
+                .background(chipBg, MaterialTheme.shapes.small)
+                .padding(horizontal = Spacing.m, vertical = Spacing.s),
+        )
+        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Остаток по выбранной делянке — как раньше, но без ручного ввода квартала/выдела/лесосеки. */
+@Composable
+private fun RemainingDetail(state: StockUiState, onBack: () -> Unit, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState()),
     ) {
-        ScreenTitle("Остатки по делянке")
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(Spacing.xs)) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Все делянки")
+            }
+            Text(
+                state.remaining?.delyankaNazvanie?.takeIf { it.isNotBlank() } ?: state.selectedTitle ?: "Остаток по делянке",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+        }
 
         Column(
             verticalArrangement = Arrangement.spacedBy(Spacing.m),
@@ -79,73 +278,17 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.l),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                OutlinedTextField(
-                    value = state.kvartal,
-                    onValueChange = viewModel::onKvartalChange,
-                    label = { Text("Квартал") },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.weight(1f),
-                )
-                SecondaryButton(
-                    text = "Делянки",
-                    onClick = viewModel::loadDelyanki,
-                    enabled = !state.isLoadingDelyanki && state.kvartal.isNotBlank(),
-                    modifier = Modifier.weight(0.6f),
-                )
-            }
-
-            if (state.isLoadingDelyanki) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-            }
-
-            if (state.delyanki.isNotEmpty()) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s),
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                ) {
-                    state.delyanki.forEach { delyanka: DelyankaDto ->
-                        val label = delyanka.nazvanie?.takeIf { it.isNotBlank() }
-                            ?: if (delyanka.lesosekaNomer.isNullOrBlank()) {
-                                "выд. ${delyanka.vydel}"
-                            } else {
-                                "выд. ${delyanka.vydel} / лес. ${delyanka.lesosekaNomer}"
-                            }
-                        AssistChip(onClick = { viewModel.selectDelyanka(delyanka) }, label = { Text(label) })
-                    }
+            if (state.isLoadingRemaining) {
+                Box(modifier = Modifier.fillMaxWidth().padding(Spacing.xl), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
             }
 
-            OutlinedTextField(
-                value = state.vydel,
-                onValueChange = viewModel::onVydelChange,
-                label = { Text("Выдел") },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            OutlinedTextField(
-                value = state.lesoseka,
-                onValueChange = viewModel::onLesosekaChange,
-                label = { Text("Лесосека (необязательно)") },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            PrimaryButton(
-                text = "Проверить остаток",
-                onClick = viewModel::loadRemaining,
-                enabled = !state.isLoadingRemaining,
-                icon = if (state.isLoadingRemaining) {
-                    { CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) }
-                } else null,
-            )
+            state.remainingStamp?.let { StatusChip(text = it, tone = ChipTone.WARN, icon = Icons.Filled.CloudOff) }
 
             if (state.error != null) {
                 StatusChip(text = state.error.orEmpty(), tone = ChipTone.ERROR)
+                SecondaryButton(text = "Повторить", onClick = onRetry)
             }
 
             val remaining = state.remaining
@@ -156,13 +299,7 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    val delyankaLabel = remaining.delyankaNazvanie?.takeIf { it.isNotBlank() } ?: buildString {
-                        if (state.vydel.isNotBlank()) append("выд. ${state.vydel}")
-                        if (state.lesoseka.isNotBlank()) {
-                            if (isNotEmpty()) append(" / ")
-                            append("лес. ${state.lesoseka}")
-                        }
-                    }
+                    val delyankaLabel = remaining.delyankaNazvanie?.takeIf { it.isNotBlank() } ?: state.selectedTitle.orEmpty()
                     val egaisLoaded = remaining.egaisImportedAt != null
 
                     OsvoenieCard(
@@ -208,6 +345,16 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
             }
         }
     }
+}
+
+/** Уровень освоения из ответа сервера (level); старый сервер без level — считаем по pct. */
+private fun levelOfWire(level: String?, pct: Double?): OsvoenieLevel = when (level) {
+    "norma" -> OsvoenieLevel.NORMA
+    "vnimanie" -> OsvoenieLevel.VNIMANIE
+    "preduprezhdenie" -> OsvoenieLevel.PREDUPREZHDENIE
+    "pererub" -> OsvoenieLevel.PERERUB
+    "net_limita" -> OsvoenieLevel.NET_LIMITA
+    else -> levelOf(pct)
 }
 
 private fun Double?.fmt(): String = if (this == null) "—" else String.format(Locale.US, "%.2f", this)

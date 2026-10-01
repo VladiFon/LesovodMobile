@@ -134,7 +134,11 @@ fun LesovodNavGraph() {
         }
         composable(Screen.Stock.route) { MainScaffold(navController) { StockScreen() } }
         composable(Screen.Kubaturnik.route) { MainScaffold(navController) { KubaturnikScreen() } }
-        composable(Screen.Map.route) { MainScaffold(navController) { MapScreen() } }
+        composable(Screen.Map.route) {
+            MainScaffold(navController) {
+                MapScreen(onOpenStock = { id -> navController.openStock(id) })
+            }
+        }
         composable(Screen.Notes.route) { MainScaffold(navController) { NotesScreen() } }
         composable(Screen.Profile.route) {
             MainScaffold(navController) {
@@ -181,6 +185,16 @@ fun LesovodNavGraph() {
         }
     }
     }
+    }
+}
+
+/** Остатки по конкретной делянке: id — через [StockNavRequest], сам переход — как по вкладке «Остатки». */
+fun NavHostController.openStock(delyankaId: Int? = null) {
+    delyankaId?.let(StockNavRequest::open)
+    navigate(Screen.Stock.route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }
 

@@ -222,6 +222,24 @@ private fun SentNoteCard(note: SentNoteDto) {
             modifier = Modifier.padding(top = Spacing.xs),
         )
         SendStatusChip(pending = false, modifier = Modifier.padding(top = Spacing.xs))
+        // ответ конторы — под заметкой, на подкрашенном фоне
+        note.otvet?.takeIf { it.isNotBlank() }?.let { otvet ->
+            Column(
+                modifier = Modifier
+                    .padding(top = Spacing.s)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.shapes.small)
+                    .padding(Spacing.m),
+            ) {
+                val header = buildString {
+                    append("Ответ")
+                    note.otvetBy?.takeIf { it.isNotBlank() }?.let { append(" ($it)") }
+                    note.otvetAt?.takeIf { it.isNotBlank() }?.let { append(", ${it.take(16)}") }
+                }
+                Text(header, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(otvet, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        }
     }
 }
 
