@@ -1,0 +1,38 @@
+shot m01-vhod
+shot m01-vhod-zapolnen
+tap Войти
+shot m02-smena
+shot m02b-smena-niz
+NOT FOUND Отметиться
+relaunch
+NOT FOUND Остатки
+relaunch
+NOT FOUND Остатки
+relaunch
+NOT FOUND Кубатурник
+relaunch
+NOT FOUND Карта
+relaunch
+NOT FOUND Заметки
+relaunch
+NOT FOUND Ещё
+relaunch
+NOT FOUND Ещё
+relaunch
+NOT FOUND Ещё
+relaunch
+NOT FOUND Ещё
+relaunch
+NOT FOUND Ещё
+relaunch
+NOT FOUND Ещё
+relaunch
+NOT FOUND Ещё
+relaunch
+NOT FOUND Остатки
+tap Войти
+shot w01-smena-valshik
+NOT FOUND Ещё
+tap Войти
+shot t01-smena-traktorist
+done
