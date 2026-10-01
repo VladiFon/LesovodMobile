@@ -109,6 +109,10 @@ fun LesovodNavGraph() {
                     onOpenAttendance = { navController.navigate(Screen.Attendance.route) },
                     onOpenProba = { navController.navigate(Screen.Proba.route) },
                     onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
+                    onOpenWorkReport = { navController.navigate(Screen.WorkReport.route) { launchSingleTop = true } },
+                    onOpenStock = { navController.openStock() },
+                    onOpenTrelevka = { navController.navigate(Screen.Trelevka.route) },
+                    onOpenBreakdown = { navController.navigate(Screen.Breakdown.route) },
                 )
             }
         }
@@ -133,7 +137,13 @@ fun LesovodNavGraph() {
             ProbaScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Stock.route) { MainScaffold(navController) { StockScreen() } }
-        composable(Screen.Kubaturnik.route) { MainScaffold(navController) { KubaturnikScreen() } }
+        composable(Screen.Kubaturnik.route) {
+            MainScaffold(navController) {
+                KubaturnikScreen(
+                    onOpenWorkReport = { navController.navigate(Screen.WorkReport.route) { launchSingleTop = true } },
+                )
+            }
+        }
         composable(Screen.Map.route) {
             MainScaffold(navController) {
                 MapScreen(onOpenStock = { id -> navController.openStock(id) })

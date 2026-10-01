@@ -102,6 +102,14 @@ fun LoginScreen(
                 .fillMaxWidth()
                 .padding(top = Spacing.m),
         )
+        Text(
+            "Забыли PIN? Попросите лесничего сбросить его на сайте: Сотрудники → Сбросить PIN.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Spacing.xs),
+        )
 
         if (uiState is LoginUiState.Error) {
             StatusChip(

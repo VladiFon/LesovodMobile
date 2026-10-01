@@ -30,6 +30,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -56,6 +57,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.local.KubaturnikCalculation
 import com.lesovod.mobile.data.local.TilesSide
 import com.lesovod.mobile.ui.components.ScreenTitle
+import com.lesovod.mobile.ui.navigation.WorkReportPrefill
+import com.lesovod.mobile.ui.navigation.WorkReportPrefillRequest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,7 +66,10 @@ import java.util.Locale
 internal fun Double.fmt(decimals: Int = 3): String = String.format(Locale.US, "%.${decimals}f", this)
 
 @Composable
-fun KubaturnikScreen(viewModel: KubaturnikViewModel = viewModel()) {
+fun KubaturnikScreen(
+    onOpenWorkReport: () -> Unit = {},
+    viewModel: KubaturnikViewModel = viewModel(),
+) {
     val state by viewModel.uiState.collectAsState()
 
     Column(
@@ -84,7 +90,14 @@ fun KubaturnikScreen(viewModel: KubaturnikViewModel = viewModel()) {
                     modifier = Modifier.padding(20.dp),
                 )
                 !state.lengthChosen -> LengthPicker(state = state, viewModel = viewModel)
-                else -> KubaturnikMain(state = state, viewModel = viewModel)
+                else -> KubaturnikMain(
+                    state = state,
+                    viewModel = viewModel,
+                    onAddToReport = { s ->
+                        WorkReportPrefillRequest.set(s.toReportPrefill())
+                        onOpenWorkReport()
+                    },
+                )
             }
         }
     }
@@ -165,7 +178,11 @@ private fun LengthPicker(state: KubaturnikUiState, viewModel: KubaturnikViewMode
 }
 
 @Composable
-private fun KubaturnikMain(state: KubaturnikUiState, viewModel: KubaturnikViewModel) {
+private fun KubaturnikMain(
+    state: KubaturnikUiState,
+    viewModel: KubaturnikViewModel,
+    onAddToReport: (KubaturnikUiState) -> Unit,
+) {
     var tab by remember { mutableStateOf(0) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -177,18 +194,22 @@ private fun KubaturnikMain(state: KubaturnikUiState, viewModel: KubaturnikViewMo
 
         Box(modifier = Modifier.weight(1f)) {
             when (tab) {
-                0 -> KubaturnikCounting(state = state, viewModel = viewModel)
+                0 -> KubaturnikCounting(state = state, viewModel = viewModel, onAddToReport = onAddToReport)
                 1 -> KubaturnikSummary(state = state)
-                else -> KubaturnikHistory(state = state, viewModel = viewModel)
+                else -> KubaturnikHistory(state = state, viewModel = viewModel, onAddToReport = onAddToReport)
             }
         }
     }
 }
 
 @Composable
-private fun KubaturnikCounting(state: KubaturnikUiState, viewModel: KubaturnikViewModel) {
+private fun KubaturnikCounting(
+    state: KubaturnikUiState,
+    viewModel: KubaturnikViewModel,
+    onAddToReport: (KubaturnikUiState) -> Unit,
+) {
     Column(modifier = Modifier.fillMaxSize()) {
-        KubaturnikHeader(state = state, viewModel = viewModel)
+        KubaturnikHeader(state = state, viewModel = viewModel, onAddToReport = onAddToReport)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         ScoreBody(
@@ -211,7 +232,11 @@ private fun KubaturnikCounting(state: KubaturnikUiState, viewModel: KubaturnikVi
 }
 
 @Composable
-private fun KubaturnikHeader(state: KubaturnikUiState, viewModel: KubaturnikViewModel) {
+private fun KubaturnikHeader(
+    state: KubaturnikUiState,
+    viewModel: KubaturnikViewModel,
+    onAddToReport: (KubaturnikUiState) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -272,6 +297,9 @@ private fun KubaturnikHeader(state: KubaturnikUiState, viewModel: KubaturnikView
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (state.totalLogCount > 0) {
+                    AddToReportButton(onClick = { onAddToReport(state) })
+                }
             }
         }
     }
@@ -399,7 +427,11 @@ private fun ThicknessLine(label: String, count: String, volume: String, header: 
 }
 
 @Composable
-private fun KubaturnikHistory(state: KubaturnikUiState, viewModel: KubaturnikViewModel) {
+private fun KubaturnikHistory(
+    state: KubaturnikUiState,
+    viewModel: KubaturnikViewModel,
+    onAddToReport: (KubaturnikUiState) -> Unit,
+) {
     var selected by remember { mutableStateOf<KubaturnikCalculation?>(null) }
     var pendingDelete by remember { mutableStateOf<KubaturnikCalculation?>(null) }
 
@@ -410,6 +442,7 @@ private fun KubaturnikHistory(state: KubaturnikUiState, viewModel: KubaturnikVie
             detailState = viewModel.uiStateFor(current),
             onBack = { selected = null },
             onDelete = { pendingDelete = current },
+            onAddToReport = onAddToReport,
         )
         state.calculations.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Пока нет сохранённых расчётов", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -480,6 +513,7 @@ private fun KubaturnikCalculationDetail(
     detailState: KubaturnikUiState,
     onBack: () -> Unit,
     onDelete: () -> Unit,
+    onAddToReport: (KubaturnikUiState) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -512,6 +546,9 @@ private fun KubaturnikCalculationDetail(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+                if (detailState.totalLogCount > 0) {
+                    AddToReportButton(onClick = { onAddToReport(detailState) })
+                }
             }
         }
 
@@ -520,6 +557,26 @@ private fun KubaturnikCalculationDetail(
         }
     }
 }
+
+/** «Добавить в отчёт»: открывает «Отчёт о работе» с объёмом партии в поле «Объём, м³». */
+@Composable
+private fun AddToReportButton(onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.padding(top = 8.dp)) {
+        Icon(Icons.Filled.PostAdd, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+        Text("Добавить в отчёт")
+    }
+}
+
+/** Объём партии и её описание (длина, брёвна, сорта) для отчёта. */
+private fun KubaturnikUiState.toReportPrefill() = WorkReportPrefill(
+    obyom = totalVolume,
+    opisanie = "Кубатурник: ${totalVolume.fmt(3)} м³, $totalLogCount брёвен, длина ${selectedLengthValue.fmt(2)} м" +
+        (usedSorts().takeIf { it.isNotEmpty() }?.let { ", сорта: ${it.joinToString(", ")}" } ?: ""),
+)
+
+/** Сорта, по которым в партии реально есть брёвна. */
+private fun KubaturnikUiState.usedSorts(): List<String> =
+    counts.filter { (_, byDest) -> byDest.values.any { byDiam -> byDiam.values.sum() > 0 } }.keys.toList()
 
 private fun formatCalculationDate(millis: Long): String =
     SimpleDateFormat("d MMM yyyy, HH:mm", Locale("ru")).format(Date(millis))

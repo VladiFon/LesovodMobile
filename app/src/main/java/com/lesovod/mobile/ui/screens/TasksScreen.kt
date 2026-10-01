@@ -17,7 +17,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Forest
+import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.LocalShipping
+import androidx.compose.material.icons.rounded.PostAdd
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.lesovod.mobile.data.session.canReportBreakdown
+import com.lesovod.mobile.data.session.canSeeStock
+import com.lesovod.mobile.data.session.canTrelevka
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material.icons.rounded.TaskAlt
@@ -39,7 +51,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -73,11 +84,29 @@ fun TasksScreen(
     onOpenAttendance: () -> Unit,
     onOpenProba: () -> Unit = {},
     onOpenNotifications: () -> Unit = {},
+    onOpenWorkReport: () -> Unit = {},
+    onOpenStock: () -> Unit = {},
+    onOpenTrelevka: () -> Unit = {},
+    onOpenBreakdown: () -> Unit = {},
     viewModel: TasksViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val session by viewModel.session.collectAsState()
-    val canInputProba = session?.role?.canInputProba == true
+    val role = session?.role
+    val canInputProba = role?.canInputProba == true
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
+    // Главные действия своей роли — крупными кнопками вверху (3–4 штуки), остальное ниже как раньше.
+    val homeActions = buildList {
+        add(HomeAction("Отметиться", Icons.Rounded.HowToReg, onOpenAttendance))
+        add(HomeAction("Мои задачи", Icons.Rounded.TaskAlt) { scope.launch { listState.animateScrollToItem(1) } })
+        if (role?.canSeeStock == true) add(HomeAction("Остатки", Icons.Rounded.Inventory2, onOpenStock))
+        add(HomeAction("Отчёт за день", Icons.Rounded.PostAdd, onOpenWorkReport))
+        if (size < 4 && role?.canTrelevka == true) add(HomeAction("Трелёвка", Icons.Rounded.LocalShipping, onOpenTrelevka))
+        if (size < 4 && role?.canReportBreakdown == true) add(HomeAction("Поломка", Icons.Rounded.Build, onOpenBreakdown))
+        if (size < 4 && canInputProba) add(HomeAction("Проба", Icons.Rounded.Forest, onOpenProba))
+    }
 
     val context = LocalContext.current
     val queueManager = remember { OfflineQueueManager.getInstance(context) }
@@ -122,24 +151,30 @@ fun TasksScreen(
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
             LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(horizontal = Spacing.screenPadding, vertical = Spacing.l),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sectionGap),
             ) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
-                        HeroCard(onClick = onOpenAttendance)
-                        if (canInputProba) {
+                        HomeActionsGrid(homeActions)
+                        if (canInputProba && homeActions.none { it.label == "Проба" }) {
                             ProbaRow(onClick = onOpenProba)
                         }
                     }
                 }
 
                 item {
-                    Text(
-                        "СЕГОДНЯ",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Column {
+                        state.offlineStamp?.let {
+                            StatusChip(text = it, tone = ChipTone.WARN, modifier = Modifier.padding(bottom = Spacing.s))
+                        }
+                        Text(
+                            "СЕГОДНЯ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
                 if (state.error != null) {
@@ -178,35 +213,43 @@ fun TasksScreen(
     }
 }
 
+private data class HomeAction(val label: String, val icon: ImageVector, val onClick: () -> Unit)
+
+/** Крупные кнопки главного экрана — по две в ряд, высокие, чтобы попадать пальцем в перчатке. */
 @Composable
-private fun HeroCard(onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.linearGradient(
-                    listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.surfaceVariant),
-                ),
-                RoundedCornerShape(28.dp),
-            )
-            .softCard(RoundedCornerShape(28.dp), filled = false)
-            .padding(Spacing.l),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s),
-    ) {
-        Text(
-            "СЛЕДУЮЩЕЕ ДЕЙСТВИЕ",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text("Отметиться на смене", style = MaterialTheme.typography.titleLarge)
-        Text(
-            "Работаю / не работаю / больничный",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        PrimaryButton(text = "Отметиться", onClick = onClick, icon = {
-            Icon(Icons.Rounded.HowToReg, contentDescription = null)
-        })
+private fun HomeActionsGrid(actions: List<HomeAction>) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
+        actions.chunked(2).forEachIndexed { rowIndex, row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.m), modifier = Modifier.fillMaxWidth()) {
+                row.forEachIndexed { index, action ->
+                    // первая кнопка («Отметиться») — главная, выделена цветом
+                    val primary = rowIndex == 0 && index == 0
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(Spacing.s, Alignment.CenterVertically),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(96.dp)
+                            .background(
+                                if (primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                RoundedCornerShape(20.dp),
+                            )
+                            .softCard(RoundedCornerShape(20.dp), filled = false)
+                            .clickable(onClick = action.onClick)
+                            .padding(Spacing.s),
+                    ) {
+                        val tint = if (primary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                        Icon(action.icon, contentDescription = null, tint = tint, modifier = Modifier.size(30.dp))
+                        Text(
+                            action.label,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = if (primary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
     }
 }
 
