@@ -60,13 +60,14 @@ jobs:
           target: google_apis
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -change-locale ru-RU
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             python3 tools/guide/driver.py tools/guide/out
       - name: Commit screenshots
         if: always()
         run: |
+          mkdir -p tools/guide/out
           cp /tmp/demo/backend.log tools/guide/out/_backend.log || true
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
