@@ -92,8 +92,17 @@ def back(wait=1.5):
     sh("shell", "input", "keyevent", "4"); time.sleep(wait)
 
 
+def kb_shown():
+    out = sh("shell", "dumpsys", "input_method", out=True) or b""
+    return b"mInputShown=true" in out
+
+
 def hide_kb():
+    # ESC не всегда прячет клавиатуру Gboard; «Назад» при открытой клавиатуре
+    # только закрывает её и не уходит с экрана.
     sh("shell", "input", "keyevent", "111"); time.sleep(0.6)
+    if kb_shown():
+        back(wait=1.0)
 
 
 def swipe_up(times=1):
