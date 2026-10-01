@@ -176,26 +176,16 @@ def master_flow():
     # отметка на смене
     if tap("Отметиться", wait=2.5):
         shot("m03-otmetka")
-    # остатки
-    if nav("Остатки"):
-        shot("m04-ostatki-pusto")
-        type_into("Квартал", "43"); hide_kb()
-        tap("Делянки", idx=0, wait=3)
-        shot("m05-ostatki-delyanki")
-        tap(contains="кв.43 выд.3", wait=1.5)
-        tap("Проверить остаток", wait=4)
-        shot("m06-ostatki-rezultat")
-        swipe_up(); shot("m07-ostatki-porody")
-        swipe_up(); shot("m08-ostatki-porody2")
-    # перерубленная делянка
-    if nav("Остатки"):
-        type_into("Квартал", "")  # фокус
-        for _ in range(4):
-            sh("shell", "input", "keyevent", "67")
-        sh("shell", "input", "text", "35"); hide_kb()
-        tap("Делянки", idx=0, wait=3)
-        tap(contains="кв.35 выд.7", wait=1.5)
-        tap("Проверить остаток", wait=4)
+    # остатки: «Мои делянки» → одно касание
+    if nav("Остатки", wait=4):
+        shot("m04-moi-delyanki")
+        if tap(contains="кв.43 выд.3", wait=4):
+            shot("m06-ostatki-rezultat")
+            swipe_up(); shot("m07-ostatki-porody")
+            swipe_up(); shot("m08-ostatki-porody2")
+    if nav("Остатки", wait=4):
+        if not tap(contains="кв.35 выд.7", wait=4):
+            swipe_up(); tap(contains="кв.35 выд.7", wait=4)
         shot("m09-ostatki-pererub")
     if nav("Кубатурник"):
         shot("m10-kubaturnik")
@@ -216,6 +206,21 @@ def master_flow():
                 shot("m15-eshche")
             if tap(t, wait=3) or (swipe_up() or tap(t, wait=3)):
                 shot(nm)
+    # профиль: тема, отправка данных, «Подготовиться к выезду», руководство
+    if nav("Ещё") and tap("Профиль", wait=3):
+        swipe_up(); shot("m21b-profil-niz")
+        if tap("Подготовиться к выезду", wait=12):
+            shot("m21c-podgotovka")
+        if tap("Светлая", wait=2):
+            to_nav(); shot("m23-svetlaya-tema")
+            nav("Ещё"); tap("Профиль", wait=3); tap("Тёмная", wait=2)
+    # без связи: остатки из сохранённого
+    sh("shell", "svc", "wifi", "disable"); sh("shell", "svc", "data", "disable"); time.sleep(3)
+    if nav("Остатки", wait=4):
+        shot("m22-ostatki-bez-svyazi")
+        if tap(contains="кв.43 выд.3", wait=3):
+            shot("m22b-ostatki-bez-svyazi-detal")
+    sh("shell", "svc", "wifi", "enable"); sh("shell", "svc", "data", "enable"); time.sleep(4)
 
 
 def worker_flow():

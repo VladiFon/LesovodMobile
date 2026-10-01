@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: VladiFon/Lesovod_pom
-          ref: claude/blissful-davinci-ifdpff
+          ref: claude/project-thread-ubolgv
           path: server
       - uses: actions/setup-python@v5
         with:
