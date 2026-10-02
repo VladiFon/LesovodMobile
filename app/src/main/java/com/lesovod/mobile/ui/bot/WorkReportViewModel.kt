@@ -14,7 +14,14 @@ import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.ui.proba.LesokulturyUchastok
+import com.lesovod.mobile.data.local.FieldDataCache
+import com.lesovod.mobile.ui.navigation.WorkReportPrefill
+import com.lesovod.mobile.ui.navigation.WorkReportPrefillRequest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
@@ -32,6 +39,8 @@ data class WorkReportUiState(
     val vydelInput: String = "",
     val vydels: List<String> = emptyList(),
     val opisanie: String = "",
+    /** Объём, м³ — например, итог партии из Кубатурника; уходит в описание отчёта. */
+    val obyom: String = "",
     val photoUri: Uri? = null,
     val isSubmitting: Boolean = false,
     val error: String? = null,
@@ -50,12 +59,15 @@ data class WorkReportUiState(
     val selectedUchastok: LesokulturyUchastok? = null,
     val isLoadingUchastki: Boolean = false,
     val uchastkiError: String? = null,
+    /** «Подставлено из задачи на сегодня: …» / «Из Кубатурника: …» — что заполнено автоматически. */
+    val prefillNote: String? = null,
 )
 
 class WorkReportViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager.getInstance(application)
     private val repository = BotRepository(NetworkModule.api, sessionManager)
     private val queueManager = OfflineQueueManager.getInstance(application)
+    private val cache = FieldDataCache(application)
 
     val session = sessionManager.session
 
@@ -71,8 +83,79 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
     )
     val uiState = _uiState.asStateFlow()
 
+    /** Человек сам выбрал делянку/режим — автоподстановка из задачи его выбор не перетирает. */
+    private var locationTouched = false
+
     init {
         if (place?.vydel != null) loadDelyanki()
+        prefillFromTodayTask()
+        // «Добавить в отчёт» из Кубатурника: объём партии и сорта
+        viewModelScope.launch {
+            WorkReportPrefillRequest.prefill.filterNotNull().collect {
+                WorkReportPrefillRequest.consume()?.let { applyKubaturnikPrefill(it) }
+            }
+        }
+    }
+
+    private fun applyKubaturnikPrefill(prefill: WorkReportPrefill) {
+        val state = _uiState.value
+        _uiState.value = state.copy(
+            obyom = String.format(Locale.US, "%.3f", prefill.obyom),
+            opisanie = if (state.opisanie.isBlank()) prefill.opisanie else state.opisanie,
+            submitted = false,
+            queuedOffline = false,
+            prefillNote = "Объём подставлен из Кубатурника",
+        )
+    }
+
+    /**
+     * Есть активная задача на сегодня, привязанная к делянке (план работ, как на «Смене»), — подставляем
+     * её делянку (или квартал/выдел вручную, если делянку в справочнике не нашли). Человек может поменять.
+     * Без связи задачи берутся из сохранённых («Подготовиться к выезду»).
+     */
+    private fun prefillFromTodayTask() {
+        viewModelScope.launch {
+            val tasks = repository.listWorkPlan().getOrNull()
+                ?.also { cache.saveWorkPlan(it) }
+                ?: cache.loadWorkPlan()?.data
+                ?: return@launch
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val withPlace = tasks.filter { !it.kvartal.isNullOrBlank() }
+            val task = withPlace.firstOrNull { it.data.take(10) == today }
+                ?: withPlace.filter { it.data.take(10) < today }.maxByOrNull { it.data }
+                ?: return@launch
+            val kvartal = task.kvartal?.trim().orEmpty()
+            val vydel = task.vydel?.trim()
+            if (locationTouched) return@launch
+
+            val delyanki = _uiState.value.delyanki.ifEmpty { repository.getDelyankiForMap().getOrNull().orEmpty() }
+            val match = delyanki.filter { it.kvartal?.trim() == kvartal && (vydel == null || it.vydel?.trim() == vydel) }
+                .maxByOrNull { it.delyankaId }
+            if (locationTouched) return@launch
+            val note = "Подставлено из задачи: ${task.zadacha}"
+            _uiState.value = if (match != null) {
+                _uiState.value.copy(
+                    delyanki = delyanki,
+                    selectedDelyanka = match,
+                    locationMode = WorkReportLocationMode.DELYANKA,
+                    tipRaboty = _uiState.value.tipRaboty.ifBlank { task.zadacha },
+                    prefillNote = note,
+                )
+            } else {
+                _uiState.value.copy(
+                    delyanki = delyanki,
+                    locationMode = WorkReportLocationMode.MANUAL,
+                    kvartal = kvartal,
+                    vydels = listOfNotNull(vydel),
+                    tipRaboty = _uiState.value.tipRaboty.ifBlank { task.zadacha },
+                    prefillNote = note,
+                )
+            }
+        }
+    }
+
+    fun onObyomChange(value: String) {
+        _uiState.value = _uiState.value.copy(obyom = value.filter { it.isDigit() || it == '.' || it == ',' })
     }
 
     fun onTipRabotyChange(value: String) {
@@ -80,6 +163,7 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun onKvartalChange(value: String) {
+        locationTouched = true
         _uiState.value = _uiState.value.copy(kvartal = value, error = null)
     }
 
@@ -110,6 +194,7 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
 
     /** Переключение между «выбрать делянку» и «указать вручную» — обе ветки хранятся в стейте. */
     fun setLocationMode(mode: WorkReportLocationMode) {
+        locationTouched = true
         _uiState.value = _uiState.value.copy(locationMode = mode, error = null)
         if (mode == WorkReportLocationMode.LESOKULTURY && _uiState.value.uchastki.isEmpty() && !_uiState.value.isLoadingUchastki) {
             loadUchastki()
@@ -183,6 +268,7 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun selectDelyanka(delyanka: DelyankaMapRefDto) {
+        locationTouched = true
         _uiState.value = _uiState.value.copy(
             selectedDelyanka = delyanka,
             locationMode = WorkReportLocationMode.DELYANKA,
@@ -218,6 +304,12 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
         val vydels = delyanka?.vydel?.let { listOf(it) } ?: uchastok?.vydel?.let { listOf(it) } ?: state.vydels
         val delyankaId = delyanka?.delyankaId
         val uchastokId = uchastok?.id
+        // У отчёта на сервере нет отдельного поля объёма — объём дописываем в описание.
+        val obyomValue = state.obyom.replace(',', '.').toDoubleOrNull()
+        val opisanie = listOfNotNull(
+            state.opisanie.trim().takeIf { it.isNotBlank() },
+            obyomValue?.let { "Объём: ${String.format(Locale.US, "%.3f", it)} м³" },
+        ).joinToString("\n")
 
         _uiState.value = state.copy(isSubmitting = true, error = null)
         viewModelScope.launch {
@@ -236,7 +328,7 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                         tipRaboty = state.tipRaboty.trim(),
                         kvartal = kvartal,
                         vydels = vydels,
-                        opisanie = state.opisanie,
+                        opisanie = opisanie,
                         photoUri = uri,
                         uploadedPhotoPath = null,
                         lat = lat,
@@ -261,7 +353,7 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                 tipRaboty = state.tipRaboty.trim(),
                 kvartal = kvartal,
                 vydels = vydels,
-                opisanie = state.opisanie,
+                opisanie = opisanie,
                 photoPath = photoPath,
                 lat = lat,
                 lon = lon,
@@ -274,7 +366,7 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
                     tipRaboty = state.tipRaboty.trim(),
                     kvartal = kvartal,
                     vydels = vydels,
-                    opisanie = state.opisanie,
+                    opisanie = opisanie,
                     photoUri = null,
                     uploadedPhotoPath = photoPath,
                     lat = lat,

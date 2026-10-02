@@ -19,6 +19,7 @@ import com.lesovod.mobile.data.network.dto.VydelLocationDto
 import com.lesovod.mobile.data.network.dto.WorkColorsDto
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.LoginResponseDto
+import com.lesovod.mobile.data.network.dto.MyDelyankaDto
 import com.lesovod.mobile.data.network.dto.PerevodRequest
 import com.lesovod.mobile.data.network.dto.UchastokPolyaRequest
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
@@ -70,6 +71,11 @@ interface ApiService {
         @Header("Authorization") bearerToken: String,
         @Query("kvartal") kvartal: String,
     ): List<DelyankaDto>
+
+    @GET("api/bot/my-delyanki")
+    suspend fun listMyDelyanki(
+        @Header("Authorization") bearerToken: String,
+    ): List<MyDelyankaDto>
 
     @GET("api/bot/remaining")
     suspend fun getRemaining(

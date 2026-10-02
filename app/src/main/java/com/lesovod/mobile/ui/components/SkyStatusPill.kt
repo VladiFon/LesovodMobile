@@ -58,7 +58,7 @@ fun SkyStatusPill(
     val (color, label) = when (state) {
         is SkyState.Sun -> semantic.ok to "Ясно"
         is SkyState.Haze -> MaterialTheme.colorScheme.tertiary to "Дымка"
-        is SkyState.Cloud -> semantic.sky to "Пасмурно · ${state.queued}"
+        is SkyState.Cloud -> semantic.sky to "Не отправлено: ${state.queued}"
         is SkyState.Syncing -> semantic.ok to "Синхронизация…"
     }
 
@@ -68,7 +68,7 @@ fun SkyStatusPill(
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, color, CircleShape)
-            .clickable(onClickLabel = "Открыть очередь отправки", onClick = onClick)
+            .clickable(onClickLabel = "Отправить сейчас", onClick = onClick)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),

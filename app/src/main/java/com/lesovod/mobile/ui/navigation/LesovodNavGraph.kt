@@ -109,6 +109,10 @@ fun LesovodNavGraph() {
                     onOpenAttendance = { navController.navigate(Screen.Attendance.route) },
                     onOpenProba = { navController.navigate(Screen.Proba.route) },
                     onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
+                    onOpenWorkReport = { navController.navigate(Screen.WorkReport.route) { launchSingleTop = true } },
+                    onOpenStock = { navController.openStock() },
+                    onOpenTrelevka = { navController.navigate(Screen.Trelevka.route) },
+                    onOpenBreakdown = { navController.navigate(Screen.Breakdown.route) },
                 )
             }
         }
@@ -133,8 +137,18 @@ fun LesovodNavGraph() {
             ProbaScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Stock.route) { MainScaffold(navController) { StockScreen() } }
-        composable(Screen.Kubaturnik.route) { MainScaffold(navController) { KubaturnikScreen() } }
-        composable(Screen.Map.route) { MainScaffold(navController) { MapScreen() } }
+        composable(Screen.Kubaturnik.route) {
+            MainScaffold(navController) {
+                KubaturnikScreen(
+                    onOpenWorkReport = { navController.navigate(Screen.WorkReport.route) { launchSingleTop = true } },
+                )
+            }
+        }
+        composable(Screen.Map.route) {
+            MainScaffold(navController) {
+                MapScreen(onOpenStock = { id -> navController.openStock(id) })
+            }
+        }
         composable(Screen.Notes.route) { MainScaffold(navController) { NotesScreen() } }
         composable(Screen.Profile.route) {
             MainScaffold(navController) {
@@ -181,6 +195,16 @@ fun LesovodNavGraph() {
         }
     }
     }
+    }
+}
+
+/** Остатки по конкретной делянке: id — через [StockNavRequest], сам переход — как по вкладке «Остатки». */
+fun NavHostController.openStock(delyankaId: Int? = null) {
+    delyankaId?.let(StockNavRequest::open)
+    navigate(Screen.Stock.route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }
 
@@ -286,7 +310,7 @@ private fun PendingSyncBanner(count: Int, onRetryNow: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Нет сети: $count " + pluralActionsRu(count) + " ждут отправки",
+                text = "Не отправлено: $count — отправится само, когда появится связь",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -295,16 +319,5 @@ private fun PendingSyncBanner(count: Int, onRetryNow: () -> Unit) {
                 Text("Повторить")
             }
         }
-    }
-}
-
-private fun pluralActionsRu(count: Int): String {
-    val mod100 = count % 100
-    val mod10 = count % 10
-    return when {
-        mod100 in 11..14 -> "действий"
-        mod10 == 1 -> "действие"
-        mod10 in 2..4 -> "действия"
-        else -> "действий"
     }
 }

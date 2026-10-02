@@ -17,6 +17,8 @@ data class GeoNoteMarker(
     val kategoriya: String? = null,
     /** Относительный адрес фото на сервере (GET /api/bot/geo-notes/{id}/photo). */
     val photoUrl: String? = null,
+    /** Метка ещё лежит в офлайн-очереди («⏳ ждёт связи») — на сервер не ушла. */
+    val pending: Boolean = false,
 ) {
     val category: GeoNoteCategory get() = GeoNoteCategory.fromCode(kategoriya)
 }

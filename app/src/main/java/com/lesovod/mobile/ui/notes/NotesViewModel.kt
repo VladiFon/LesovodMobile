@@ -16,7 +16,18 @@ import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.data.session.canViewNotesInbox
 import java.util.Calendar
+import com.lesovod.mobile.data.local.PendingActionType
+import com.lesovod.mobile.data.local.PendingNotePayload
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
@@ -41,6 +52,9 @@ data class NotesUiState(
     val queuedOffline: Boolean = false,
 )
 
+/** Заметка из офлайн-очереди — показывается в «Мои заметки» со статусом «⏳ ждёт связи». */
+data class PendingNoteView(val id: String, val text: String, val createdAt: String)
+
 class NotesViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager.getInstance(application)
     private val repository = BotRepository(NetworkModule.api, sessionManager)
@@ -50,12 +64,33 @@ class NotesViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(NotesUiState())
     val uiState = _uiState.asStateFlow()
 
+    private val queueJson = Json { ignoreUnknownKeys = true }
+
+    /** Отдельно от uiState: экран сбрасывает форму после отправки, а очередь при этом не меняется. */
+    val pendingNotes: StateFlow<List<PendingNoteView>> = queueManager.pending
+        .map { list ->
+            list.filter { it.type == PendingActionType.NOTE }.mapNotNull { action ->
+                runCatching { queueJson.decodeFromString<PendingNotePayload>(action.payload) }.getOrNull()?.let {
+                    PendingNoteView(
+                        id = action.id,
+                        text = it.text,
+                        createdAt = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale("ru")).format(Date(action.createdAt)),
+                    )
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     init {
         val canViewInbox = sessionManager.session.value?.role?.canViewNotesInbox == true
         _uiState.value = _uiState.value.copy(canViewInbox = canViewInbox, reminders = reminderStore.list())
         loadRecipients()
         loadSentNotes()
         if (canViewInbox) loadInbox()
+        // заметка ушла из очереди — она уже в «Моих заметках» на сервере
+        viewModelScope.launch {
+            queueManager.completed.collect { if (it.type == PendingActionType.NOTE) loadSentNotes() }
+        }
     }
 
     fun loadSentNotes() {
@@ -110,6 +145,7 @@ class NotesViewModel(application: Application) : AndroidViewModel(application) {
                     canViewInbox = state.canViewInbox,
                     recipients = state.recipients,
                     reminders = state.reminders,
+                    sentNotes = state.sentNotes,
                     queuedOffline = true,
                 )
                 return@launch

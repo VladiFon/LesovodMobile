@@ -28,6 +28,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.FilterChip
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.MenuBook
+import com.lesovod.mobile.data.local.PendingActionType
+import com.lesovod.mobile.data.network.NetworkModule
+import com.lesovod.mobile.data.repository.FieldPrepManager
+import com.lesovod.mobile.data.local.ThemeMode
+import com.lesovod.mobile.data.repository.OfflineQueueManager
+import com.lesovod.mobile.ui.components.SendStatusChip
+import com.lesovod.mobile.data.local.ThemePrefs
 import com.lesovod.mobile.BuildConfig
 import com.lesovod.mobile.data.update.AppUpdateManager
 import com.lesovod.mobile.data.update.UpdateState
@@ -121,7 +135,13 @@ fun ProfileScreen(
                 ProfileRow("Должность", session?.dolzhnost?.takeIf { it.isNotBlank() } ?: "—")
             }
 
+            ThemeCard()
+
+            QueueCard()
+
             MapSettingsCard()
+
+            GuideCard()
 
             UpdateCard()
 
@@ -137,11 +157,144 @@ fun ProfileScreen(
     }
 }
 
+/**
+ * «Не отправлено: N» — сколько действий (отчёты, заметки, метки, отметки…) лежит в офлайн-очереди,
+ * с кнопкой «Отправить сейчас». Пустая очередь — короткая строка «Всё отправлено».
+ */
+@Composable
+private fun QueueCard() {
+    val context = LocalContext.current
+    val queueManager = remember { OfflineQueueManager.getInstance(context) }
+    val pending by queueManager.pending.collectAsState()
+    val isSyncing by queueManager.isSyncing.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .softCard()
+            .padding(Spacing.l)
+            .padding(top = Spacing.l),
+    ) {
+        Text("Отправка данных", style = MaterialTheme.typography.titleSmall)
+        if (pending.isEmpty()) {
+            SendStatusChip(pending = false, modifier = Modifier.padding(top = Spacing.m))
+            Text(
+                "Всё отправлено на сервер",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+        } else {
+            StatusChip(text = "Не отправлено: ${pending.size}", tone = ChipTone.WARN, modifier = Modifier.padding(top = Spacing.m))
+            val byType = pending.groupingBy { it.type.labelRu() }.eachCount()
+            Text(
+                byType.entries.joinToString(", ") { "${it.key}: ${it.value}" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+            pending.mapNotNull { it.lastError }.lastOrNull()?.let {
+                Text(
+                    "Последняя ошибка: $it",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = Spacing.xs),
+                )
+            }
+            PrimaryButton(
+                text = if (isSyncing) "Отправляем…" else "Отправить сейчас",
+                onClick = queueManager::retryNow,
+                enabled = !isSyncing,
+                modifier = Modifier.padding(top = Spacing.m),
+            )
+        }
+    }
+}
+
+private fun PendingActionType.labelRu(): String = when (this) {
+    PendingActionType.REPORT -> "отчёты"
+    PendingActionType.BREAKDOWN -> "поломки"
+    PendingActionType.ATTENDANCE -> "отметки"
+    PendingActionType.TASK_COMPLETE -> "задачи"
+    PendingActionType.TRELEVKA -> "трелёвка"
+    PendingActionType.PROBA -> "пробы"
+    PendingActionType.NOTE -> "заметки"
+    PendingActionType.LESOKULTURY -> "лесные культуры"
+    PendingActionType.GEO_NOTE -> "метки на карте"
+}
+
+/** Выбор темы: «Тёмная» (по умолчанию) / «Светлая» / «Как в системе» — применяется сразу. */
+@Composable
+private fun ThemeCard() {
+    val context = LocalContext.current
+    val themePrefs = remember { ThemePrefs.getInstance(context) }
+    val mode by themePrefs.mode.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .softCard()
+            .padding(Spacing.l)
+            .padding(top = Spacing.l),
+    ) {
+        Text("Тема", style = MaterialTheme.typography.titleSmall)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s),
+            modifier = Modifier
+                .padding(top = Spacing.m)
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            ThemeMode.entries.forEach { option ->
+                FilterChip(
+                    selected = mode == option,
+                    onClick = { themePrefs.setMode(option) },
+                    label = { Text(option.label) },
+                )
+            }
+        }
+        Text(
+            "Тёмная тема лучше читается в лесу и бережёт батарею",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
+    }
+}
+
 @Composable
 private fun ProfileRow(label: String, value: String) {
     Column(modifier = Modifier.padding(vertical = Spacing.xs)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** «Руководство» — открывает руководство пользователя на сайте (<сервер>/guide/index.html) в браузере. */
+@Composable
+private fun GuideCard() {
+    val context = LocalContext.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .padding(top = Spacing.l)
+            .fillMaxWidth()
+            .softCard()
+            .clickable {
+                val uri = Uri.parse(NetworkModule.BASE_URL.trimEnd('/') + "/guide/index.html")
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+            }
+            .padding(Spacing.l),
+    ) {
+        Icon(Icons.Filled.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Column(modifier = Modifier.weight(1f).padding(start = Spacing.m)) {
+            Text("Руководство", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Как пользоваться приложением — откроется в браузере",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -304,6 +457,12 @@ private fun MapSettingsCard(viewModel: MapSettingsViewModel = viewModel()) {
                 modifier = Modifier.padding(top = Spacing.l),
             )
         }
+
+        // Всё для работы без связи разом: делянки, остатки, задачи и границы карты
+        val context = LocalContext.current
+        val prepManager = remember { FieldPrepManager.getInstance(context) }
+        val prep by prepManager.state.collectAsState()
+        PrepareForTripButton(prep = prep, onPrepare = prepManager::prepare, modifier = Modifier.padding(top = Spacing.s))
 
         state.lastDownloadAt?.let {
             Text(

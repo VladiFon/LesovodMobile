@@ -459,7 +459,7 @@ fun ForestMapView(
             Text(
                 "1:${formatScale(scaleDenominator(hud.zoom, hud.latitude, context.resources.displayMetrics.xdpi))}  ·  z${"%.1f".format(hud.zoom)}$accuracySuffix",
                 style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
             )
         }
@@ -484,7 +484,7 @@ private fun GlassButton(
         onClick = onClick,
         shape = CircleShape,
         color = if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.92f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-        contentColor = if (active) Color.White else MaterialTheme.colorScheme.primary,
+        contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
         shadowElevation = 3.dp,
         modifier = Modifier

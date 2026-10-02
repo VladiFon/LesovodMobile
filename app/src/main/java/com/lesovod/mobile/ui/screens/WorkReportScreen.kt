@@ -45,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
@@ -120,6 +121,8 @@ fun WorkReportScreen(
                     SecondaryButton(text = "Отправить ещё один", onClick = viewModel::resetSubmitted)
                 }
             } else {
+                state.prefillNote?.let { StatusChip(text = it, tone = ChipTone.PRIMARY) }
+
                 OutlinedTextField(
                     value = state.tipRaboty,
                     onValueChange = viewModel::onTipRabotyChange,
@@ -231,6 +234,17 @@ fun WorkReportScreen(
                     label = { Text("Что сделано (необязательно)") },
                     enabled = !state.isSubmitting,
                     minLines = 3,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                OutlinedTextField(
+                    value = state.obyom,
+                    onValueChange = viewModel::onObyomChange,
+                    label = { Text("Объём, м³ (необязательно)") },
+                    singleLine = true,
+                    enabled = !state.isSubmitting,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth(),
                 )

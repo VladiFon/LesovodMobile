@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.local.CompletedWorkStore
+import com.lesovod.mobile.data.local.FieldDataCache
 import com.lesovod.mobile.data.local.PendingActionType
 import com.lesovod.mobile.data.local.PendingTaskCompletePayload
 import com.lesovod.mobile.data.network.ConnectivityException
@@ -24,12 +25,15 @@ data class TasksUiState(
     val completingId: Int? = null,
     val queuedIds: Set<Int> = emptySet(),
     val error: String? = null,
+    /** Задачи из сохранённых на устройстве — «Данные на ДД.ММ чч:мм (нет связи)». */
+    val offlineStamp: String? = null,
 )
 
 class TasksViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager.getInstance(application)
     private val repository = BotRepository(NetworkModule.api, sessionManager)
     private val completedStore = CompletedWorkStore(application)
+    private val cache = FieldDataCache(application)
     private val queueManager = OfflineQueueManager.getInstance(application)
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -59,8 +63,19 @@ class TasksViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val result = repository.listWorkPlan()
             _uiState.value = result.fold(
-                onSuccess = { _uiState.value.copy(isLoading = false, items = it) },
-                onFailure = { _uiState.value.copy(isLoading = false, error = it.message) },
+                onSuccess = {
+                    cache.saveWorkPlan(it)
+                    _uiState.value.copy(isLoading = false, items = it, offlineStamp = null)
+                },
+                onFailure = { err ->
+                    // без связи — задачи, сохранённые в прошлый раз (или «Подготовиться к выезду»)
+                    val cached = cache.loadWorkPlan()
+                    if (err is ConnectivityException && cached != null) {
+                        _uiState.value.copy(isLoading = false, items = cached.data, offlineStamp = "${cached.stamp} (нет связи)")
+                    } else {
+                        _uiState.value.copy(isLoading = false, error = err.message)
+                    }
+                },
             )
         }
     }

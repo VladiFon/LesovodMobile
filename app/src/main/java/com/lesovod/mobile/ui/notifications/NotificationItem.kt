@@ -8,7 +8,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 
 /** Тип события — используется только для выбора иконки, неизвестный тип просто рисуется общей. */
-enum class NotificationType { BREAKDOWN, NOTE, PROBA, TRELEVKA, OTHER }
+enum class NotificationType { BREAKDOWN, NOTE, PROBA, TRELEVKA, OSVOENIE, SROK, OTVET_NA_ZAMETKU, OTHER }
 
 data class NotificationItem(
     val id: Int,
@@ -34,9 +34,17 @@ fun JsonObject.toNotificationItem(): NotificationItem? {
         "note", "zametka", "заметка" -> NotificationType.NOTE
         "proba", "проба" -> NotificationType.PROBA
         "trelevka", "трелёвка", "трелевка" -> NotificationType.TRELEVKA
+        // освоение делянки перешло 90/100/110% лимита
+        "osvoenie", "освоение" -> NotificationType.OSVOENIE
+        // напоминание о сроке
+        "srok", "срок" -> NotificationType.SROK
+        // контора ответила на заметку рабочего
+        "otvet_na_zametku" -> NotificationType.OTVET_NA_ZAMETKU
+        // новые типы с сервера не прячем — показываем с общей иконкой
         else -> NotificationType.OTHER
     }
-    val text = stringValue("text") ?: stringValue("title") ?: stringValue("message") ?: ""
+    val text = listOfNotNull(stringValue("text"), stringValue("title"), stringValue("message"), stringValue("body"))
+        .firstOrNull { it.isNotBlank() } ?: ""
     val isRead = boolValue("is_read") ?: boolValue("read") ?: boolValue("prochitano") ?: false
     val createdAt = stringValue("created_at")
     return NotificationItem(id, type, text, isRead, createdAt)

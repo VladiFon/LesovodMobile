@@ -38,6 +38,25 @@ data class DelyankaDto(
     val nazvanie: String? = null,
 )
 
+/**
+ * Строка экрана «Мои делянки» (GET /api/bot/my-delyanki): делянка с освоением лимита.
+ * level: norma | vnimanie (≥90%) | preduprezhdenie (≥100%) | pererub (>110%) | net_limita.
+ * mozhno_do_100/110 — сколько м³ ещё можно заготовить (отрицательное — уже сверх).
+ */
+@Serializable
+data class MyDelyankaDto(
+    @SerialName("delyanka_id") val delyankaId: Int,
+    val nazvanie: String? = null,
+    val kvartal: String? = null,
+    val vydel: String? = null,
+    @SerialName("lesoseka_nomer") val lesosekaNomer: String? = null,
+    val moya: Boolean = false,
+    val pct: Double? = null,
+    val level: String? = null,
+    @SerialName("mozhno_do_100") val mozhnoDo100: Double? = null,
+    @SerialName("mozhno_do_110") val mozhnoDo110: Double? = null,
+)
+
 @Serializable
 data class VolumeBreakdownDto(
     val limit: Double? = null,
@@ -108,6 +127,10 @@ data class SentNoteDto(
     val text: String,
     @SerialName("recipient_fio") val recipientFio: String? = null,
     @SerialName("created_at") val createdAt: String,
+    /** Ответ конторы на заметку (сервер новее 01.10.2026; у старого сервера полей нет). */
+    val otvet: String? = null,
+    @SerialName("otvet_at") val otvetAt: String? = null,
+    @SerialName("otvet_by") val otvetBy: String? = null,
 )
 
 /** Тело POST /api/bot/geo-notes. telegram_id обязателен на бэкенде (GeoNoteIn в
