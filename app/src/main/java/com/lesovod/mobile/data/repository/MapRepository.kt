@@ -10,6 +10,7 @@ import com.lesovod.mobile.ui.map.MapShape
 import com.lesovod.mobile.ui.map.ShapeCodec
 import com.lesovod.mobile.ui.map.ShapeKind
 import com.lesovod.mobile.ui.map.toMarker
+import com.lesovod.mobile.data.network.dto.LesokulturyKartochkaDto
 import com.lesovod.mobile.data.network.dto.LesokulturyMapDto
 import com.lesovod.mobile.data.network.dto.MapSearchResultDto
 import com.lesovod.mobile.data.network.dto.SkladDto
@@ -177,6 +178,15 @@ class MapRepository(
         force = force,
         fetch = { api.listSklady() },
         decode = { json.decodeFromString<List<SkladDto>>(it.readBytes().decodeToString()) },
+        encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
+    )
+
+    /** Карточка участка лесных культур — тоже кэшируется для работы без связи. */
+    suspend fun getLesokulturyKartochka(id: Int): Result<LesokulturyKartochkaDto> = cached(
+        key = "lk_kartochka_$id",
+        ttlMs = DELYANKI_TTL_MS,
+        fetch = { api.getLesokulturyKartochka(requireToken(), id) },
+        decode = { json.decodeFromString<LesokulturyKartochkaDto>(it.readBytes().decodeToString()) },
         encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
     )
 

@@ -70,7 +70,17 @@ import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /** Выбранный объект — подсвечивается на карте, пока открыта карточка. */
-data class MapSelection(val kvartal: String, val vydel: String?, val kind: ShapeKind)
+/**
+ * Что выбрано на карте. Для лесных культур refId — id участка; ownKontur — у участка свой контур
+ * (подсвечивается он), иначе подсвечивается весь выдел.
+ */
+data class MapSelection(
+    val kvartal: String,
+    val vydel: String?,
+    val kind: ShapeKind,
+    val refId: Int? = null,
+    val ownKontur: Boolean = false,
+)
 
 private enum class LocateMode { Off, Follow, Heading }
 

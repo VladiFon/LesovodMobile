@@ -19,6 +19,9 @@ data class GeoNoteMarker(
     val photoUrl: String? = null,
     /** Метка ещё лежит в офлайн-очереди («⏳ ждёт связи») — на сервер не ушла. */
     val pending: Boolean = false,
+    /** Метка коллеги, которую я принял: id приглашения (для «Убрать с моей карты») и от кого. */
+    val shareId: Int? = null,
+    val sharedFromFio: String? = null,
 ) {
     val category: GeoNoteCategory get() = GeoNoteCategory.fromCode(kategoriya)
 }
@@ -32,6 +35,8 @@ fun GeoNoteDto.toMarker() = GeoNoteMarker(
     id = id,
     kategoriya = kategoriya,
     photoUrl = photoUrl?.takeIf { hasPhoto },
+    shareId = shareId,
+    sharedFromFio = sharedFromFio,
 )
 
 /**

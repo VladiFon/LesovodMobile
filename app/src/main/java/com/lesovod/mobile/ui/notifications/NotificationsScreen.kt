@@ -24,7 +24,10 @@ import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +49,7 @@ import com.lesovod.mobile.ui.theme.softCard
 fun NotificationsScreen(
     onBack: () -> Unit,
     onOpenNote: () -> Unit,
+    onOpenMap: () -> Unit = {},
     viewModel: NotificationsViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -67,6 +71,14 @@ fun NotificationsScreen(
             }
         }
 
+        state.message?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.xs),
+            )
+        }
         when {
             state.isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -85,9 +97,11 @@ fun NotificationsScreen(
                     NotificationCard(
                         item = item,
                         onClick = {
-                            viewModel.markRead(item.id)
+                            if (item.type != NotificationType.METKA) viewModel.markRead(item.id)
                             if (item.type == NotificationType.NOTE || item.type == NotificationType.OTVET_NA_ZAMETKU) onOpenNote()
+                            if (item.type == NotificationType.METKA && item.answered == true) onOpenMap()
                         },
+                        onAnswerMark = { accept -> viewModel.answerMark(item, accept) },
                     )
                 }
             }
@@ -96,7 +110,7 @@ fun NotificationsScreen(
 }
 
 @Composable
-private fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
+private fun NotificationCard(item: NotificationItem, onClick: () -> Unit, onAnswerMark: (Boolean) -> Unit = {}) {
     val containerColor = if (item.isRead) {
         MaterialTheme.colorScheme.surface
     } else {
@@ -128,6 +142,16 @@ private fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
             item.createdAt?.let {
                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
             }
+            if (item.type == NotificationType.METKA && item.relatedId != null) {
+                when (item.answered) {
+                    true -> Text("Принята — нажмите, чтобы открыть карту", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = Spacing.xs))
+                    false -> Text("Отклонена", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+                    null -> if (!item.isRead) Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.padding(top = Spacing.xs)) {
+                        Button(onClick = { onAnswerMark(true) }) { Text("Принять") }
+                        OutlinedButton(onClick = { onAnswerMark(false) }) { Text("Отклонить") }
+                    }
+                }
+            }
         }
         if (!item.isRead) {
             Box(modifier = Modifier.size(9.dp).background(MaterialTheme.colorScheme.tertiary, CircleShape))
@@ -140,6 +164,7 @@ private fun NotificationType.title(): String? = when (this) {
     NotificationType.OSVOENIE -> "Освоение делянки"
     NotificationType.SROK -> "Срок"
     NotificationType.OTVET_NA_ZAMETKU -> "Ответ на заметку"
+    NotificationType.METKA -> "Метка от коллеги"
     else -> null
 }
 
@@ -151,5 +176,6 @@ private fun NotificationType.icon(): ImageVector = when (this) {
     NotificationType.OSVOENIE -> Icons.Filled.Warning
     NotificationType.SROK -> Icons.Filled.Schedule
     NotificationType.OTVET_NA_ZAMETKU -> Icons.Filled.Forum
+    NotificationType.METKA -> Icons.Filled.Place
     NotificationType.OTHER -> Icons.Filled.Info
 }

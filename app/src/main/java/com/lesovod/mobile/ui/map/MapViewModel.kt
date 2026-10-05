@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.local.CompletedWorkStore
+import com.lesovod.mobile.data.notifications.IncomingMarks
 import com.lesovod.mobile.data.local.PendingActionType
 import com.lesovod.mobile.data.local.PendingGeoNotePayload
 import com.lesovod.mobile.data.network.ConnectivityException
@@ -12,8 +13,11 @@ import com.lesovod.mobile.data.repository.OfflineQueueManager
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import com.lesovod.mobile.data.network.NetworkModule
+import com.lesovod.mobile.data.network.dto.CoworkerDto
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
+import com.lesovod.mobile.data.network.dto.LesokulturyKartochkaDto
 import com.lesovod.mobile.data.network.dto.LesokulturyMapDto
+import com.lesovod.mobile.data.network.dto.toKartochka
 import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.repository.CellTier
 import com.lesovod.mobile.data.repository.DownloadState
@@ -67,6 +71,17 @@ data class GeoNoteDraft(
     val error: String? = null,
 )
 
+/** Окно «Отправить метку коллеге». */
+data class GeoNoteShareState(
+    val note: GeoNoteMarker,
+    val coworkers: List<CoworkerDto> = emptyList(),
+    val loading: Boolean = true,
+    val selected: Set<Int> = emptySet(),
+    val komment: String = "",
+    val sending: Boolean = false,
+    val error: String? = null,
+)
+
 data class MapUiState(
     val layers: MapLayers = MapLayers(),
     val selection: MapSelection? = null,
@@ -90,6 +105,8 @@ data class MapUiState(
     val selectedCard: VydelCard? = null,
     /** Данные самой делянки (лесосеки из МДО). */
     val selectedDelyanka: DelyankaCard? = null,
+    /** Карточка участка лесных культур (тап по культурам на карте). */
+    val selectedLesokultury: LesokulturyKartochkaDto? = null,
     /** Пояснение вместо карточки (например, контур делянки есть, а данных по ней нет). */
     val cardNotice: String? = null,
     val isLoadingCard: Boolean = false,
@@ -101,6 +118,8 @@ data class MapUiState(
     /** Метка, по которой тапнули — маленькая карточка с текстом. */
     val selectedGeoNote: GeoNoteMarker? = null,
     val geoNotesError: String? = null,
+    /** Открыто окно «Отправить метку коллеге». */
+    val share: GeoNoteShareState? = null,
     /** Метки, поставленные без сети и ждущие отправки, — рисуются на карте вместе с отправленными. */
     val pendingGeoNotes: List<GeoNoteMarker> = emptyList(),
 
@@ -119,6 +138,8 @@ data class MapUiState(
     val lesokulturyLegend: List<Pair<Int, String>> = emptyList(),
     /** Собственные контуры участков лесных культур (если загружены на сайте). */
     val lesokulturyKontury: List<MapShape> = emptyList(),
+    /** Все участки культур лесничества — по ним тап по выделу с культурами находит участок. */
+    val lesokulturyList: List<LesokulturyMapDto> = emptyList(),
 
     // --- мои задачи и склады ---
     val tasks: List<WorkPlanItemDto> = emptyList(),
@@ -264,14 +285,27 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             queueManager.completed.collect { if (it.type == PendingActionType.GEO_NOTE) loadGeoNotes(force = true) }
         }
+        // приняли метку коллеги на экране уведомлений — перечитываем, не дожидаясь кэша
+        viewModelScope.launch {
+            var seen = IncomingMarks.version.value
+            IncomingMarks.version.collect { v ->
+                if (v != seen) {
+                    seen = v
+                    loadGeoNotes(force = true)
+                }
+            }
+        }
         loadTasks()
         loadSklady()
     }
 
     /** force — сразу после создания своей метки: кэш на 5 минут её бы ещё не знал. */
     fun loadGeoNotes(force: Boolean = false) {
+        // метку коллеги приняли, пока карты не было, — кэш её ещё не знает
+        val stale = IncomingMarks.version.value != IncomingMarks.mapSeenVersion
+        IncomingMarks.mapSeenVersion = IncomingMarks.version.value
         viewModelScope.launch {
-            repository.getGeoNotes(force).fold(
+            repository.getGeoNotes(force || stale).fold(
                 onSuccess = { _uiState.value = _uiState.value.copy(geoNotes = it, geoNotesError = null) },
                 onFailure = { _uiState.value = _uiState.value.copy(geoNotesError = "Метки не загрузились: ${it.message}") },
             )
@@ -308,13 +342,14 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 val kontury = list.mapNotNull { lk ->
                     val rings = lk.geometry?.let { g -> runCatching { g.toOuterRings() }.getOrNull() }.orEmpty()
                     if (rings.isEmpty()) null
-                    else buildShape(ShapeKind.VYDEL, lk.kvartal, lk.vydel, lkColor(lk), rings.map { ring ->
+                    else buildShape(ShapeKind.LESOKULTURY, lk.kvartal, lk.vydel, lkColor(lk), rings.map { ring ->
                         DoubleArray(ring.size * 2).also { arr -> ring.forEachIndexed { i, p -> arr[2 * i] = p.latitude; arr[2 * i + 1] = p.longitude } }
-                    })
+                    }, refId = lk.id)
                 }
                 _uiState.value = _uiState.value.copy(
                     lesokulturyKeys = list.filter { !it.hasKontur }.associate { MapRepository.vydelKey(it.kvartal, it.vydel) to lkColor(it) },
                     lesokulturyKontury = kontury,
+                    lesokulturyList = list,
                     lesokulturyLegend = list.map { lkColor(it) to (it.vidKultur ?: "Лесные культуры") }.distinct(),
                 )
             }
@@ -381,7 +416,76 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(noteDraft = draft.copy(category = category, error = null))
     }
 
+    // ------------------------------------------------- отправка меток коллегам ---
+
+    fun openShare(note: GeoNoteMarker) {
+        _uiState.value = _uiState.value.copy(share = GeoNoteShareState(note))
+        viewModelScope.launch {
+            botRepository.listCoworkers().fold(
+                onSuccess = { list -> updateShare { it.copy(coworkers = list, loading = false) } },
+                onFailure = { err ->
+                    val text = if (err.message?.contains("404") == true || err.message?.contains("Not Found") == true)
+                        "Сервер ещё не обновлён — отправка меток появится после обновления" else err.message
+                    updateShare { it.copy(loading = false, error = text ?: "Не удалось загрузить сотрудников") }
+                },
+            )
+        }
+    }
+
+    private fun updateShare(change: (GeoNoteShareState) -> GeoNoteShareState) {
+        val share = _uiState.value.share ?: return
+        _uiState.value = _uiState.value.copy(share = change(share))
+    }
+
+    fun toggleShareRecipient(id: Int) = updateShare {
+        it.copy(selected = if (id in it.selected) it.selected - id else it.selected + id, error = null)
+    }
+
+    fun updateShareKomment(text: String) = updateShare { it.copy(komment = text.take(300)) }
+
+    fun closeShare() {
+        _uiState.value = _uiState.value.copy(share = null)
+    }
+
+    fun sendShare() {
+        val share = _uiState.value.share ?: return
+        if (share.selected.isEmpty() || share.sending) return
+        updateShare { it.copy(sending = true, error = null) }
+        viewModelScope.launch {
+            botRepository.shareGeoNote(share.note.id, share.selected.toList(), share.komment).fold(
+                onSuccess = { result ->
+                    val novye = result.otpravleno.filterNot { it.uzhePrinyata }.map { it.fio }
+                    val uzhe = result.otpravleno.filter { it.uzhePrinyata }.map { it.fio }
+                    val text = buildList {
+                        if (novye.isNotEmpty()) add("Метка отправлена: ${novye.joinToString(", ")}")
+                        if (uzhe.isNotEmpty()) add("уже есть у: ${uzhe.joinToString(", ")}")
+                    }.joinToString("; ")
+                    _uiState.value = _uiState.value.copy(share = null, message = text.ifEmpty { "Метка отправлена" })
+                },
+                onFailure = { err -> updateShare { it.copy(sending = false, error = err.message ?: "Не удалось отправить") } },
+            )
+        }
+    }
+
     fun deleteGeoNote(note: GeoNoteMarker) {
+        // метка коллеги: не удаляем у автора, а убираем со своей карты
+        val shareId = note.shareId
+        if (shareId != null) {
+            viewModelScope.launch {
+                botRepository.answerGeoNoteShare(shareId, accept = false).fold(
+                    onSuccess = {
+                        _uiState.value = _uiState.value.copy(
+                            selectedGeoNote = null,
+                            geoNotes = _uiState.value.geoNotes.filterNot { it.id == note.id },
+                            message = "Метка убрана с вашей карты",
+                        )
+                        loadGeoNotes(force = true)
+                    },
+                    onFailure = { _uiState.value = _uiState.value.copy(message = it.message ?: "Не удалось убрать метку") },
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             botRepository.deleteGeoNote(note.id).fold(
                 onSuccess = {
@@ -628,7 +732,15 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
      * участке). Второй тап по тому же — открываем таксацию. Тап по другому — выделение переезжает.
      */
     fun onShapeTap(shape: MapShape) {
-        val tapped = MapSelection(shape.kvartal, shape.vydel, shape.kind)
+        val tapped = if (shape.kind == ShapeKind.LESOKULTURY) {
+            // свой контур несёт id участка; культуры во весь выдел — ищем участок по кв./выд.
+            val id = shape.refId ?: _uiState.value.lesokulturyList
+                .filter { !it.hasKontur && it.kvartal == shape.kvartal && it.vydel == shape.vydel }
+                .maxByOrNull { it.godSozdaniya.orEmpty() }?.id
+            MapSelection(shape.kvartal, shape.vydel, shape.kind, refId = id, ownKontur = shape.refId != null)
+        } else {
+            MapSelection(shape.kvartal, shape.vydel, shape.kind)
+        }
         if (_uiState.value.selection == tapped) {
             openSelected()
         } else {
@@ -636,7 +748,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 selection = tapped,
                 cardOpen = false,
                 isLoadingCard = false,
-                selectedCard = null, selectedDelyanka = null, cardNotice = null,
+                selectedCard = null, selectedDelyanka = null, selectedLesokultury = null, cardNotice = null,
                 cardError = null,
                 selectedKvartalLabel = null,
             )
@@ -656,6 +768,10 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         if (vydel != null) loadHistory(selection.kvartal, vydel)
         if (vydel == null) {
             _uiState.value = _uiState.value.copy(cardOpen = true, selectedKvartalLabel = "Квартал ${selection.kvartal}")
+            return
+        }
+        if (selection.kind == ShapeKind.LESOKULTURY) {
+            openLesokultury(selection)
             return
         }
         _uiState.value = _uiState.value.copy(
@@ -693,6 +809,40 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Карточка участка культур: подробная с сервера, без связи / со старым сервером — то, что есть в слое. */
+    private fun openLesokultury(selection: MapSelection) {
+        val id = selection.refId
+        val fromLayer = _uiState.value.lesokulturyList.firstOrNull { it.id == id }?.toKartochka()
+        _uiState.value = _uiState.value.copy(
+            cardOpen = true, isLoadingCard = true, cardError = null,
+            selectedCard = null, selectedDelyanka = null, selectedLesokultury = null, cardNotice = null,
+        )
+        if (id == null) {
+            _uiState.value = _uiState.value.copy(isLoadingCard = false, cardNotice = "Участок лесных культур не найден — обновите слои")
+            return
+        }
+        viewModelScope.launch {
+            val card = repository.getLesokulturyKartochka(id).getOrNull() ?: fromLayer
+            if (_uiState.value.selection != selection) return@launch
+            _uiState.value = if (card != null) _uiState.value.copy(isLoadingCard = false, selectedLesokultury = card)
+            else _uiState.value.copy(isLoadingCard = false, cardError = "Не удалось загрузить участок лесных культур")
+        }
+    }
+
+    /** Из карточки культур: «Таксация выдела» / «Делянка на выделе» — тот же кв./выд. другим объектом. */
+    fun showSelectedAs(kind: ShapeKind) {
+        val sel = _uiState.value.selection ?: return
+        _uiState.value = _uiState.value.copy(selection = MapSelection(sel.kvartal, sel.vydel, kind), cardOpen = false)
+        openSelected()
+    }
+
+    /** Есть ли на выбранном кв./выд. заведённая делянка — для кнопки в карточке культур. */
+    fun selectedHasDelyanka(): Boolean {
+        val sel = _uiState.value.selection ?: return false
+        val vydel = sel.vydel ?: return false
+        return findDelyanka(_uiState.value.delyankaRefs, sel.kvartal, vydel, _uiState.value.selectedLesnichestvo) != null
+    }
+
     /** Делянка на этом кв./выд.; если их несколько (архивная и новая) — берём последнюю заведённую. */
     private fun findDelyanka(refs: List<DelyankaMapRefDto>, kvartal: String, vydel: String, lesnichestvo: String?): DelyankaMapRefDto? =
         refs.filter {
@@ -725,7 +875,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Закрыть карточку, но оставить участок выделенным. */
     fun closeCard() {
-        _uiState.value = _uiState.value.copy(cardOpen = false, isLoadingCard = false, selectedCard = null, selectedDelyanka = null, cardNotice = null, cardError = null, selectedKvartalLabel = null)
+        _uiState.value = _uiState.value.copy(cardOpen = false, isLoadingCard = false, selectedCard = null, selectedDelyanka = null, selectedLesokultury = null, cardNotice = null, cardError = null, selectedKvartalLabel = null)
     }
 
     /** Снять выделение совсем. */
@@ -734,7 +884,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             selection = null,
             cardOpen = false,
             isLoadingCard = false,
-            selectedCard = null, selectedDelyanka = null, cardNotice = null,
+            selectedCard = null, selectedDelyanka = null, selectedLesokultury = null, cardNotice = null,
             cardError = null,
             selectedKvartalLabel = null,
         )
@@ -792,6 +942,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             ShapeKind.KVARTAL -> state.kvartaly
             ShapeKind.VYDEL -> state.vydela
             ShapeKind.LESOSEKA -> state.lesoseki
+            ShapeKind.LESOKULTURY -> if (sel.ownKontur) state.lesokulturyKontury.filter { it.refId == sel.refId } else state.vydela
         }
         val shape = shapes.lastOrNull { it.kvartal == sel.kvartal && it.vydel == sel.vydel } ?: return null
         return LatLon(shape.labelLat, shape.labelLon)

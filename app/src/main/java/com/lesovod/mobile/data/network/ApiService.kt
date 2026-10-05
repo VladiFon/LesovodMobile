@@ -9,6 +9,11 @@ import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.GeoJsonFeatureCollection
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
 import com.lesovod.mobile.data.network.dto.GeoNoteDto
+import com.lesovod.mobile.data.network.dto.CoworkerDto
+import com.lesovod.mobile.data.network.dto.GeoNoteShareDto
+import com.lesovod.mobile.data.network.dto.GeoNoteShareRequest
+import com.lesovod.mobile.data.network.dto.GeoNoteShareResultDto
+import com.lesovod.mobile.data.network.dto.LesokulturyKartochkaDto
 import com.lesovod.mobile.data.network.dto.LesokulturyMapDto
 import com.lesovod.mobile.data.network.dto.MapSearchResultDto
 import com.lesovod.mobile.data.network.dto.SkladDto
@@ -291,6 +296,26 @@ interface ApiService {
     @DELETE("api/bot/geo-notes/{id}")
     suspend fun deleteGeoNote(@Header("Authorization") bearerToken: String, @Path("id") id: Int): ResponseBody
 
+    // --- отправка меток коллегам (сервер 05.10.2026+) ---
+    @GET("api/bot/coworkers")
+    suspend fun listCoworkers(@Header("Authorization") bearerToken: String): List<CoworkerDto>
+
+    @POST("api/bot/geo-notes/{id}/share")
+    suspend fun shareGeoNote(
+        @Header("Authorization") bearerToken: String,
+        @Path("id") id: Int,
+        @Body body: GeoNoteShareRequest,
+    ): GeoNoteShareResultDto
+
+    @GET("api/bot/geo-note-shares/incoming")
+    suspend fun listIncomingGeoNoteShares(@Header("Authorization") bearerToken: String): List<GeoNoteShareDto>
+
+    @POST("api/bot/geo-note-shares/{id}/accept")
+    suspend fun acceptGeoNoteShare(@Header("Authorization") bearerToken: String, @Path("id") id: Int): ResponseBody
+
+    @POST("api/bot/geo-note-shares/{id}/decline")
+    suspend fun declineGeoNoteShare(@Header("Authorization") bearerToken: String, @Path("id") id: Int): ResponseBody
+
     @GET("api/map/work-colors")
     suspend fun getWorkColors(
         @Header("Authorization") bearerToken: String,
@@ -309,6 +334,12 @@ interface ApiService {
         @Header("Authorization") bearerToken: String,
         @Query("lesnichestvo_num") lesnichestvoNum: String? = null,
     ): List<LesokulturyMapDto>
+
+    @GET("api/map/lesokultury/{id}/kartochka")
+    suspend fun getLesokulturyKartochka(
+        @Header("Authorization") bearerToken: String,
+        @Path("id") id: Int,
+    ): LesokulturyKartochkaDto
 
     @GET("api/map/vydel-history")
     suspend fun getVydelHistory(

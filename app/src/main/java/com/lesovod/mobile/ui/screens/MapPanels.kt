@@ -23,6 +23,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Checkbox
+import com.lesovod.mobile.ui.map.GeoNoteShareState
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
@@ -430,9 +434,11 @@ internal fun GeoNoteDetails(
     onNavigate: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
+    onShare: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var confirmDelete by remember(note.id) { mutableStateOf(false) }
+    val shared = note.shareId != null
     FloatingCard(modifier = modifier) {
         Box {
             Column(
@@ -451,6 +457,14 @@ internal fun GeoNoteDetails(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
                 )
+                if (shared) {
+                    Text(
+                        "Метка от коллеги: ${note.sharedFromFio ?: note.authorFio ?: "—"}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
                 SendStatusChip(pending = note.pending, modifier = Modifier.padding(top = 6.dp))
                 if (!note.noteText.isNullOrBlank()) {
                     Text(note.noteText, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
@@ -468,10 +482,15 @@ internal fun GeoNoteDetails(
                     onNavigate = onNavigate,
                     modifier = Modifier.padding(top = 10.dp),
                 )
-                if (note.id > 0) {
+                if (note.id > 0 && !note.pending) {
+                    // отправить метку на аккаунт коллеги — он примет её из уведомлений
+                    OutlinedButton(onClick = onShare, modifier = Modifier.padding(top = 8.dp).fillMaxWidth()) {
+                        Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Text("Отправить коллеге", modifier = Modifier.padding(start = 8.dp))
+                    }
                     TextButton(onClick = { confirmDelete = true }, modifier = Modifier.padding(top = 4.dp)) {
                         Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                        Text("Удалить метку", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 6.dp))
+                        Text(if (shared) "Убрать с моей карты" else "Удалить метку", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 6.dp))
                     }
                 }
             }
@@ -481,12 +500,96 @@ internal fun GeoNoteDetails(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить метку?") },
-            text = { Text("Метка пропадёт с карты у вас и в QGIS.") },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Удалить", color = MaterialTheme.colorScheme.error) } },
+            title = { Text(if (shared) "Убрать метку?" else "Удалить метку?") },
+            text = {
+                Text(
+                    if (shared) "Метка пропадёт с вашей карты. У автора она останется."
+                    else "Метка пропадёт с карты у вас, у коллег, которым вы её отправили, и в QGIS.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text(if (shared) "Убрать" else "Удалить", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
         )
     }
+}
+
+/** Кому отправить метку: список коллег с галочками и необязательный комментарий. */
+@Composable
+internal fun GeoNoteShareDialog(
+    state: GeoNoteShareState,
+    onToggle: (Int) -> Unit,
+    onKommentChange: (String) -> Unit,
+    onSend: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var filter by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Отправить метку") },
+        text = {
+            Column {
+                Text(
+                    "Коллега получит уведомление и, приняв, увидит метку у себя на карте.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                when {
+                    state.loading -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    }
+                    state.coworkers.isEmpty() -> Text(
+                        state.error ?: "Список сотрудников пуст",
+                        color = if (state.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    else -> {
+                        if (state.coworkers.size > 8) {
+                            OutlinedTextField(
+                                value = filter,
+                                onValueChange = { filter = it },
+                                placeholder = { Text("Поиск по фамилии") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            )
+                        }
+                        Column(modifier = Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState()).padding(top = 4.dp)) {
+                            state.coworkers
+                                .filter { filter.isBlank() || it.fio.contains(filter.trim(), ignoreCase = true) }
+                                .forEach { c ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth().clickable { onToggle(c.id) },
+                                    ) {
+                                        Checkbox(checked = c.id in state.selected, onCheckedChange = { onToggle(c.id) })
+                                        Column {
+                                            Text(c.fio, style = MaterialTheme.typography.bodyLarge)
+                                            listOfNotNull(c.dolzhnost, c.uchastok).filter { it.isNotBlank() }.joinToString(" · ")
+                                                .takeIf { it.isNotEmpty() }
+                                                ?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                        }
+                                    }
+                                }
+                        }
+                        OutlinedTextField(
+                            value = state.komment,
+                            onValueChange = onKommentChange,
+                            label = { Text("Комментарий (необязательно)") },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        )
+                        if (state.error != null) {
+                            Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onSend, enabled = state.selected.isNotEmpty() && !state.sending) {
+                Text(if (state.selected.size > 1) "Отправить (${state.selected.size})" else "Отправить")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+    )
 }
 
 // ------------------------------------------------------------ склады ---

@@ -15,6 +15,47 @@ data class GeoNoteDto(
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("has_photo") val hasPhoto: Boolean = false,
     @SerialName("photo_url") val photoUrl: String? = null,
+    /** Метка коллеги, принятая мной (сервер 05.10.2026+): id приглашения и от кого. */
+    @SerialName("share_id") val shareId: Int? = null,
+    @SerialName("shared_from_fio") val sharedFromFio: String? = null,
+)
+
+/** GET /api/bot/coworkers — кому можно отправить метку. */
+@Serializable
+data class CoworkerDto(
+    val id: Int,
+    val fio: String,
+    val dolzhnost: String? = null,
+    val uchastok: String? = null,
+)
+
+/** POST /api/bot/geo-notes/{id}/share */
+@Serializable
+data class GeoNoteShareRequest(
+    @SerialName("sotrudnik_ids") val sotrudnikIds: List<Int>,
+    val komment: String? = null,
+)
+
+@Serializable
+data class GeoNoteShareResultDto(
+    val otpravleno: List<GeoNoteShareSentDto> = emptyList(),
+)
+
+@Serializable
+data class GeoNoteShareSentDto(
+    val fio: String,
+    @SerialName("uzhe_prinyata") val uzhePrinyata: Boolean = false,
+)
+
+/** GET /api/bot/geo-note-shares/incoming — метки, которые мне отправили и я ещё не принял. */
+@Serializable
+data class GeoNoteShareDto(
+    @SerialName("share_id") val shareId: Int,
+    @SerialName("from_fio") val fromFio: String? = null,
+    val komment: String? = null,
+    val status: String? = null,
+    @SerialName("shared_at") val sharedAt: String? = null,
+    val note: GeoNoteDto,
 )
 
 /** GET /api/map/work-colors — цвет выдела по видам выполненных работ. */
@@ -65,6 +106,52 @@ data class LesokulturyMapDto(
     /** Вид культур (обычные, под пологом, плантационные…) и его цвет — сервер 29.09.2026+. */
     @SerialName("vid_kultur") val vidKultur: String? = null,
     @SerialName("vid_kultur_color") val vidKulturColor: String? = null,
+)
+
+/** GET /api/map/lesokultury/{id}/kartochka — карточка участка по тапу на карте (сервер 05.10.2026+). */
+@Serializable
+data class LesokulturyKartochkaDto(
+    val id: Int,
+    val lesnichestvo: String? = null,
+    val kvartal: String? = null,
+    val vydel: String? = null,
+    val ploshad: Double? = null,
+    @SerialName("god_sozdaniya") val godSozdaniya: String? = null,
+    @SerialName("glavnaya_poroda") val glavnayaPoroda: String? = null,
+    @SerialName("sostav_formula") val sostavFormula: String? = null,
+    val status: String? = null,
+    @SerialName("vid_kultur") val vidKultur: String? = null,
+    @SerialName("vid_kultur_color") val vidKulturColor: String? = null,
+    @SerialName("metod_sozdaniya") val metodSozdaniya: String? = null,
+    @SerialName("sposob_obrabotki") val sposobObrabotki: String? = null,
+    @SerialName("posadochnyy_material") val posadochnyyMaterial: String? = null,
+    @SerialName("shema_posadki") val shemaPosadki: String? = null,
+    @SerialName("gustota_posadki") val gustotaPosadki: String? = null,
+    @SerialName("normativ_perevoda") val normativPerevoda: String? = null,
+    val tlu: String? = null,
+    @SerialName("kategoriya_ploshadi") val kategoriyaPloshadi: String? = null,
+    @SerialName("posl_meropriyatie") val poslMeropriyatie: String? = null,
+    @SerialName("prizhivaemost_pct") val prizhivaemostPct: Double? = null,
+    @SerialName("kolichestvo_na_ga") val kolichestvoNaGa: Double? = null,
+    @SerialName("sostav_fakt") val sostavFakt: String? = null,
+    val primechaniya: String? = null,
+    @SerialName("has_kontur") val hasKontur: Boolean = false,
+    val zhurnal: List<LesokulturyZhurnalDto> = emptyList(),
+)
+
+@Serializable
+data class LesokulturyZhurnalDto(
+    val tip: String? = null,
+    val data: String? = null,
+    @SerialName("prizhivaemost_pct") val prizhivaemostPct: Double? = null,
+    @SerialName("kolichestvo_na_ga") val kolichestvoNaGa: Double? = null,
+)
+
+/** Со старым сервером (без /kartochka) — то, что уже пришло для слоя. */
+fun LesokulturyMapDto.toKartochka() = LesokulturyKartochkaDto(
+    id = id, lesnichestvo = lesnichestvo, kvartal = kvartal, vydel = vydel, ploshad = ploshad,
+    godSozdaniya = godSozdaniya, glavnayaPoroda = glavnayaPoroda, status = status, vidKultur = vidKultur,
+    vidKulturColor = vidKulturColor, hasKontur = hasKontur,
 )
 
 /** GET /api/map/delyanka-location — центр выдела. */

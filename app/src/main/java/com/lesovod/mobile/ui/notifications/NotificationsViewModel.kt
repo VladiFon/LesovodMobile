@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.network.NetworkModule
+import com.lesovod.mobile.data.notifications.IncomingMarks
 import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.data.session.SessionManager
@@ -15,6 +16,8 @@ data class NotificationsUiState(
     val items: List<NotificationItem> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
+    /** Короткое сообщение после ответа на метку. */
+    val message: String? = null,
 )
 
 class NotificationsViewModel(application: Application) : AndroidViewModel(application) {
@@ -51,6 +54,24 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             repository.markNotificationRead(id)
             badgeManager.refresh()
+        }
+    }
+
+    /** Метка от коллеги: принять (появится на моей карте) или отклонить. */
+    fun answerMark(item: NotificationItem, accept: Boolean) {
+        val shareId = item.relatedId ?: return
+        viewModelScope.launch {
+            repository.answerGeoNoteShare(shareId, accept).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(
+                        items = _uiState.value.items.map { if (it.id == item.id) it.copy(isRead = true, answered = accept) else it },
+                        message = if (accept) "Метка добавлена на вашу карту" else "Метка отклонена",
+                    )
+                    IncomingMarks.markersChanged()
+                    badgeManager.refresh()
+                },
+                onFailure = { _uiState.value = _uiState.value.copy(message = it.message ?: "Не удалось ответить на метку") },
+            )
         }
     }
 

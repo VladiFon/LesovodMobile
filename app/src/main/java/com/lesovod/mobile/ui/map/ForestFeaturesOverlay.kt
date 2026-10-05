@@ -136,8 +136,10 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
     private fun drawKontur(shape: MapShape, v: View) {
         if (shape.maxLat < v.south || shape.minLat > v.north || shape.maxLon < v.west || shape.minLon > v.east) return
         buildPath(shape, v.projection)
-        val color = shape.statusColor ?: LESOKULTURY_COLOR
-        lesokulturyFillPaint.color = withAlpha(color, 70)
+        val sel = selection
+        val selected = sel != null && sel.kind == ShapeKind.LESOKULTURY && sel.ownKontur && sel.refId == shape.refId
+        val color = if (selected) HIGHLIGHT_COLOR else shape.statusColor ?: LESOKULTURY_COLOR
+        lesokulturyFillPaint.color = withAlpha(color, if (selected) SELECTED_FILL_ALPHA else 70)
         lesokulturyPaint.color = color
         v.canvas.drawPath(path, lesokulturyFillPaint)
         v.canvas.drawPath(path, lesokulturyPaint)
@@ -178,7 +180,7 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
         val labelled = when (shape.kind) {
             ShapeKind.KVARTAL -> v.zoom >= 11.5 && minOf(widthPx, heightPx) > 60
             ShapeKind.VYDEL -> v.zoom >= 14.0 && minOf(widthPx, heightPx) > 34
-            ShapeKind.LESOSEKA -> false
+            ShapeKind.LESOSEKA, ShapeKind.LESOKULTURY -> false
         }
         if (labelled) drawLabel(shape, v)
     }
@@ -186,7 +188,10 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
     private fun applyStyle(shape: MapShape) {
         val sel = selection
         // выбранным считается только объект того же типа: делянка и выдел с одним номером — разные объекты
-        val selected = sel != null && sel.kind == shape.kind && sel.kvartal == shape.kvartal && sel.vydel == shape.vydel
+        val sameKv = sel != null && sel.kvartal == shape.kvartal && sel.vydel == shape.vydel
+        // культуры без своего контура выделяются всем выделом
+        val selected = sameKv && (sel!!.kind == shape.kind ||
+            (sel.kind == ShapeKind.LESOKULTURY && !sel.ownKontur && shape.kind == ShapeKind.VYDEL))
         val done = shape.vydel != null && CompletedWorkStore.key(shape.kvartal, shape.vydel) in completed
         fillPaint.color = AndroidColor.TRANSPARENT
         strokePaint.color = AndroidColor.WHITE
@@ -222,6 +227,8 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
                     strokePaint.strokeWidth = 7f
                 }
             }
+            // свои контуры культур рисует drawKontur, сюда не попадают
+            ShapeKind.LESOKULTURY -> Unit
             ShapeKind.LESOSEKA -> {
                 // контур делянки — цветом её статуса / вида рубки / вида пользования; лесосека
                 // ГИСлесхоза без делянки в Лесоводе — цветом вида рубки из её же атрибутов
@@ -290,7 +297,24 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
         val lat = p.latitude
         val lon = p.longitude
 
-        // сверху вниз: делянки → выделы → кварталы
+        // сверху вниз: лесные культуры → делянки → выделы → кварталы. Культуры — первыми: их
+        // контур обычно лежит внутри делянки/выдела, и раньше тап по ним открывал делянку или выдел.
+        if (layers.lesokultury) {
+            lesokulturyKontury.lastOrNull { it.contains(lat, lon) }?.let { shape ->
+                onShapeTap(shape)
+                return true
+            }
+            if (layers.vydela && lesokulturyKeys.isNotEmpty()) {
+                vydela.lastOrNull {
+                    it.vydel != null && CompletedWorkStore.key(it.kvartal, it.vydel) in lesokulturyKeys && it.contains(lat, lon)
+                }?.let { v ->
+                    buildShape(ShapeKind.LESOKULTURY, v.kvartal, v.vydel, null, v.rings)?.let { lk ->
+                        onShapeTap(lk)
+                        return true
+                    }
+                }
+            }
+        }
         if (layers.lesoseki && lesosekiTappable) lesoseki.lastOrNull { it.contains(lat, lon) }?.let { shape ->
             onShapeTap(shape)
             return true

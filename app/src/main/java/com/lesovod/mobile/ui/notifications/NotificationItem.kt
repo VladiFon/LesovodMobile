@@ -8,7 +8,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 
 /** Тип события — используется только для выбора иконки, неизвестный тип просто рисуется общей. */
-enum class NotificationType { BREAKDOWN, NOTE, PROBA, TRELEVKA, OSVOENIE, SROK, OTVET_NA_ZAMETKU, OTHER }
+enum class NotificationType { BREAKDOWN, NOTE, PROBA, TRELEVKA, OSVOENIE, SROK, OTVET_NA_ZAMETKU, METKA, OTHER }
 
 data class NotificationItem(
     val id: Int,
@@ -16,6 +16,10 @@ data class NotificationItem(
     val text: String,
     val isRead: Boolean,
     val createdAt: String?,
+    /** id связанной записи; для METKA — id приглашения (принять / отклонить метку). */
+    val relatedId: Int? = null,
+    /** Ответ на метку, данный на этом экране: true — принята, false — отклонена. */
+    val answered: Boolean? = null,
 )
 
 private fun JsonObject.intValue(key: String): Int? = (this[key] as? JsonPrimitive)?.intOrNull
@@ -40,6 +44,8 @@ fun JsonObject.toNotificationItem(): NotificationItem? {
         "srok", "срок" -> NotificationType.SROK
         // контора ответила на заметку рабочего
         "otvet_na_zametku" -> NotificationType.OTVET_NA_ZAMETKU
+        // коллега отправил метку — принять на свою карту
+        "metka" -> NotificationType.METKA
         // новые типы с сервера не прячем — показываем с общей иконкой
         else -> NotificationType.OTHER
     }
@@ -47,7 +53,7 @@ fun JsonObject.toNotificationItem(): NotificationItem? {
         .firstOrNull { it.isNotBlank() } ?: ""
     val isRead = boolValue("is_read") ?: boolValue("read") ?: boolValue("prochitano") ?: false
     val createdAt = stringValue("created_at")
-    return NotificationItem(id, type, text, isRead, createdAt)
+    return NotificationItem(id, type, text, isRead, createdAt, relatedId = intValue("related_id"))
 }
 
 /**

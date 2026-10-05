@@ -1,5 +1,7 @@
 package com.lesovod.mobile.ui.navigation
 
+import com.lesovod.mobile.data.notifications.IncomingMarks
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -185,6 +187,11 @@ fun LesovodNavGraph() {
                         popUpTo(Screen.Notifications.route) { inclusive = true }
                     }
                 },
+                onOpenMap = {
+                    navController.navigate(Screen.Map.route) {
+                        popUpTo(Screen.Notifications.route) { inclusive = true }
+                    }
+                },
             )
         }
         composable(Screen.Inventarizatsiya.route) {
@@ -222,6 +229,16 @@ private fun MainScaffold(
     val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
     val unreadCount by badgeManager.unreadCount.collectAsState()
     LaunchedEffect(Unit) { badgeManager.refresh() }
+    // метки от коллег: пока приложение открыто — раз в минуту, закрыто — WorkManager раз в 15 минут
+    LaunchedEffect(session != null) {
+        if (session == null) return@LaunchedEffect
+        IncomingMarks.schedule(context)
+        while (true) {
+            IncomingMarks.check(context)
+            badgeManager.refresh()
+            delay(60_000)
+        }
+    }
     var showQuickActions by remember { mutableStateOf(false) }
 
     if (showQuickActions) {
