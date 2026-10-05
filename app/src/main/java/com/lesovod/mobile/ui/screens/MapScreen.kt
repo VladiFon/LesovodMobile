@@ -99,6 +99,8 @@ import com.lesovod.mobile.ui.map.MapTool
 import com.lesovod.mobile.ui.map.MapUiState
 import com.lesovod.mobile.ui.map.MapViewModel
 import com.lesovod.mobile.ui.map.ShapeKind
+import com.lesovod.mobile.data.network.dto.LesokulturyKartochkaDto
+import androidx.compose.material3.OutlinedButton
 import com.lesovod.mobile.ui.map.TASK_COLOR
 import com.lesovod.mobile.ui.map.VydelCard
 import kotlinx.coroutines.delay
@@ -360,6 +362,8 @@ fun MapScreen(
                 onNavigate = { label -> viewModel.navigateToSelected(label) },
                 onDismiss = viewModel::closeCard,
                 onOpenStock = if (canSeeStock) onOpenStock else null,
+                onShowAs = viewModel::showSelectedAs,
+                hasDelyanka = viewModel.selectedHasDelyanka(),
                 modifier = measureBottom,
             )
         }
@@ -454,9 +458,20 @@ fun MapScreen(
                     },
                     onDelete = { viewModel.deleteGeoNote(note) },
                     onDismiss = viewModel::dismissGeoNotePopup,
+                    onShare = { viewModel.openShare(note) },
                     modifier = measureBottom,
                 )
             }
+        }
+
+        state.share?.let { share ->
+            GeoNoteShareDialog(
+                state = share,
+                onToggle = viewModel::toggleShareRecipient,
+                onKommentChange = viewModel::updateShareKomment,
+                onSend = viewModel::sendShare,
+                onDismiss = viewModel::closeShare,
+            )
         }
     }
 }
@@ -769,6 +784,8 @@ private fun ObjectCard(
     onNavigate: (String) -> Unit,
     onDismiss: () -> Unit,
     onOpenStock: ((Int) -> Unit)? = null,
+    onShowAs: (ShapeKind) -> Unit = {},
+    hasDelyanka: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val selection = state.selection
@@ -797,6 +814,12 @@ private fun ObjectCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(end = 40.dp, top = 4.dp, bottom = 4.dp),
+                    )
+
+                    state.selectedLesokultury != null -> LesokulturyCardContent(
+                        card = state.selectedLesokultury,
+                        hasDelyanka = hasDelyanka,
+                        onShowAs = onShowAs,
                     )
 
                     state.selectedDelyanka != null -> DelyankaCardContent(
@@ -964,7 +987,11 @@ private fun SelectionHint(selection: MapSelection, onOpen: () -> Unit, onClear: 
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 Text(
-                    if (selection.vydel != null) "Нажмите ещё раз — таксация" else "Нажмите ещё раз — информация",
+                    when {
+                        selection.kind == ShapeKind.LESOKULTURY -> "Нажмите ещё раз — участок культур"
+                        selection.vydel != null -> "Нажмите ещё раз — таксация"
+                        else -> "Нажмите ещё раз — информация"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.secondary,
                 )
@@ -981,6 +1008,79 @@ private fun MapSelection.title(): String = when (kind) {
     ShapeKind.LESOSEKA -> "Делянка · кв. $kvartal, выд. $vydel"
     ShapeKind.VYDEL -> "Выдел · кв. $kvartal, выд. $vydel"
     ShapeKind.KVARTAL -> "Квартал $kvartal"
+    ShapeKind.LESOKULTURY -> "Лесные культуры · кв. $kvartal, выд. $vydel"
+}
+
+/** Участок лесных культур: вид, год, порода, площадь — сразу; способ, схема, густота, журнал — по «Подробнее». */
+@Composable
+private fun LesokulturyCardContent(card: LesokulturyKartochkaDto, hasDelyanka: Boolean, onShowAs: (ShapeKind) -> Unit) {
+    var expanded by remember(card) { mutableStateOf(false) }
+    Text(
+        "Лесные культуры" + (card.vidKultur?.takeIf { it.isNotBlank() && it != "Лесные культуры" }?.let { " · $it" } ?: ""),
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(end = 40.dp),
+    )
+    Text(
+        listOfNotNull(
+            "кв. ${card.kvartal ?: "—"}, выд. ${card.vydel ?: "—"}",
+            card.lesnichestvo?.takeIf { it.isNotBlank() },
+            card.status?.takeIf { it.isNotBlank() },
+        ).joinToString(" · "),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Stat("Год создания", card.godSozdaniya, Modifier.weight(1f))
+        Stat("Порода", card.glavnayaPoroda, Modifier.weight(1f))
+        Stat("Площадь", card.ploshad?.let { "${"%.2f".format(it).trimEnd('0').trimEnd(',', '.')} га" }, Modifier.weight(1f))
+    }
+    val posl = card.poslMeropriyatie ?: card.zhurnal.firstOrNull()?.let { listOfNotNull(it.tip, it.data).joinToString(" ") }
+    InfoRow("Последнее мероприятие", posl?.takeIf { it.isNotBlank() })
+    InfoRow("Приживаемость", (card.prizhivaemostPct ?: card.zhurnal.firstOrNull()?.prizhivaemostPct)?.let { "${it.toInt()} %" })
+
+    AnimatedVisibility(visible = expanded) {
+        Column(modifier = Modifier.padding(top = 4.dp)) {
+            InfoRow("Состав", card.sostavFakt ?: card.sostavFormula)
+            InfoRow("Способ создания", card.metodSozdaniya)
+            InfoRow("Обработка почвы", card.sposobObrabotki)
+            InfoRow("Посадочный материал", card.posadochnyyMaterial)
+            InfoRow("Схема посадки", card.shemaPosadki)
+            InfoRow("Густота посадки", card.gustotaPosadki?.let { "$it тыс. шт/га" })
+            InfoRow("Деревьев на га (последний учёт)", card.kolichestvoNaGa?.let { "${it.toInt()}" })
+            InfoRow("ТЛУ", card.tlu)
+            InfoRow("Норматив перевода", card.normativPerevoda)
+            InfoRow("Категория площади", card.kategoriyaPloshadi)
+            InfoRow("Примечания", card.primechaniya)
+            if (card.zhurnal.isNotEmpty()) {
+                InfoRow(
+                    "Журнал мероприятий",
+                    card.zhurnal.joinToString("\n") { z ->
+                        listOfNotNull(z.data, z.tip, z.prizhivaemostPct?.let { "приживаемость ${it.toInt()} %" }).joinToString(" · ")
+                    },
+                )
+            }
+        }
+    }
+    TextButton(onClick = { expanded = !expanded }, modifier = Modifier.padding(top = 2.dp)) {
+        Text(if (expanded) "Свернуть" else "Подробнее", color = MaterialTheme.colorScheme.secondary)
+        Icon(
+            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.padding(start = 4.dp).size(18.dp),
+        )
+    }
+    // культуры часто сажают на месте старой делянки — до неё и до таксации выдела один тап
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { onShowAs(ShapeKind.VYDEL) }, modifier = Modifier.weight(1f)) { Text("Таксация выдела") }
+        if (hasDelyanka) {
+            OutlinedButton(onClick = { onShowAs(ShapeKind.LESOSEKA) }, modifier = Modifier.weight(1f)) { Text("Делянка") }
+        }
+    }
 }
 
 /** Данные самой делянки (лесосеки) из документа МДО — не общая таксация выдела. */

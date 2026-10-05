@@ -2,7 +2,8 @@ package com.lesovod.mobile.ui.map
 
 import android.graphics.Color as AndroidColor
 
-enum class ShapeKind { KVARTAL, VYDEL, LESOSEKA }
+/** LESOKULTURY — участок лесных культур (свой контур или весь выдел); новые — только в конец: ShapeCodec пишет ordinal. */
+enum class ShapeKind { KVARTAL, VYDEL, LESOSEKA, LESOKULTURY }
 
 /**
  * Готовая к рисованию геометрия: кольца лежат плоскими массивами [lat0, lon0, lat1, lon1, …],
@@ -18,6 +19,8 @@ class MapShape(
     val maxLat: Double,
     val minLon: Double,
     val maxLon: Double,
+    /** id участка лесных культур (для LESOKULTURY) — по нему открывается карточка. */
+    val refId: Int? = null,
 ) {
     val labelLat: Double get() = (minLat + maxLat) / 2
     val labelLon: Double get() = (minLon + maxLon) / 2
@@ -27,7 +30,7 @@ class MapShape(
     val key: String = "$kind|$kvartal|$vydel|${rings.size}|${rings.firstOrNull()?.size}"
 }
 
-fun buildShape(kind: ShapeKind, kvartal: String, vydel: String?, statusColor: Int?, rings: List<DoubleArray>): MapShape? {
+fun buildShape(kind: ShapeKind, kvartal: String, vydel: String?, statusColor: Int?, rings: List<DoubleArray>, refId: Int? = null): MapShape? {
     var minLat = Double.MAX_VALUE
     var maxLat = -Double.MAX_VALUE
     var minLon = Double.MAX_VALUE
@@ -46,7 +49,7 @@ fun buildShape(kind: ShapeKind, kvartal: String, vydel: String?, statusColor: In
             i += 2
         }
     }
-    return if (any) MapShape(kind, kvartal, vydel, statusColor, rings, minLat, maxLat, minLon, maxLon) else null
+    return if (any) MapShape(kind, kvartal, vydel, statusColor, rings, minLat, maxLat, minLon, maxLon, refId) else null
 }
 
 /** Общая для потокового парсера логика: какие свойства GeoJSON что означают для каждого слоя. */
@@ -67,6 +70,8 @@ fun shapeFromProperties(kind: ShapeKind, prop: (String) -> String?, rawNumVds: S
             if (vd.isNullOrBlank()) return null
             buildShape(kind, kv, vd, parseColorOrNull(prop("vid_rubki_color")), rings)
         }
+        // участки культур приходят не потоковым GeoJSON, а из /api/map/lesokultury (MapViewModel)
+        ShapeKind.LESOKULTURY -> null
     }
 }
 

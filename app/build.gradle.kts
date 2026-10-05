@@ -12,8 +12,8 @@ android {
         applicationId = "com.lesovod.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 12
-        versionName = "0.6.0"
+        versionCode = 13
+        versionName = "0.7.0"
     }
 
     // Фиксированный debug-ключ в репозитории (keystore/debug.keystore) вместо
@@ -81,6 +81,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
 
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    // проверка меток от коллег, когда приложение закрыто (пуш-сервера нет)
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

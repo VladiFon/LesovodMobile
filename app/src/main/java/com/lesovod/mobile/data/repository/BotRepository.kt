@@ -5,6 +5,10 @@ import android.net.Uri
 import com.lesovod.mobile.data.network.ApiService
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.buildPhotoPart
+import com.lesovod.mobile.data.network.dto.CoworkerDto
+import com.lesovod.mobile.data.network.dto.GeoNoteShareDto
+import com.lesovod.mobile.data.network.dto.GeoNoteShareRequest
+import com.lesovod.mobile.data.network.dto.GeoNoteShareResultDto
 import com.lesovod.mobile.data.network.dto.AttendanceMarkDto
 import com.lesovod.mobile.data.network.dto.AttendanceMarkRequest
 import com.lesovod.mobile.data.network.dto.AttendanceStatus
@@ -195,6 +199,22 @@ class BotRepository(
 
     suspend fun deleteGeoNote(id: Int): Result<Unit> = safeCall {
         api.deleteGeoNote(requireToken(), id)
+        Unit
+    }
+
+    suspend fun listCoworkers(): Result<List<CoworkerDto>> = safeCall { api.listCoworkers(requireToken()) }
+
+    suspend fun shareGeoNote(id: Int, sotrudnikIds: List<Int>, komment: String?): Result<GeoNoteShareResultDto> = safeCall {
+        api.shareGeoNote(requireToken(), id, GeoNoteShareRequest(sotrudnikIds, komment?.trim()?.takeIf { it.isNotEmpty() }))
+    }
+
+    suspend fun listIncomingGeoNoteShares(): Result<List<GeoNoteShareDto>> = safeCall {
+        api.listIncomingGeoNoteShares(requireToken())
+    }
+
+    /** accept=false — отклонить или убрать уже принятую метку коллеги со своей карты. */
+    suspend fun answerGeoNoteShare(shareId: Int, accept: Boolean): Result<Unit> = safeCall {
+        if (accept) api.acceptGeoNoteShare(requireToken(), shareId) else api.declineGeoNoteShare(requireToken(), shareId)
         Unit
     }
 
