@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.data.network.dto.LesokulturyDannyeDto
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PhotoPickerField
@@ -212,6 +213,41 @@ private fun ResultRow(label: String, value: Double?, unit: String) {
     )
 }
 
+/** Что из участка культур подтянется в ведомость пробы (сервер подставляет сам). */
+@Composable
+private fun LkDannyeCard(d: LesokulturyDannyeDto) {
+    val lines = listOfNotNull(
+        d.sostav?.takeIf { it.isNotBlank() }?.let { "Состав" to it },
+        d.polnota?.let { "Полнота" to it.toString() },
+        d.vozrast?.let { "Возраст" to "$it лет" },
+        d.ploshad?.let { "Площадь" to "$it га" },
+    )
+    Column(
+        modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+    ) {
+        Text(
+            "🌱 Подтянется из лесных культур",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        if (lines.isEmpty()) {
+            Text("По участку пока нет состава, полноты и возраста", style = MaterialTheme.typography.bodyMedium)
+        }
+        lines.forEach { (label, value) ->
+            Text("$label: $value", style = MaterialTheme.typography.bodyLarge)
+        }
+        d.poslednUhod?.takeIf { it.isNotBlank() }?.let {
+            Text("Последний уход: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(
+            "Это попадёт в ведомость автоматически — лесничий проверит на сервере",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
     val context = LocalContext.current
@@ -224,6 +260,7 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
             enabled = !state.isSubmitting,
             title = "Участок лесных культур",
         )
+        state.lkDannye?.takeIf { state.selectedUchastok?.id == it.id }?.let { LkDannyeCard(it) }
     } else {
         Text("Место пробы", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         OutlinedTextField(
