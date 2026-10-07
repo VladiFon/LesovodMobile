@@ -22,6 +22,7 @@ import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.PerevodRequest
 import com.lesovod.mobile.data.network.dto.UchastokPolyaRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
+import com.lesovod.mobile.data.network.dto.LesokulturyDannyeDto
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.network.dto.RawReportRequest
@@ -247,6 +248,11 @@ class BotRepository(
 
     suspend fun listMyProby(): Result<List<ProbaResponse>> = safeCall {
         api.listMyProby(requireToken())
+    }
+
+    /** Данные культур участка, которые сервер подставит в шапку пробы. */
+    suspend fun getLesokulturyDannye(uchastokId: Int, dataZamera: String?): Result<LesokulturyDannyeDto?> = safeCall {
+        api.getLesokulturyDannye(requireToken(), uchastokId.toString(), dataZamera).firstOrNull()
     }
 
     suspend fun listLesokulturyUchastki(): Result<List<LesokulturyUchastok>> = safeCall {

@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
+import com.lesovod.mobile.data.network.dto.LesokulturyDannyeDto
 import com.lesovod.mobile.data.network.dto.ProbaFormRequest
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.data.network.dto.ProbaRowRequest
@@ -47,6 +48,8 @@ data class ProbaUiState(
     val lesokulturyUchastki: List<LesokulturyUchastok> = emptyList(),
     /** Участок л/к, где взята проба — квартал/выдел/площадь подставляются из него. */
     val selectedUchastok: LesokulturyUchastok? = null,
+    /** Данные культур выбранного участка — сервер подставит их в шапку пробы. */
+    val lkDannye: LesokulturyDannyeDto? = null,
     /** Квартал/выдел вручную — для проб не на участке лесных культур. */
     val manualPlace: Boolean = false,
     /** Справочник пород с сервера (как выпадающий список на вебе). */
@@ -121,8 +124,18 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(
             selectedUchastok = uchastok,
             ploshadVydela = uchastok?.ploshad?.let { formatPloshad(it) } ?: _uiState.value.ploshadVydela,
+            lkDannye = null,
             error = null,
         )
+        if (uchastok == null) return
+        viewModelScope.launch {
+            // Без сети просто не показываем — сервер всё равно подставит при отправке.
+            repository.getLesokulturyDannye(uchastok.id, _uiState.value.dataZamera).onSuccess { dannye ->
+                if (_uiState.value.selectedUchastok?.id == uchastok.id) {
+                    _uiState.value = _uiState.value.copy(lkDannye = dannye)
+                }
+            }
+        }
     }
 
     fun setManualPlace(manual: Boolean) {

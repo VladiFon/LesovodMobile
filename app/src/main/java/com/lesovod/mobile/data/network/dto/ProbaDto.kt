@@ -82,3 +82,22 @@ data class ProbaResponse(
     val ploshadLesoseki: Double? get() = data?.ploshadLesoseki ?: ploshadVydela
     val rows: List<ProbaRowResponse> get() = rowsTop.ifEmpty { data?.rows.orEmpty() }
 }
+
+/**
+ * Элемент GET /api/uhody/lesokultury-dannye — что известно о культурах участка и что сервер
+ * сам подставит в шапку пробы (состав, полнота, возраст, площадь). istochniki: поле → откуда взято.
+ */
+@Serializable
+data class LesokulturyDannyeDto(
+    val id: Int,
+    val status: String? = null,
+    @SerialName("glavnaya_poroda") val glavnayaPoroda: String? = null,
+    @SerialName("god_sozdaniya") val godSozdaniya: String? = null,
+    val sostav: String? = null,
+    val polnota: Double? = null,
+    val vozrast: Int? = null,
+    val ploshad: Double? = null,
+    @SerialName("kolichestvo_na_ga") val kolichestvoNaGa: Double? = null,
+    @SerialName("posledn_uhod") val poslednUhod: String? = null,
+    val istochniki: Map<String, String> = emptyMap(),
+)

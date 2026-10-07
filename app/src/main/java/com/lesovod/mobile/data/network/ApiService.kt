@@ -31,6 +31,7 @@ import com.lesovod.mobile.data.network.dto.NoteCreateRequest
 import com.lesovod.mobile.data.network.dto.NoteDto
 import com.lesovod.mobile.data.network.dto.PhotoUploadResponseDto
 import com.lesovod.mobile.data.network.dto.PorodySpravochnikDto
+import com.lesovod.mobile.data.network.dto.LesokulturyDannyeDto
 import com.lesovod.mobile.data.network.dto.ProbaResponse
 import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
 import com.lesovod.mobile.data.network.dto.RawReportRequest
@@ -173,6 +174,13 @@ interface ApiService {
         @Header("Authorization") bearerToken: String,
         @Body body: ProbaSaveRequest,
     ): ProbaResponse
+
+    @GET("api/uhody/lesokultury-dannye")
+    suspend fun getLesokulturyDannye(
+        @Header("Authorization") bearerToken: String,
+        @Query("ids") ids: String,
+        @Query("data_zamera") dataZamera: String? = null,
+    ): List<LesokulturyDannyeDto>
 
     @GET("api/uhody/proby/mine")
     suspend fun listMyProby(
