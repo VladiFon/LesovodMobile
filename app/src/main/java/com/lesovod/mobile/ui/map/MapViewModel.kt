@@ -8,6 +8,8 @@ import com.lesovod.mobile.data.local.CompletedWorkStore
 import com.lesovod.mobile.data.notifications.IncomingMarks
 import com.lesovod.mobile.data.local.PendingActionType
 import com.lesovod.mobile.data.local.PendingGeoNotePayload
+import com.lesovod.mobile.data.local.PendingKartaProbaPayload
+import com.lesovod.mobile.data.network.dto.KartaProbaCreateRequest
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.repository.OfflineQueueManager
 import kotlinx.serialization.decodeFromString
@@ -53,6 +55,8 @@ data class MapLayers(
     val geoNotes: Boolean = true,
     val sklady: Boolean = true,
     val tasks: Boolean = true,
+    /** Пробные площади лесных культур — тонкий пунктир, видны всем. */
+    val proby: Boolean = true,
     /** Своя подложка из файла .mbtiles (например, ортофото, выгруженное из QGIS) — работает без интернета. */
     val offlineBase: Boolean = true,
 )
@@ -171,6 +175,14 @@ data class MapUiState(
     val offlineBasePath: String? = null,
     val offlineBaseName: String? = null,
 
+    // --- пробные площади (тех. приёмка, инвентаризация 1-го и 3-го года — на одной пробе) ---
+    val proby: List<ProbaShape> = emptyList(),
+    /** Поставлены без сети — ждут отправки, рисуются серым. */
+    val pendingProby: List<ProbaShape> = emptyList(),
+    val selectedProba: ProbaShape? = null,
+    val probaDraft: ProbaDraft? = null,
+    val probyError: String? = null,
+
     /** Короткое сообщение внизу ("Метка удалена", "Контур сохранён: 2,35 га"). */
     val message: String? = null,
 )
@@ -180,7 +192,7 @@ data class NavTarget(val point: LatLon, val label: String)
 
 data class MapFocus(val point: LatLon, val zoom: Double, val token: Int)
 
-enum class MapTool { NONE, RULER, WALK }
+enum class MapTool { NONE, RULER, WALK, PROBA }
 
 data class WalkState(
     val recording: Boolean = false,
@@ -221,6 +233,7 @@ private const val WALK_MAX_ACCURACY_M = 30f
 private const val PLACE_MIN_MOVE_M = 15.0
 private const val SEARCH_DEBOUNCE_MS = 350L
 private const val GEO_NOTE_QUEUED_MESSAGE = "Нет сети — метка сохранена на устройстве и отправится сама"
+private const val PROBA_QUEUED_MESSAGE = "Нет сети — проба сохранена на телефоне и уйдёт на сервер сама"
 
 class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val hub = MapDataHub.getInstance(application)
@@ -252,6 +265,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val cellLoads = Semaphore(PARALLEL_CELL_LOADS)
 
     private var searchJob: Job? = null
+    private val probaGps = GpsAverager()
     private var focusCounter = 0
     private var lastPlaceAt: LatLon? = null
 
@@ -283,7 +297,21 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            queueManager.completed.collect { if (it.type == PendingActionType.GEO_NOTE) loadGeoNotes(force = true) }
+            queueManager.completed.collect {
+                if (it.type == PendingActionType.GEO_NOTE) loadGeoNotes(force = true)
+                if (it.type == PendingActionType.KARTA_PROBA) currentNum()?.let { num -> loadProby(num, force = true) }
+            }
+        }
+        // пробы, поставленные без сети, — сразу на карте (серым), пока очередь их не отправит
+        viewModelScope.launch {
+            queueManager.pending.collect { pending ->
+                val shapes = pending.filter { it.type == PendingActionType.KARTA_PROBA }.mapNotNull { action ->
+                    runCatching { queueJson.decodeFromString<PendingKartaProbaPayload>(action.payload) }.getOrNull()?.let {
+                        pendingProbaShape(it.request)
+                    }
+                }
+                _uiState.value = _uiState.value.copy(pendingProby = shapes)
+            }
         }
         // приняли метку коллеги на экране уведомлений — перечитываем, не дожидаясь кэша
         viewModelScope.launch {
@@ -336,6 +364,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value = withDelyankaColors(_uiState.value.copy(delyankaRefs = refs))
             }
         }
+        loadProby(num, force)
         viewModelScope.launch {
             repository.getLesokultury(num, force).onSuccess { list ->
                 // выдел подсвечиваем целиком, только если у участка нет своего контура
@@ -362,7 +391,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         loadColors(num, force = true)
         loadGeoNotes(force = true)
         loadTasks()
-        _uiState.value = _uiState.value.copy(message = "Цвета, метки и задачи обновлены")
+        _uiState.value = _uiState.value.copy(message = "Цвета, метки, пробы и задачи обновлены")
     }
 
     fun setColorMode(mode: ColorMode) {
@@ -905,6 +934,20 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 state = state.copy(walk = walk.copy(points = walk.points + here))
             }
         }
+        // проба: центр — среднее GPS-точек, пока человек стоит на месте
+        val draft = state.probaDraft
+        if (draft != null && draft.averaging && draft.forma != ProbaForma.KONTUR && probaGps.add(lat, lon, accuracy)) {
+            val center = probaGps.center
+            state = state.copy(
+                probaDraft = draft.copy(
+                    center = center,
+                    fixes = probaGps.count,
+                    accuracy = probaGps.accuracy,
+                    averaging = !probaGps.full,
+                    uchastokId = if (draft.uchastokAuto && center != null) autoUchastok(center) else draft.uchastokId,
+                ),
+            )
+        }
         _uiState.value = state
 
         // квартал/выдел под ногами — не на каждый сдвиг, а когда отошли на 15 м
@@ -1087,9 +1130,28 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             tool = tool,
             rulerPoints = if (tool == MapTool.RULER) current.rulerPoints else emptyList(),
             walk = if (tool == MapTool.WALK) current.walk else WalkState(),
+            probaDraft = if (tool == MapTool.PROBA) current.probaDraft else null,
             selection = if (tool != MapTool.NONE) null else current.selection,
             cardOpen = false,
         )
+    }
+
+    /** Тап по карте, пока включён инструмент: линейка — точка, проба — центр вручную. */
+    fun onToolTap(point: LatLon) {
+        when (_uiState.value.tool) {
+            MapTool.RULER -> onRulerTap(point)
+            MapTool.PROBA -> {
+                val draft = _uiState.value.probaDraft ?: return
+                if (draft.forma == ProbaForma.KONTUR) return
+                _uiState.value = _uiState.value.copy(
+                    probaDraft = draft.copy(
+                        center = point, averaging = false, manualCenter = true, accuracy = null, error = null,
+                        uchastokId = if (draft.uchastokAuto) autoUchastok(point) else draft.uchastokId,
+                    ),
+                )
+            }
+            else -> Unit
+        }
     }
 
     fun onRulerTap(point: LatLon) {
@@ -1164,6 +1226,278 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 },
             )
         }
+    }
+
+    // ------------------------------------------------------- пробы на карте ---
+
+    private fun loadProby(num: Int, force: Boolean = false) {
+        viewModelScope.launch {
+            repository.getKartaProby(num, force).fold(
+                onSuccess = { list ->
+                    val shapes = list.map { it.toShape() }
+                    val sel = _uiState.value.selectedProba
+                    _uiState.value = _uiState.value.copy(
+                        proby = shapes,
+                        probyError = null,
+                        selectedProba = sel?.let { s -> shapes.firstOrNull { it.id == s.id } ?: s.takeIf { it.pending } },
+                    )
+                },
+                onFailure = { err ->
+                    // старый сервер без /api/proby — просто нет слоя, не ошибка на весь экран
+                    val text = err.message.orEmpty()
+                    if (!text.contains("404") && !text.contains("Not Found")) {
+                        _uiState.value = _uiState.value.copy(probyError = "Пробы не загрузились: $text")
+                    }
+                },
+            )
+        }
+    }
+
+    private var pendingProbaCounter = 0
+
+    private fun pendingProbaShape(r: KartaProbaCreateRequest): ProbaShape? {
+        val ring = when (ProbaForma.fromCode(r.forma)) {
+            ProbaForma.KONTUR -> r.tochki?.map { LatLon(it[1], it[0]) }
+            ProbaForma.PRYAMOUGOLNIK -> if (r.lat != null && r.lon != null)
+                pryamougolnikRing(LatLon(r.lat, r.lon), r.dlinaM ?: 10.0, r.shirinaM ?: 2.0, r.azimut ?: 0.0) else null
+            ProbaForma.KRUG -> if (r.lat != null && r.lon != null) krugRing(LatLon(r.lat, r.lon), r.radiusM ?: 5.64) else null
+        }?.takeIf { it.size >= 3 } ?: return null
+        val center = if (r.lat != null && r.lon != null) LatLon(r.lat, r.lon)
+        else LatLon(ring.sumOf { it.lat } / ring.size, ring.sumOf { it.lon } / ring.size)
+        pendingProbaCounter += 1
+        return ProbaShape(-pendingProbaCounter, r.nomer.orEmpty(), center, ring.toFlatRing(), null, pending = true)
+    }
+
+    /**
+     * «Поставить пробу» (инструменты карты). Центр сразу — где стоим, дальше уточняется
+     * усреднением GPS; нет GPS — центр карты, его можно поставить тапом. kontur — точки
+     * «Обмера обходом» (кнопка «Сохранить как пробу»).
+     */
+    fun startProbaDraft(kontur: List<LatLon> = emptyList()) {
+        val state = _uiState.value
+        if (state.walk.recording && kontur.isEmpty()) {
+            _uiState.value = state.copy(message = "Сначала остановите обмер обходом")
+            return
+        }
+        probaGps.reset()
+        val forma = if (kontur.size >= 3) ProbaForma.KONTUR else hub.prefs.lastProbaForma?.let { ProbaForma.fromCode(it) }
+            ?.takeIf { it != ProbaForma.KONTUR } ?: ProbaForma.KRUG
+        val me = state.myLocation
+        val center = when {
+            kontur.size >= 3 -> LatLon(kontur.sumOf { it.lat } / kontur.size, kontur.sumOf { it.lon } / kontur.size)
+            me != null -> me.also { probaGps.add(it.lat, it.lon, state.myAccuracy) }
+            else -> camera?.let { LatLon(it.latitude, it.longitude) }
+        }
+        val draft = ProbaDraft(
+            forma = forma,
+            radius = hub.prefs.lastProbaRadius ?: "5.64",
+            dlina = hub.prefs.lastProbaDlina ?: "10",
+            shirina = hub.prefs.lastProbaShirina ?: "2",
+            center = center,
+            averaging = kontur.isEmpty() && me != null,
+            fixes = probaGps.count,
+            accuracy = if (me != null) probaGps.accuracy else null,
+            manualCenter = me == null && kontur.isEmpty(),
+            kontur = kontur,
+            uchastokId = center?.let { autoUchastok(it) },
+        )
+        _uiState.value = state.copy(
+            tool = MapTool.PROBA, probaDraft = draft, walk = WalkState(), selection = null, cardOpen = false,
+            selectedProba = null, selectedGeoNote = null, noteDraft = null,
+        )
+    }
+
+    fun updateProbaDraft(change: (ProbaDraft) -> ProbaDraft) {
+        val draft = _uiState.value.probaDraft ?: return
+        _uiState.value = _uiState.value.copy(probaDraft = change(draft).copy(error = null))
+    }
+
+    /** «Уточнить ещё раз»: заново набрать GPS-точки, стоя в центре пробы. */
+    fun restartProbaAveraging() {
+        probaGps.reset()
+        val me = _uiState.value.myLocation
+        if (me != null) probaGps.add(me.lat, me.lon, _uiState.value.myAccuracy)
+        updateProbaDraft {
+            it.copy(
+                averaging = true, manualCenter = false, fixes = probaGps.count, accuracy = probaGps.accuracy,
+                center = probaGps.center ?: it.center,
+            )
+        }
+    }
+
+    fun pickProbaUchastok(id: Int?) = updateProbaDraft { it.copy(uchastokId = id, uchastokAuto = false) }
+
+    /**
+     * Участок культур в точке: свой контур участка, затем выдел с культурами (самый свежий
+     * участок на этом кв./выд.). Нет — сервер попробует сам по кварталу/выделу.
+     */
+    private fun autoUchastok(point: LatLon): Int? {
+        val state = _uiState.value
+        state.lesokulturyKontury.lastOrNull { it.contains(point.lat, point.lon) }?.refId?.let { return it }
+        val vydel = state.vydela.lastOrNull { it.contains(point.lat, point.lon) } ?: return null
+        return state.lesokulturyList
+            .filter { it.kvartal == vydel.kvartal && it.vydel == vydel.vydel }
+            .maxByOrNull { it.godSozdaniya.orEmpty() }?.id
+    }
+
+    /** Участки для выбора в форме пробы: сначала на этом квартале. */
+    fun probaUchastkiOptions(): List<LesokulturyMapDto> {
+        val state = _uiState.value
+        val kv = state.probaDraft?.center?.let { c -> state.vydela.lastOrNull { it.contains(c.lat, c.lon) }?.kvartal }
+            ?: state.here?.kvartal
+        return state.lesokulturyList.distinctBy { it.id }
+            .sortedWith(compareBy<LesokulturyMapDto>({ it.kvartal != kv }, { it.kvartal.toIntOrNull() ?: Int.MAX_VALUE }, { it.vydel.toIntOrNull() ?: Int.MAX_VALUE }))
+    }
+
+    fun dismissProbaDraft() {
+        probaGps.reset()
+        _uiState.value = _uiState.value.copy(probaDraft = null, tool = MapTool.NONE)
+    }
+
+    fun saveProbaDraft() {
+        val state = _uiState.value
+        val draft = state.probaDraft ?: return
+        if (draft.saving) return
+        val center = draft.center
+        val error = when {
+            draft.forma == ProbaForma.KONTUR && draft.kontur.size < 3 -> "Для обхода нужно минимум 3 точки"
+            draft.forma != ProbaForma.KONTUR && center == null -> "Нет точки центра — дождитесь GPS или нажмите на карту"
+            draft.forma == ProbaForma.KRUG && draft.number(draft.radius)?.takeIf { it in 0.3..200.0 } == null -> "Радиус — от 0,3 до 200 м"
+            draft.forma == ProbaForma.PRYAMOUGOLNIK && (draft.number(draft.dlina)?.takeIf { it in 0.3..500.0 } == null ||
+                draft.number(draft.shirina)?.takeIf { it in 0.3..500.0 } == null) -> "Длина и ширина — от 0,3 до 500 м"
+            else -> null
+        }
+        if (error != null) {
+            _uiState.value = state.copy(probaDraft = draft.copy(error = error))
+            return
+        }
+        val place = center?.let { c -> state.vydela.lastOrNull { it.contains(c.lat, c.lon) } }
+        val request = KartaProbaCreateRequest(
+            forma = draft.forma.code,
+            lat = center?.lat,
+            lon = center?.lon,
+            radiusM = draft.number(draft.radius).takeIf { draft.forma == ProbaForma.KRUG },
+            dlinaM = draft.number(draft.dlina).takeIf { draft.forma == ProbaForma.PRYAMOUGOLNIK },
+            shirinaM = draft.number(draft.shirina).takeIf { draft.forma == ProbaForma.PRYAMOUGOLNIK },
+            azimut = (draft.number(draft.azimut) ?: 0.0).let { ((it % 360) + 360) % 360 }.takeIf { draft.forma == ProbaForma.PRYAMOUGOLNIK },
+            tochki = draft.kontur.map { listOf(it.lon, it.lat) }.takeIf { draft.forma == ProbaForma.KONTUR },
+            tochnostM = draft.accuracy?.toDouble()?.takeIf { !draft.manualCenter },
+            nomer = draft.nomer.trim().ifEmpty { null },
+            uchastokId = draft.uchastokId,
+            lesnichestvo = state.selectedLesnichestvo,
+            kvartal = place?.kvartal ?: state.here?.kvartal,
+            vydel = place?.vydel ?: state.here?.vydel,
+            orientir = draft.orientir.trim().ifEmpty { null },
+        )
+        hub.prefs.lastProbaForma = draft.forma.code.takeIf { draft.forma != ProbaForma.KONTUR } ?: hub.prefs.lastProbaForma
+        if (draft.forma == ProbaForma.KRUG) hub.prefs.lastProbaRadius = draft.radius.trim()
+        if (draft.forma == ProbaForma.PRYAMOUGOLNIK) {
+            hub.prefs.lastProbaDlina = draft.dlina.trim()
+            hub.prefs.lastProbaShirina = draft.shirina.trim()
+        }
+        _uiState.value = state.copy(probaDraft = draft.copy(saving = true, error = null))
+        viewModelScope.launch {
+            var photoPath: String? = null
+            if (draft.photoUri != null) {
+                val upload = botRepository.uploadPhoto(getApplication<Application>(), draft.photoUri)
+                if (upload.exceptionOrNull() is ConnectivityException) {
+                    queueManager.enqueueKartaProba(request, draft.photoUri)
+                    finishProbaDraft(PROBA_QUEUED_MESSAGE)
+                    return@launch
+                }
+                upload.onFailure { err ->
+                    _uiState.value.probaDraft?.let { d ->
+                        _uiState.value = _uiState.value.copy(probaDraft = d.copy(saving = false, error = err.message ?: "Не удалось загрузить фото"))
+                    }
+                    return@launch
+                }
+                photoPath = upload.getOrNull()
+            }
+            val result = botRepository.createKartaProba(request.copy(photoPath = photoPath))
+            if (result.exceptionOrNull() is ConnectivityException) {
+                queueManager.enqueueKartaProba(request.copy(photoPath = photoPath), null)
+                finishProbaDraft(PROBA_QUEUED_MESSAGE)
+                return@launch
+            }
+            result.fold(
+                onSuccess = { created ->
+                    val shape = created.toShape()
+                    _uiState.value = _uiState.value.copy(proby = _uiState.value.proby + shape)
+                    val kuda = created.uchastok?.let { u ->
+                        " · участок кв. ${u.kvartal.orEmpty()}, выд. ${u.vydel.orEmpty()}" + if (created.uchastokAvto) " (по месту)" else ""
+                    } ?: " · без участка культур"
+                    finishProbaDraft("Проба П${created.nomer.orEmpty()} сохранена$kuda — её видят все")
+                    currentNum()?.let { loadProby(it, force = true) }
+                },
+                onFailure = { err ->
+                    val text = err.message.orEmpty()
+                    val msg = if (text.contains("404") || text.contains("Not Found"))
+                        "Сервер ещё не обновлён — пробы появятся после обновления сервера" else text.ifEmpty { "Не удалось сохранить пробу" }
+                    _uiState.value.probaDraft?.let { d -> _uiState.value = _uiState.value.copy(probaDraft = d.copy(saving = false, error = msg)) }
+                },
+            )
+        }
+    }
+
+    private fun finishProbaDraft(message: String) {
+        probaGps.reset()
+        _uiState.value = _uiState.value.copy(probaDraft = null, tool = MapTool.NONE, message = message)
+    }
+
+    fun onProbaTap(proba: ProbaShape) {
+        _uiState.value = _uiState.value.copy(
+            selectedProba = proba, selectedGeoNote = null, selectedSklad = null, noteDraft = null,
+            selection = null, cardOpen = false,
+        )
+    }
+
+    fun dismissProba() {
+        _uiState.value = _uiState.value.copy(selectedProba = null)
+    }
+
+    fun deleteProba(proba: ProbaShape) {
+        viewModelScope.launch {
+            botRepository.deleteKartaProba(proba.id).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(
+                        selectedProba = null,
+                        proby = _uiState.value.proby.filterNot { it.id == proba.id },
+                        message = "Проба П${proba.nomer} убрана с карты",
+                    )
+                    currentNum()?.let { loadProby(it, force = true) }
+                },
+                onFailure = { _uiState.value = _uiState.value.copy(message = it.message ?: "Не удалось убрать пробу") },
+            )
+        }
+    }
+
+    /** «Перенести центр сюда»: нашли колышек — ставим центр туда, где стоим (форма та же). */
+    fun moveProbaToMe(proba: ProbaShape) {
+        val me = _uiState.value.myLocation ?: run {
+            _uiState.value = _uiState.value.copy(message = "Нет GPS — включите геолокацию")
+            return
+        }
+        viewModelScope.launch {
+            botRepository.moveKartaProba(proba.id, me.lat, me.lon, _uiState.value.myAccuracy?.toDouble()).fold(
+                onSuccess = { updated ->
+                    val shape = updated.toShape()
+                    _uiState.value = _uiState.value.copy(
+                        selectedProba = shape,
+                        proby = _uiState.value.proby.map { if (it.id == shape.id) shape else it },
+                        message = "Центр пробы П${proba.nomer} перенесён",
+                    )
+                    currentNum()?.let { loadProby(it, force = true) }
+                },
+                onFailure = { _uiState.value = _uiState.value.copy(message = it.message ?: "Не удалось перенести пробу") },
+            )
+        }
+    }
+
+    /** Из окна «Сохранить контур» обмера: этот контур — граница пробы. */
+    fun walkToProba() {
+        val points = _uiState.value.walk.points
+        if (points.size < 3) return
+        startProbaDraft(kontur = points)
     }
 
     // ------------------------------------------------------ офлайн-подложка ---

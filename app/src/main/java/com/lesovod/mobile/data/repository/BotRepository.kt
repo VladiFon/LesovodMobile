@@ -16,6 +16,9 @@ import com.lesovod.mobile.data.network.dto.BreakdownRequest
 import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
+import com.lesovod.mobile.data.network.dto.KartaProbaCreateRequest
+import com.lesovod.mobile.data.network.dto.KartaProbaDto
+import com.lesovod.mobile.data.network.dto.KartaProbaMoveRequest
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.MyDelyankaDto
 import com.lesovod.mobile.data.network.dto.NoteCreateRequest
@@ -217,6 +220,26 @@ class BotRepository(
     suspend fun answerGeoNoteShare(shareId: Int, accept: Boolean): Result<Unit> = safeCall {
         if (accept) api.acceptGeoNoteShare(requireToken(), shareId) else api.declineGeoNoteShare(requireToken(), shareId)
         Unit
+    }
+
+    // --- пробные площади на карте (сервер 26.10.2026+) ---
+
+    suspend fun createKartaProba(request: KartaProbaCreateRequest): Result<KartaProbaDto> = safeCall {
+        api.createKartaProba(requireToken(), request)
+    }
+
+    suspend fun moveKartaProba(id: Int, lat: Double, lon: Double, tochnostM: Double?): Result<KartaProbaDto> = safeCall {
+        api.moveKartaProba(requireToken(), id, KartaProbaMoveRequest(lat, lon, tochnostM))
+    }
+
+    suspend fun deleteKartaProba(id: Int): Result<Unit> = safeCall {
+        api.deleteKartaProba(requireToken(), id)
+        Unit
+    }
+
+    /** Пробы участка культур — для карточки инвентаризации («на той же пробе, что в прошлый раз»). */
+    suspend fun listKartaProbyUchastka(uchastokId: Int): Result<List<KartaProbaDto>> = safeCall {
+        api.listKartaProby(requireToken(), uchastokId = uchastokId)
     }
 
     suspend fun createTrack(request: TrackCreateRequest): Result<TrackCreatedDto> = safeCall {

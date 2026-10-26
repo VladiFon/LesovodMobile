@@ -105,6 +105,10 @@ fun ForestMapView(
     fitToken: Int,
     lesosekiTappable: Boolean,
     geoNotes: List<GeoNoteMarker>,
+    proby: List<ProbaShape>,
+    selectedProbaId: Int?,
+    probaDraftRing: List<LatLon>?,
+    probaDraftCenter: LatLon?,
     colorMode: ColorMode,
     workColors: Map<String, Int>,
     delyankaStatusColors: Map<String, Int>,
@@ -125,6 +129,7 @@ fun ForestMapView(
     onShapeTap: (MapShape) -> Unit,
     onEmptyTap: () -> Unit,
     onGeoNoteTap: (GeoNoteMarker) -> Unit,
+    onProbaTap: (ProbaShape) -> Unit,
     onMapLongPress: (lat: Double, lon: Double) -> Unit,
     onViewportChanged: (bbox: String, zoom: Double, latitude: Double, longitude: Double) -> Unit,
     initialCamera: MapCamera?,
@@ -140,6 +145,7 @@ fun ForestMapView(
     val scaleBarState = remember { mutableStateOf<ScaleBarOverlay?>(null) }
     val featuresOverlay = remember { ForestFeaturesOverlay(density) }
     val geoNotesOverlay = remember { GeoNotesOverlay(density) }
+    val probyOverlay = remember { ProbyOverlay(density) }
     val toolsOverlay = remember { MapToolsOverlay(density) }
     val offlineBaseOverlayState = remember { mutableStateOf<Pair<String, TilesOverlay>?>(null) }
     val lastFocusToken = remember { mutableStateOf(focus?.token ?: 0) }
@@ -250,6 +256,8 @@ fun ForestMapView(
                     overlays.add(RotationGestureOverlay(this).apply { isEnabled = true })
 
                     overlays.add(featuresOverlay)
+                    // пробы — над участками культур (тап по пробе важнее тапа по участку), под метками
+                    overlays.add(probyOverlay)
                     overlays.add(geoNotesOverlay)
                     // выше меток: линейка должна перехватывать тапы раньше всех
                     overlays.add(toolsOverlay)
@@ -329,6 +337,11 @@ fun ForestMapView(
                 val shownNotes = if (layers.geoNotes) geoNotes else emptyList()
                 if (geoNotesOverlay.notes !== shownNotes) { geoNotesOverlay.notes = shownNotes; dirty = true }
                 geoNotesOverlay.onNoteTap = onGeoNoteTap
+                if (probyOverlay.proby !== proby) { probyOverlay.proby = proby; dirty = true }
+                if (probyOverlay.selectedId != selectedProbaId) { probyOverlay.selectedId = selectedProbaId; dirty = true }
+                if (probyOverlay.draftRing != probaDraftRing) { probyOverlay.draftRing = probaDraftRing; dirty = true }
+                if (probyOverlay.draftCenter != probaDraftCenter) { probyOverlay.draftCenter = probaDraftCenter; dirty = true }
+                probyOverlay.onProbaTap = onProbaTap
 
                 if (featuresOverlay.colorMode != colorMode) { featuresOverlay.colorMode = colorMode; dirty = true }
                 if (featuresOverlay.workColors !== workColors) { featuresOverlay.workColors = workColors; dirty = true }
@@ -337,7 +350,8 @@ fun ForestMapView(
                 if (featuresOverlay.lesokulturyKontury !== lesokulturyKontury) { featuresOverlay.lesokulturyKontury = lesokulturyKontury; dirty = true }
                 if (featuresOverlay.taskKeys != taskKeys) { featuresOverlay.taskKeys = taskKeys; dirty = true }
 
-                val rulerActive = tool == MapTool.RULER
+                // проба: тап по карте ставит центр вручную — перехватываем, как линейка
+                val rulerActive = tool == MapTool.RULER || tool == MapTool.PROBA
                 if (toolsOverlay.rulerActive != rulerActive) { toolsOverlay.rulerActive = rulerActive; dirty = true }
                 if (toolsOverlay.rulerPoints !== rulerPoints) { toolsOverlay.rulerPoints = rulerPoints; dirty = true }
                 if (toolsOverlay.walkPoints !== walkPoints) { toolsOverlay.walkPoints = walkPoints; dirty = true }

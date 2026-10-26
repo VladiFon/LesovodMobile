@@ -382,7 +382,13 @@ private fun WalkStat(label: String, value: String, modifier: Modifier = Modifier
 }
 
 @Composable
-internal fun WalkSaveDialog(walk: WalkState, defaultName: String, onSave: (String, String) -> Unit, onDismiss: () -> Unit) {
+internal fun WalkSaveDialog(
+    walk: WalkState,
+    defaultName: String,
+    onSave: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+    onSaveAsProba: (() -> Unit)? = null,
+) {
     var name by remember { mutableStateOf(defaultName) }
     var note by remember { mutableStateOf("") }
     AlertDialog(
@@ -394,6 +400,12 @@ internal fun WalkSaveDialog(walk: WalkState, defaultName: String, onSave: (Strin
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Название") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
                 OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Примечание") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                 walk.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp)) }
+                // обошли границу пробной площади — сохранить не как обмер, а как пробу
+                if (onSaveAsProba != null) {
+                    TextButton(onClick = onSaveAsProba, enabled = !walk.saving, modifier = Modifier.padding(top = 4.dp)) {
+                        Text("Это граница пробы — сохранить как пробу")
+                    }
+                }
             }
         },
         confirmButton = {

@@ -8,6 +8,9 @@ import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.GeoJsonFeatureCollection
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
+import com.lesovod.mobile.data.network.dto.KartaProbaCreateRequest
+import com.lesovod.mobile.data.network.dto.KartaProbaDto
+import com.lesovod.mobile.data.network.dto.KartaProbaMoveRequest
 import com.lesovod.mobile.data.network.dto.GeoNoteDto
 import com.lesovod.mobile.data.network.dto.CoworkerDto
 import com.lesovod.mobile.data.network.dto.GeoNoteShareDto
@@ -366,6 +369,30 @@ interface ApiService {
 
     @GET("api/map/sklady")
     suspend fun listSklady(): List<SkladDto>
+
+    // --- пробные площади на карте (сервер 26.10.2026+) — видны всем ---
+    @GET("api/proby")
+    suspend fun listKartaProby(
+        @Header("Authorization") bearerToken: String,
+        @Query("lesnichestvo_num") lesnichestvoNum: String? = null,
+        @Query("uchastok_id") uchastokId: Int? = null,
+    ): List<KartaProbaDto>
+
+    @POST("api/proby")
+    suspend fun createKartaProba(
+        @Header("Authorization") bearerToken: String,
+        @Body body: KartaProbaCreateRequest,
+    ): KartaProbaDto
+
+    @PATCH("api/proby/{id}")
+    suspend fun moveKartaProba(
+        @Header("Authorization") bearerToken: String,
+        @Path("id") id: Int,
+        @Body body: KartaProbaMoveRequest,
+    ): KartaProbaDto
+
+    @DELETE("api/proby/{id}")
+    suspend fun deleteKartaProba(@Header("Authorization") bearerToken: String, @Path("id") id: Int): ResponseBody
 
     @POST("api/bot/tracks")
     suspend fun createTrack(

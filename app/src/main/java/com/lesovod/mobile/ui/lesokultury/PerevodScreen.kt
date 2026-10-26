@@ -129,6 +129,8 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
                     onRazmerChange = viewModel::onProbaRazmerChange,
                     onRemove = viewModel::removeProba,
                     onAdd = viewModel::addProba,
+                    kartaProby = state.kartaProby,
+                    onPickKarta = viewModel::pickKartaProba,
                 )
             }
 

@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
@@ -98,6 +99,7 @@ import com.lesovod.mobile.ui.map.MapSelection
 import com.lesovod.mobile.ui.map.MapTool
 import com.lesovod.mobile.ui.map.MapUiState
 import com.lesovod.mobile.ui.map.MapViewModel
+import com.lesovod.mobile.ui.map.ProbaForma
 import com.lesovod.mobile.ui.map.ShapeKind
 import com.lesovod.mobile.data.network.dto.LesokulturyKartochkaDto
 import androidx.compose.material3.OutlinedButton
@@ -140,8 +142,9 @@ fun MapScreen(
 
     // пока идёт обмер обходом, экран не гаснет — иначе GPS-точки перестают приходить
     val view = LocalView.current
-    DisposableEffect(state.walk.recording) {
-        view.keepScreenOn = state.walk.recording
+    val keepOn = state.walk.recording || state.probaDraft?.averaging == true
+    DisposableEffect(keepOn) {
+        view.keepScreenOn = keepOn
         onDispose { view.keepScreenOn = false }
     }
 
@@ -152,7 +155,8 @@ fun MapScreen(
     val toolPanelVisible = state.tool != MapTool.NONE
     val cardVisible = state.cardOpen
     val bottomPanelVisible = cardVisible || toolPanelVisible || state.tasksOpen ||
-        state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null
+        state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null ||
+        state.probaDraft != null || state.selectedProba != null
     // первый тап только выделяет участок — внизу подсказка, что второй тап откроет таксацию
     val hintVisible = state.selection != null && !bottomPanelVisible
     var lastSelection by remember { mutableStateOf(state.selection) }
@@ -183,10 +187,12 @@ fun MapScreen(
     BackHandler(
         enabled = state.search.open || cardVisible || layersOpen || toolsMenuOpen || state.selection != null ||
             state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null ||
-            state.tasksOpen || (toolPanelVisible && !state.walk.recording),
+            state.selectedProba != null || state.tasksOpen || (toolPanelVisible && !state.walk.recording),
     ) {
         when {
             state.search.open -> viewModel.openSearch(false)
+            state.probaDraft != null -> viewModel.dismissProbaDraft()
+            state.selectedProba != null -> viewModel.dismissProba()
             state.noteDraft != null -> viewModel.dismissNoteDraft()
             state.selectedGeoNote != null -> viewModel.dismissGeoNotePopup()
             state.selectedSklad != null -> viewModel.dismissSklad()
@@ -200,6 +206,8 @@ fun MapScreen(
 
     // Отправленные метки + метки из офлайн-очереди (тот же список, пока ни одна из частей не поменялась).
     val allGeoNotes = remember(state.geoNotes, state.pendingGeoNotes) { state.geoNotes + state.pendingGeoNotes }
+    val allProby = remember(state.proby, state.pendingProby) { state.proby + state.pendingProby }
+    val probaDraftRing = remember(state.probaDraft) { state.probaDraft?.previewRing() }
 
     // Карта на весь экран — всё остальное лежит поверх неё полупрозрачными элементами.
     Box(modifier = Modifier.fillMaxSize()) {
@@ -213,6 +221,10 @@ fun MapScreen(
             fitToken = state.fitToken,
             lesosekiTappable = !state.usedFallbackRectangles,
             geoNotes = if (state.layers.geoNotes) allGeoNotes else emptyList(),
+            proby = if (state.layers.proby || state.probaDraft != null) allProby else emptyList(),
+            selectedProbaId = state.selectedProba?.id,
+            probaDraftRing = probaDraftRing,
+            probaDraftCenter = state.probaDraft?.takeIf { it.forma != ProbaForma.KONTUR }?.center,
             colorMode = state.colorMode,
             workColors = state.workColors,
             delyankaStatusColors = state.delyankaStatusColors,
@@ -228,11 +240,12 @@ fun MapScreen(
             focus = state.focus,
             offlineBasePath = state.offlineBasePath.takeIf { state.layers.offlineBase },
             onSkladTap = { closeOverlays(); viewModel.onSkladTap(it) },
-            onRulerTap = viewModel::onRulerTap,
+            onRulerTap = viewModel::onToolTap,
             onLocationFix = viewModel::onLocationFix,
             onShapeTap = { closeOverlays(); viewModel.onShapeTap(it) },
             onEmptyTap = { closeOverlays(); viewModel.clearSelection() },
             onGeoNoteTap = { closeOverlays(); viewModel.onGeoNoteTap(it) },
+            onProbaTap = { closeOverlays(); viewModel.onProbaTap(it) },
             onMapLongPress = { lat, lon -> closeOverlays(); if (state.tool == MapTool.NONE) viewModel.startNoteDraft(lat, lon) },
             onViewportChanged = viewModel::onViewportChanged,
             initialCamera = remember { viewModel.camera },
@@ -275,6 +288,11 @@ fun MapScreen(
                             text = { Text("Обмер обходом") },
                             leadingIcon = { Icon(Icons.Filled.DirectionsWalk, contentDescription = null) },
                             onClick = { toolsMenuOpen = false; viewModel.setTool(MapTool.WALK) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Поставить пробу") },
+                            leadingIcon = { Icon(Icons.Filled.CropFree, contentDescription = null) },
+                            onClick = { toolsMenuOpen = false; viewModel.startProbaDraft() },
                         )
                         DropdownMenuItem(
                             text = { Text("Мои задачи") },
@@ -348,6 +366,7 @@ fun MapScreen(
                 state.download.error?.let { StatusChip(it, isError = true) }
                 state.error?.let { StatusChip(it, isError = true) }
                 state.geoNotesError?.let { StatusChip(it, isError = true) }
+                state.probyError?.let { StatusChip(it, isError = true) }
                 state.message?.let { StatusChip(it) }
                 if (state.usedFallbackRectangles && state.vydela.isNotEmpty()) {
                     StatusChip("Контуры лесосек ещё не получены — показаны границы выдела")
@@ -404,6 +423,7 @@ fun MapScreen(
                 walk = state.walk,
                 defaultName = state.here?.label?.let { "Обмер, $it" } ?: "Обмер",
                 onSave = viewModel::saveWalk,
+                onSaveAsProba = viewModel::walkToProba,
                 onDismiss = viewModel::dismissWalkDialog,
             )
         }
@@ -459,6 +479,42 @@ fun MapScreen(
                     onDelete = { viewModel.deleteGeoNote(note) },
                     onDismiss = viewModel::dismissGeoNotePopup,
                     onShare = { viewModel.openShare(note) },
+                    modifier = measureBottom,
+                )
+            }
+        }
+
+        var lastProbaDraft by remember { mutableStateOf(state.probaDraft) }
+        if (state.probaDraft != null) lastProbaDraft = state.probaDraft
+        BottomPanel(visible = state.probaDraft != null) {
+            (state.probaDraft ?: lastProbaDraft)?.let { draft ->
+                ProbaDraftCard(
+                    draft = draft,
+                    uchastki = remember(state.lesokulturyList, draft.center) { viewModel.probaUchastkiOptions() },
+                    onChange = viewModel::updateProbaDraft,
+                    onRestartGps = viewModel::restartProbaAveraging,
+                    onPickUchastok = viewModel::pickProbaUchastok,
+                    onSave = viewModel::saveProbaDraft,
+                    onDismiss = viewModel::dismissProbaDraft,
+                    modifier = measureBottom,
+                )
+            }
+        }
+
+        var lastProba by remember { mutableStateOf(state.selectedProba) }
+        if (state.selectedProba != null) lastProba = state.selectedProba
+        BottomPanel(visible = state.selectedProba != null) {
+            (state.selectedProba ?: lastProba)?.let { proba ->
+                ProbaDetails(
+                    proba = proba,
+                    me = state.myLocation,
+                    onNavigate = {
+                        viewModel.dismissProba()
+                        viewModel.navigateTo(proba.center, "проба П${proba.nomer}")
+                    },
+                    onMoveHere = { viewModel.moveProbaToMe(proba) },
+                    onDelete = { viewModel.deleteProba(proba) },
+                    onDismiss = viewModel::dismissProba,
                     modifier = measureBottom,
                 )
             }
@@ -682,6 +738,7 @@ private fun LayersPanel(
             LayerRow("Лесные культуры", layers.lesokultury) { onChange(layers.copy(lesokultury = it)) }
             LayerRow("Мои задачи", layers.tasks) { onChange(layers.copy(tasks = it)) }
             LayerRow("Мои метки", layers.geoNotes) { onChange(layers.copy(geoNotes = it)) }
+            LayerRow("Пробы (л/к)", layers.proby) { onChange(layers.copy(proby = it)) }
             LayerRow("Склады", layers.sklady) { onChange(layers.copy(sklady = it)) }
             LayerRow("Спутниковый снимок", layers.satellite) { onChange(layers.copy(satellite = it)) }
             if (offlineBaseName != null) {

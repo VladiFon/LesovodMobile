@@ -1,8 +1,10 @@
 package com.lesovod.mobile.ui.lesokultury
 
+import com.lesovod.mobile.data.network.dto.KartaProbaDto
 import com.lesovod.mobile.data.network.dto.ProbaRowIn
 import com.lesovod.mobile.data.network.dto.RezultatIn
 import com.lesovod.mobile.ui.proba.LesokulturyUchastok
+import java.util.Locale
 import java.util.UUID
 
 /** Одна строка таблицы проб — «Номер пробы» + «Размер пробы, м²» (ввод текстом, как везде в приложении). */
@@ -10,7 +12,24 @@ data class ProbaEntry(
     val id: String = UUID.randomUUID().toString(),
     val nomer: String = "",
     val razmer: String = "",
+    /** Проба с карты (GET /api/proby): учёт на той же пробе, что и в прошлый раз. */
+    val kartaProbaId: Int? = null,
 )
+
+/** Пробы с карты → строки карточки: «П1, 100 м²». Пустую строку по умолчанию заменяют. */
+fun ProbaEntry.isBlank() = nomer.isBlank() && razmer.isBlank() && kartaProbaId == null
+
+fun KartaProbaDto.toProbaEntry() = ProbaEntry(
+    nomer = nomer.orEmpty(),
+    razmer = ploshadM2?.let { if (it == Math.floor(it)) it.toLong().toString() else "%.1f".format(Locale.US, it) }.orEmpty(),
+    kartaProbaId = id,
+)
+
+/** Добавить пробу с карты (повторно — не добавляет); пустые строки уступают ей место. */
+fun List<ProbaEntry>.withKartaProba(proba: KartaProbaDto): List<ProbaEntry> {
+    if (any { it.kartaProbaId == proba.id }) return this
+    return filterNot { it.isBlank() } + proba.toProbaEntry()
+}
 
 /**
  * Одна строка результатов обследования — порода из справочника, «высажено» вводится вручную,
@@ -68,7 +87,7 @@ fun validateLesokulturyForm(
 }
 
 fun List<ProbaEntry>.toProbaRowsIn(): List<ProbaRowIn> = map {
-    ProbaRowIn(nomer = it.nomer.trim(), razmer = it.razmer.trim().replace(',', '.').toDouble())
+    ProbaRowIn(nomer = it.nomer.trim(), razmer = it.razmer.trim().replace(',', '.').toDouble(), kartaProbaId = it.kartaProbaId)
 }
 
 fun List<RezultatEntry>.toRezultatyIn(): List<RezultatIn> = map {

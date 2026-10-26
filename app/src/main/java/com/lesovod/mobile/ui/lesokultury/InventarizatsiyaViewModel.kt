@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.local.PendingLesokulturyPayload
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
+import com.lesovod.mobile.data.network.dto.KartaProbaDto
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.repository.OfflineQueueManager
@@ -22,6 +23,8 @@ data class InventarizatsiyaUiState(
     val god: Int = 1,
     val porody: List<String> = emptyList(),
     val proby: List<ProbaEntry> = listOf(ProbaEntry()),
+    /** Пробы выбранного участка, поставленные на карте (сервер 26.10.2026+). */
+    val kartaProby: List<KartaProbaDto> = emptyList(),
     val rezultaty: List<RezultatEntry> = emptyList(),
     val isLoadingReference: Boolean = true,
     val isSubmitting: Boolean = false,
@@ -59,7 +62,27 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
     }
 
     fun selectUchastok(uchastok: LesokulturyUchastok?) {
-        _uiState.value = _uiState.value.copy(selectedUchastok = uchastok, error = null)
+        _uiState.value = _uiState.value.copy(selectedUchastok = uchastok, error = null, kartaProby = emptyList())
+        if (uchastok != null) loadKartaProby(uchastok.id)
+    }
+
+    /**
+     * Пробы участка с карты: тех. приёмка, 1-й и 3-й год — на одних и тех же пробах. Если в
+     * карточке ещё пусто — сразу подставляем их (лишние человек уберёт крестиком).
+     * Нет связи / старый сервер — просто без подсказки.
+     */
+    private fun loadKartaProby(uchastokId: Int) {
+        viewModelScope.launch {
+            val list = repository.listKartaProbyUchastka(uchastokId).getOrNull().orEmpty()
+            val state = _uiState.value
+            if (state.selectedUchastok?.id != uchastokId) return@launch
+            val proby = if (list.isNotEmpty() && state.proby.all { it.isBlank() }) list.map { it.toProbaEntry() } else state.proby
+            _uiState.value = state.copy(kartaProby = list, proby = proby)
+        }
+    }
+
+    fun pickKartaProba(proba: KartaProbaDto) {
+        _uiState.value = _uiState.value.copy(proby = _uiState.value.proby.withKartaProba(proba), error = null)
     }
 
     fun selectGod(god: Int) {
