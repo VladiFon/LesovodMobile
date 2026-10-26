@@ -81,6 +81,8 @@ internal fun ProbaDraftCard(
     onSave: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onTakeVeshka: () -> Unit = {},
+    onUndoVeshka: () -> Unit = {},
 ) {
     val enabled = !draft.saving
     FloatingCard(modifier = modifier) {
@@ -109,11 +111,13 @@ internal fun ProbaDraftCard(
                     )
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 10.dp)) {
-                        listOf(ProbaForma.KRUG, ProbaForma.PRYAMOUGOLNIK).forEach { f ->
+                        listOf(ProbaForma.KRUG, ProbaForma.PRYAMOUGOLNIK, ProbaForma.VESHKI).forEach { f ->
                             ChoiceChip(f.label, draft.forma == f, enabled) { onChange { it.copy(forma = f) } }
                         }
                     }
-                    if (draft.forma == ProbaForma.KRUG) {
+                    if (draft.forma == ProbaForma.VESHKI) {
+                        VeshkiBlock(draft, enabled, onTakeVeshka, onUndoVeshka)
+                    } else if (draft.forma == ProbaForma.KRUG) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp),
@@ -208,7 +212,13 @@ private fun CenterStatus(draft: ProbaDraft, enabled: Boolean, onRestartGps: () -
     Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             val acc = draft.accuracy?.let { "±${it.roundToInt()} м" }
-            val text = when {
+            val n = draft.veshki.size + 1
+            val text = if (draft.forma == ProbaForma.VESHKI) when {
+                draft.center == null -> "Вешка $n: жду GPS — встань у вешки (или нажми на карту)"
+                draft.manualCenter -> "Вешка $n поставлена вручную (тап по карте)"
+                draft.averaging -> "Вешка $n: уточняю GPS — ${draft.fixes} точек${acc?.let { ", $it" } ?: ""}, стой у вешки"
+                else -> "Вешка $n по GPS готова: ${draft.fixes} точек${acc?.let { ", $it" } ?: ""}"
+            } else when {
                 draft.center == null -> "Нет точки центра — дождитесь GPS или нажмите на карту"
                 draft.manualCenter -> "Центр поставлен вручную (тап по карте)"
                 draft.averaging -> "Уточняю центр по GPS: ${draft.fixes} точек${acc?.let { ", $it" } ?: ""} — постойте в центре пробы"
@@ -230,9 +240,48 @@ private fun CenterStatus(draft: ProbaDraft, enabled: Boolean, onRestartGps: () -
             if (!draft.averaging || draft.manualCenter) {
                 TextButton(onClick = onRestartGps, enabled = enabled) {
                     Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Text(if (draft.manualCenter) "Взять центр по GPS" else "Уточнить заново", modifier = Modifier.padding(start = 6.dp))
+                    Text(
+                        when {
+                            draft.manualCenter -> if (draft.forma == ProbaForma.VESHKI) "Взять вешку по GPS" else "Взять центр по GPS"
+                            else -> "Уточнить заново"
+                        },
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Проба по вешкам: встал у вешки → телефон копит GPS → «Вешка N здесь» → к следующей.
+ * Порядок обхода не важен — углы сами встанут по кругу.
+ */
+@Composable
+private fun VeshkiBlock(draft: ProbaDraft, enabled: Boolean, onTake: () -> Unit, onUndo: () -> Unit) {
+    val n = draft.veshki.size
+    Text(
+        if (n < ProbaDraft.VESHEK) "Обойди вешки по очереди: у каждой постой, пока наберутся точки (чем больше, тем точнее), и жми «Вешка здесь». Порядок не важен."
+        else "Все $n вешки есть — можно сохранять. Если вешек больше — отметь и их.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    if (n > 0) {
+        Text(
+            draft.veshki.indices.joinToString("  ") { i ->
+                "${i + 1}" + (draft.veshkiTochnost.getOrNull(i)?.let { " ±${it.roundToInt()} м" } ?: " (вручную)")
+            }.let { "Вешки: $it" },
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+        Button(onClick = onTake, enabled = enabled && draft.center != null, modifier = Modifier.weight(1f)) {
+            Text("📍 Вешка ${n + 1} здесь")
+        }
+        if (n > 0) {
+            OutlinedButton(onClick = onUndo, enabled = enabled) { Text("↺ Убрать ${n}-ю") }
         }
     }
 }
