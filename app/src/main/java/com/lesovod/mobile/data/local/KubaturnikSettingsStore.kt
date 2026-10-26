@@ -19,7 +19,13 @@ class KubaturnikSettingsStore(context: Context) {
             ?: TilesSide.LEFT
         set(value) = prefs.edit { putString(KEY_TILES_SIDE, value.name) }
 
+    /** Голосовой ввод: повторять вслух, что услышал («двадцать четыре»), чтобы не смотреть в экран. */
+    var voiceSpeakBack: Boolean
+        get() = prefs.getBoolean(KEY_VOICE_SPEAK_BACK, true)
+        set(value) = prefs.edit { putBoolean(KEY_VOICE_SPEAK_BACK, value) }
+
     private companion object {
         const val KEY_TILES_SIDE = "tiles_side"
+        const val KEY_VOICE_SPEAK_BACK = "voice_speak_back"
     }
 }
