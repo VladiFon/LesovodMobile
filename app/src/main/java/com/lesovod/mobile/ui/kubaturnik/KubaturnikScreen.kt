@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -214,29 +216,37 @@ private fun KubaturnikCounting(
     viewModel: KubaturnikViewModel,
     onAddToReport: (KubaturnikUiState) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        KubaturnikHeader(state = state, voice = voice, viewModel = viewModel, onAddToReport = onAddToReport)
-        VoiceBar(state = state, voice = voice, viewModel = viewModel)
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    // Весь «Счёт» прокручивается: шапку (длина, шаг, сорта, итог, голос) можно увести вверх,
+    // и тогда сетка плиток занимает весь видимый экран. Высота сетки фиксирована по экрану —
+    // внутри прокрутки у неё нет «оставшегося места», а плиткам нужна конечная высота.
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val gridHeight = maxHeight.coerceAtLeast(MinScoreHeight)
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            KubaturnikHeader(state = state, voice = voice, viewModel = viewModel, onAddToReport = onAddToReport)
+            VoiceBar(state = state, voice = voice, viewModel = viewModel)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        ScoreBody(
-            tilesSide = state.tilesSide,
-            diameters = state.diameterButtonValues,
-            counts = state.currentCombo,
-            lastTapped = state.lastTap?.first,
-            onTap = viewModel::tapDiameter,
-            onUndo = viewModel::undoDiameter,
-            panel = {
-                ReferencePanel(
-                    lastTap = state.lastTap,
-                    rows = state.currentComboRows,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            },
-            modifier = Modifier.weight(1f),
-        )
+            ScoreBody(
+                tilesSide = state.tilesSide,
+                diameters = state.diameterButtonValues,
+                counts = state.currentCombo,
+                lastTapped = state.lastTap?.first,
+                onTap = viewModel::tapDiameter,
+                onUndo = viewModel::undoDiameter,
+                panel = {
+                    ReferencePanel(
+                        lastTap = state.lastTap,
+                        rows = state.currentComboRows,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                },
+                modifier = Modifier.height(gridHeight),
+            )
+        }
     }
 }
+
+private val MinScoreHeight = 360.dp
 
 @Composable
 private fun KubaturnikHeader(
@@ -341,6 +351,8 @@ private fun SortRow(state: KubaturnikUiState, viewModel: KubaturnikViewModel) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
+        // Сортов может быть больше, чем влезает в ширину, — листаются вбок.
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
     ) {
         Text("Сорт:", style = MaterialTheme.typography.labelMedium)
         state.sorts.forEach { sort ->
