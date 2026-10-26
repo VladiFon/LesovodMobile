@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,7 @@ import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PorodaDropdown
 import com.lesovod.mobile.ui.components.SecondaryButton
 import com.lesovod.mobile.ui.components.StatusChip
+import com.lesovod.mobile.ui.proba.LesokulturyUchastok
 import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 import kotlinx.serialization.json.JsonElement
@@ -143,6 +145,9 @@ fun RezultatySection(
     onVysazhenoChange: (poroda: String, value: String) -> Unit,
     onRemove: (String) -> Unit,
     onAdd: (String) -> Unit,
+    uchastok: LesokulturyUchastok? = null,
+    onPrizhilosChange: (poroda: String, value: String) -> Unit = { _, _ -> },
+    onVysazhenoAuto: (poroda: String) -> Unit = {},
 ) {
     var tab by remember { mutableStateOf(PorodyTab.VVOD) }
     val totalRazmer = remember(proby) { totalRazmerM2(proby) }
@@ -188,6 +193,10 @@ fun RezultatySection(
                 onVysazhenoChange = onVysazhenoChange,
                 onRemove = onRemove,
                 onAdd = onAdd,
+                uchastok = uchastok,
+                proby = proby,
+                onPrizhilosChange = onPrizhilosChange,
+                onVysazhenoAuto = onVysazhenoAuto,
             )
             PorodyTab.ITOG -> PorodyItogTab(rezultaty = rezultaty, multiplier = multiplier)
         }
@@ -204,6 +213,10 @@ private fun PorodyVvodTab(
     onVysazhenoChange: (poroda: String, value: String) -> Unit,
     onRemove: (String) -> Unit,
     onAdd: (String) -> Unit,
+    uchastok: LesokulturyUchastok?,
+    proby: List<ProbaEntry>,
+    onPrizhilosChange: (poroda: String, value: String) -> Unit,
+    onVysazhenoAuto: (poroda: String) -> Unit,
 ) {
     // Показываем только те породы, что реально растут на участке: остальные добавляются вручную,
     // а не висят длинным списком из всего справочника.
@@ -218,7 +231,7 @@ private fun PorodyVvodTab(
             )
         } else {
             Text(
-                "«+» — прижилось ещё одно, «−» — отменить последнее",
+                "Прижилось — наберите число или считайте «+» / «−». Высажено на пробах считается само по составу и густоте участка.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -233,6 +246,9 @@ private fun PorodyVvodTab(
                 onDecrement = { onUndo(poroda) },
                 onVysazhenoChange = { onVysazhenoChange(poroda, it) },
                 onRemove = { onRemove(poroda) },
+                raschet = vysazhenoRaschet(poroda, uchastok, proby),
+                onPrizhilosChange = { onPrizhilosChange(poroda, it) },
+                onVysazhenoAuto = { onVysazhenoAuto(poroda) },
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -274,8 +290,16 @@ private fun PorodaInputRow(
     onDecrement: () -> Unit,
     onVysazhenoChange: (String) -> Unit,
     onRemove: () -> Unit,
+    raschet: VysazhenoRaschet? = null,
+    onPrizhilosChange: (String) -> Unit = {},
+    onVysazhenoAuto: () -> Unit = {},
 ) {
     val count = rezultat?.prizhilos ?: 0
+    // Своё текстовое состояние: пустое поле — это 0, но стирать «0» перед вводом не нужно.
+    var prizhilosText by remember(poroda) { mutableStateOf(if (count == 0) "" else "$count") }
+    if ((prizhilosText.toIntOrNull() ?: 0) != count) prizhilosText = if (count == 0) "" else "$count"
+    val vysazheno = rezultat?.vysazheno?.toIntOrNull()
+    val bolshe = vysazheno != null && count > vysazheno
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -285,38 +309,68 @@ private fun PorodaInputRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(poroda, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-
-            OutlinedIconButton(onClick = onDecrement, enabled = enabled && count > 0, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Filled.Remove, contentDescription = "Уменьшить «прижилось», $poroda")
-            }
-            Text(
-                "$count",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = Spacing.s),
-            )
-            OutlinedIconButton(onClick = onIncrement, enabled = enabled, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Filled.Add, contentDescription = "Увеличить «прижилось», $poroda")
-            }
             if (rezultat != null) {
                 IconButton(onClick = onRemove, enabled = enabled) {
                     Icon(Icons.Filled.Close, contentDescription = "Убрать породу «$poroda»")
                 }
             }
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+            OutlinedIconButton(onClick = onDecrement, enabled = enabled && count > 0, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Remove, contentDescription = "Уменьшить «прижилось», $poroda")
+            }
+            OutlinedTextField(
+                value = prizhilosText,
+                onValueChange = { v ->
+                    prizhilosText = v.filter(Char::isDigit).take(6)
+                    onPrizhilosChange(prizhilosText)
+                },
+                label = { Text("Прижилось") },
+                placeholder = { Text("0") },
+                singleLine = true,
+                enabled = enabled,
+                isError = bolshe,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedIconButton(onClick = onIncrement, enabled = enabled, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Add, contentDescription = "Увеличить «прижилось», $poroda")
+            }
+        }
         if (rezultat != null) {
+            val vruchnuyu = rezultat.vysazhenoVruchnuyu
             OutlinedTextField(
                 value = rezultat.vysazheno,
                 onValueChange = onVysazhenoChange,
-                label = { Text("Высажено") },
+                label = { Text(if (vruchnuyu || raschet == null) "Высажено на пробах" else "Высажено на пробах (авто)") },
                 singleLine = true,
                 enabled = enabled,
+                isError = bolshe,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                trailingIcon = if (vruchnuyu) {
+                    { TextButton(onClick = onVysazhenoAuto, enabled = enabled) { Text("авто") } }
+                } else null,
+                supportingText = {
+                    Text(
+                        when {
+                            bolshe -> "Прижилось больше, чем высажено — проверьте цифры"
+                            vruchnuyu -> "Введено вручную" + (raschet?.let { " · по расчёту было бы ${it.shtuk}" } ?: "")
+                            raschet != null -> raschetText(raschet)
+                            else -> "Не из чего посчитать (нет доли в составе, густоты или размера проб) — введите сами"
+                        },
+                    )
+                },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
     }
 }
+
+/** «3000 шт/га × 8/10 × 100 м² = 24 шт» — чтобы было видно, откуда цифра. */
+private fun raschetText(r: VysazhenoRaschet): String =
+    "${formatCompact(r.naGa)} шт/га × ${r.dolya}/10 × ${formatCompact(r.razmerM2)} м² = ${r.shtuk} шт"
 
 @Composable
 private fun PorodyItogTab(rezultaty: List<RezultatEntry>, multiplier: Double?) {

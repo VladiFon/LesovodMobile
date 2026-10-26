@@ -108,7 +108,7 @@ private fun String.toNumberOrNull(): Double? = trim().replace(',', '.').toDouble
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun UchastokPolyaCard(uchastok: LesokulturyUchastok, enabled: Boolean = true) {
+fun UchastokPolyaCard(uchastok: LesokulturyUchastok, enabled: Boolean = true, onSaved: (UchastokPolyaRequest) -> Unit = {}) {
     val viewModel: UchastokPolyaViewModel = viewModel(key = "polya-${uchastok.id}")
     val saveState by viewModel.state.collectAsState()
     val polya: UchastokPolya = uchastok.polya
@@ -210,18 +210,17 @@ fun UchastokPolyaCard(uchastok: LesokulturyUchastok, enabled: Boolean = true) {
             text = if (saving) "Сохраняю…" else "Сохранить данные участка",
             enabled = fieldsEnabled,
             onClick = {
-                viewModel.save(
-                    uchastok.id,
-                    UchastokPolyaRequest(
-                        podvydel = podvydel.trim().takeIf { it.isNotEmpty() },
-                        metodSozdaniya = metod.takeIf { it.isNotEmpty() },
-                        sposobObrabotki = sposob.takeIf { it.isNotEmpty() },
-                        shemaMezhduRyadami = mezhdu.toNumberOrNull()?.takeIf { it > 0 },
-                        shemaVRyadu = vRyadu.toNumberOrNull()?.takeIf { it > 0 },
-                        gustotaPosadki = (gustota.toNumberOrNull() ?: gustotaPoShema?.toDouble())?.takeIf { it > 0 },
-                        posadochnyyMaterial = material.trim().takeIf { it.isNotEmpty() },
-                    ),
+                val request = UchastokPolyaRequest(
+                    podvydel = podvydel.trim().takeIf { it.isNotEmpty() },
+                    metodSozdaniya = metod.takeIf { it.isNotEmpty() },
+                    sposobObrabotki = sposob.takeIf { it.isNotEmpty() },
+                    shemaMezhduRyadami = mezhdu.toNumberOrNull()?.takeIf { it > 0 },
+                    shemaVRyadu = vRyadu.toNumberOrNull()?.takeIf { it > 0 },
+                    gustotaPosadki = (gustota.toNumberOrNull() ?: gustotaPoShema?.toDouble())?.takeIf { it > 0 },
+                    posadochnyyMaterial = material.trim().takeIf { it.isNotEmpty() },
                 )
+                viewModel.save(uchastok.id, request)
+                onSaved(request)
             },
         )
     }

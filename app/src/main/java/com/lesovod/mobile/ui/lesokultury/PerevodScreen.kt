@@ -113,7 +113,7 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
                 return@Column
             }
 
-            UchastokPolyaCard(uchastok = state.selectedUchastok!!, enabled = !state.isSubmitting)
+            UchastokPolyaCard(uchastok = state.selectedUchastok!!, enabled = !state.isSubmitting, onSaved = viewModel::onPolyaSaved)
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(Spacing.m),
@@ -136,7 +136,7 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
 
             RezultatySection(
                 porody = state.porody,
-                rezultaty = state.rezultaty,
+                rezultaty = state.rezultatyItog,
                 proby = state.proby,
                 enabled = !state.isSubmitting,
                 onTap = viewModel::tapPoroda,
@@ -144,6 +144,9 @@ fun PerevodScreen(onBack: () -> Unit, viewModel: PerevodViewModel = viewModel())
                 onVysazhenoChange = viewModel::onVysazhenoChange,
                 onRemove = viewModel::removeRezultat,
                 onAdd = viewModel::addPoroda,
+                uchastok = state.selectedUchastok,
+                onPrizhilosChange = viewModel::onPrizhilosChange,
+                onVysazhenoAuto = viewModel::onVysazhenoAuto,
             )
 
             PreviewCard(preview = state.preview)

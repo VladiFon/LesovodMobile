@@ -7,6 +7,7 @@ import com.lesovod.mobile.data.local.PendingLesokulturyPayload
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.KartaProbaDto
+import com.lesovod.mobile.data.network.dto.UchastokPolyaRequest
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.repository.BotRepository
 import com.lesovod.mobile.data.repository.OfflineQueueManager
@@ -33,6 +34,8 @@ data class InventarizatsiyaUiState(
     /** Нет сети — карточка сохранена на телефоне и уйдёт на сервер сама, когда появится связь. */
     val queuedOffline: Boolean = false,
 ) {
+    /** Результаты с «высажено», посчитанным по составу и размеру проб, — их видит человек и их же отправляем. */
+    val rezultatyItog: List<RezultatEntry> get() = rezultaty.withAutoVysazheno(selectedUchastok, proby)
     val preview: LesokulturyPreview get() = computePreview(proby, rezultaty, selectedUchastok?.ploshad)
 }
 
@@ -61,8 +64,11 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
         }
     }
 
+    /** Участок выбран — породы из его состава (8Е2С → Ель, Сосна) сразу строками, если в карточке ещё ничего не насчитано. */
     fun selectUchastok(uchastok: LesokulturyUchastok?) {
-        _uiState.value = _uiState.value.copy(selectedUchastok = uchastok, error = null, kartaProby = emptyList())
+        val state = _uiState.value
+        val rezultaty = if (uchastok != null && state.rezultaty.all { it.prizhilos == 0 && !it.vysazhenoVruchnuyu }) rezultatyIzSostava(uchastok, state.porody) else state.rezultaty
+        _uiState.value = state.copy(selectedUchastok = uchastok, rezultaty = rezultaty, error = null, kartaProby = emptyList())
         if (uchastok != null) loadKartaProby(uchastok.id)
     }
 
@@ -129,11 +135,38 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
         )
     }
 
+    /** «Высажено» поправили руками — дальше авторасчёт эту породу не трогает. */
     fun onVysazhenoChange(poroda: String, value: String) {
         _uiState.value = _uiState.value.copy(
-            rezultaty = _uiState.value.rezultaty.map { if (it.poroda == poroda) it.copy(vysazheno = value) else it },
+            rezultaty = _uiState.value.rezultaty.map {
+                if (it.poroda == poroda) it.copy(vysazheno = value.filter(Char::isDigit), vysazhenoVruchnuyu = true) else it
+            },
             error = null,
         )
+    }
+
+    /** Вернуть «высажено» к расчёту по составу и размеру проб. */
+    fun onVysazhenoAuto(poroda: String) {
+        _uiState.value = _uiState.value.copy(
+            rezultaty = _uiState.value.rezultaty.map { if (it.poroda == poroda) it.copy(vysazheno = "", vysazhenoVruchnuyu = false) else it },
+        )
+    }
+
+    /** «Прижилось» набрали числом. */
+    fun onPrizhilosChange(poroda: String, value: String) {
+        val count = value.filter(Char::isDigit).take(6).toIntOrNull() ?: 0
+        _uiState.value = _uiState.value.copy(
+            rezultaty = _uiState.value.rezultaty.map { if (it.poroda == poroda) it.copy(prizhilos = count) else it },
+            error = null,
+        )
+    }
+
+    /** Густоту/схему дописали в «Данных участка» — расчёт «высажено» берёт их сразу. */
+    fun onPolyaSaved(request: UchastokPolyaRequest) {
+        val state = _uiState.value
+        val uchastok = state.selectedUchastok ?: return
+        val updated = uchastok.withPolya(request)
+        _uiState.value = state.copy(selectedUchastok = updated, uchastki = state.uchastki.map { if (it.id == updated.id) updated else it })
     }
 
     /** Добавить породу в карточку вручную — в списке ввода только те породы, что есть на участке. */
@@ -151,7 +184,7 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
 
     fun submit() {
         val state = _uiState.value
-        val validationError = validateLesokulturyForm(state.selectedUchastok, state.proby, state.rezultaty)
+        val validationError = validateLesokulturyForm(state.selectedUchastok, state.proby, state.rezultatyItog)
         if (validationError != null) {
             _uiState.value = state.copy(error = validationError)
             return
@@ -162,7 +195,7 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
         viewModelScope.launch {
             val request = InventarizatsiyaRequest(
                 proby = state.proby.toProbaRowsIn(),
-                rezultaty = state.rezultaty.toRezultatyIn(),
+                rezultaty = state.rezultatyItog.toRezultatyIn(),
                 god = state.god,
             )
             val result = repository.submitInventarizatsiya(uchastok.id, request)

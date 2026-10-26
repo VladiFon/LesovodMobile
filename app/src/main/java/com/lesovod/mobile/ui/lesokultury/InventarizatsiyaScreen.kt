@@ -83,7 +83,7 @@ fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewMo
                 return@Column
             }
 
-            UchastokPolyaCard(uchastok = state.selectedUchastok!!, enabled = !state.isSubmitting)
+            UchastokPolyaCard(uchastok = state.selectedUchastok!!, enabled = !state.isSubmitting, onSaved = viewModel::onPolyaSaved)
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(Spacing.m),
@@ -106,7 +106,7 @@ fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewMo
 
             RezultatySection(
                 porody = state.porody,
-                rezultaty = state.rezultaty,
+                rezultaty = state.rezultatyItog,
                 proby = state.proby,
                 enabled = !state.isSubmitting,
                 onTap = viewModel::tapPoroda,
@@ -114,6 +114,9 @@ fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewMo
                 onVysazhenoChange = viewModel::onVysazhenoChange,
                 onRemove = viewModel::removeRezultat,
                 onAdd = viewModel::addPoroda,
+                uchastok = state.selectedUchastok,
+                onPrizhilosChange = viewModel::onPrizhilosChange,
+                onVysazhenoAuto = viewModel::onVysazhenoAuto,
             )
 
             PreviewCard(preview = state.preview)
