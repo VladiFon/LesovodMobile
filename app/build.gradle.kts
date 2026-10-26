@@ -12,8 +12,14 @@ android {
         applicationId = "com.lesovod.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 18
-        versionName = "0.8.3"
+        versionCode = 19
+        versionName = "0.9.0"
+
+        // Vosk (голосовой ввод) тянет нативную библиотеку ~10 МБ на каждую архитектуру —
+        // оставляем только ARM-телефоны, x86 нужен лишь эмуляторам.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     // Фиксированный debug-ключ в репозитории (keystore/debug.keystore) вместо
@@ -93,6 +99,11 @@ dependencies {
 
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("org.osmdroid:osmdroid-android:6.1.20")
+
+    // Оффлайн-распознавание речи для голосового ввода в кубатурнике (модель качается отдельно).
+    implementation("com.alphacephei:vosk-android:0.3.75")
+
+    testImplementation("junit:junit:4.13.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

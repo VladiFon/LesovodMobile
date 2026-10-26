@@ -1,7 +1,9 @@
 package com.lesovod.mobile.ui.kubaturnik
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.lesovod.mobile.data.local.KubaturnikBatchStore
 import com.lesovod.mobile.data.local.KubaturnikBlock
 import com.lesovod.mobile.data.local.KubaturnikCalculation
@@ -13,8 +15,12 @@ import com.lesovod.mobile.data.local.KubaturnikTableLoader
 import com.lesovod.mobile.data.local.TilesSide
 import com.lesovod.mobile.data.local.diameterButtons
 import com.lesovod.mobile.data.local.volumeFor
+import com.lesovod.mobile.data.voice.KubaturnikVoice
+import com.lesovod.mobile.data.voice.VoskModelManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.util.Locale
 
 enum class KubaturnikDestination(val label: String) {
     MACHINE("Машина"), TRAILER("Прицеп");
@@ -168,12 +174,43 @@ fun thicknessGroup(diameter: Int): ThicknessGroup = when {
     else -> ThicknessGroup.THICK
 }
 
+/** Строка журнала голосового ввода: что услышал телефон и что он с этим сделал. */
+data class VoiceLogEntry(val heard: String, val result: String, val ok: Boolean)
+
+data class VoiceUiState(
+    val listening: Boolean = false,
+    /** Модель грузится в память (секунда-две после нажатия на микрофон). */
+    val starting: Boolean = false,
+    val modelReady: Boolean = false,
+    val downloading: Boolean = false,
+    /** 0..1, или -1 — размер неизвестен. */
+    val downloadProgress: Float = 0f,
+    val showModelDialog: Boolean = false,
+    val partial: String = "",
+    /** Последние фразы, свежая — первой. */
+    val log: List<VoiceLogEntry> = emptyList(),
+    val speakBack: Boolean = true,
+    val error: String? = null,
+)
+
+/** Одно изменение счётчика голосом — чтобы «отмена» могла его откатить. */
+private data class VoiceDelta(val sort: String, val destination: KubaturnikDestination, val diameter: Int, val delta: Int)
+
 class KubaturnikViewModel(application: Application) : AndroidViewModel(application) {
     private val store = KubaturnikBatchStore(application)
     private val settingsStore = KubaturnikSettingsStore(application)
+    private val modelManager = VoskModelManager(application)
+    private var voice: KubaturnikVoice? = null
+    /** Голосовые фразы, изменившие счёт, — последняя в конце. «Отмена» откатывает фразу целиком. */
+    private val voiceUndo = ArrayDeque<List<VoiceDelta>>()
 
     private val _uiState = MutableStateFlow(KubaturnikUiState())
     val uiState = _uiState.asStateFlow()
+
+    private val _voiceState = MutableStateFlow(
+        VoiceUiState(modelReady = modelManager.isReady, speakBack = settingsStore.voiceSpeakBack),
+    )
+    val voiceState = _voiceState.asStateFlow()
 
     init {
         val tilesSide = settingsStore.tilesSide
@@ -282,15 +319,10 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
         val state = _uiState.value
         val block = state.selectedBlock ?: return
         val volume = block.volumeFor(diameter, state.selectedLengthIndex) ?: return
-
-        val counts = state.counts.toMutableMap()
-        val bySort = counts[state.activeSort]?.toMutableMap() ?: mutableMapOf()
-        val byDest = bySort[state.destination]?.toMutableMap() ?: mutableMapOf()
-        byDest[diameter] = (byDest[diameter] ?: 0) + 1
-        bySort[state.destination] = byDest
-        counts[state.activeSort] = bySort
-
-        _uiState.value = state.copy(counts = counts, lastTap = diameter to volume)
+        _uiState.value = state.copy(
+            counts = state.countsWith(state.activeSort, state.destination, diameter, +1),
+            lastTap = diameter to volume,
+        )
         persist()
     }
 
@@ -299,19 +331,13 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
         val state = _uiState.value
         val current = state.currentCombo[diameter] ?: return
         if (current <= 0) return
-
-        val counts = state.counts.toMutableMap()
-        val bySort = counts[state.activeSort]?.toMutableMap() ?: return
-        val byDest = bySort[state.destination]?.toMutableMap() ?: return
         val newCount = current - 1
-        if (newCount <= 0) byDest.remove(diameter) else byDest[diameter] = newCount
-        bySort[state.destination] = byDest
-        counts[state.activeSort] = bySort
-
         // Счёт «последней» плитки упал до 0 — сбрасываем «последний тап» (панель покажет «—»).
         val lastTap = if (newCount <= 0 && state.lastTap?.first == diameter) null else state.lastTap
-
-        _uiState.value = state.copy(counts = counts, lastTap = lastTap)
+        _uiState.value = state.copy(
+            counts = state.countsWith(state.activeSort, state.destination, diameter, -1),
+            lastTap = lastTap,
+        )
         persist()
     }
 
@@ -332,6 +358,7 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
             calculations = store.listCalculations()
         }
         store.clearDraft()
+        voiceUndo.clear()
         _uiState.value = KubaturnikUiState(
             loading = false,
             table = state.table,
@@ -363,9 +390,225 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
+    // ---- Голосовой ввод ----
+
+    fun setVoiceSpeakBack(enabled: Boolean) {
+        settingsStore.voiceSpeakBack = enabled
+        _voiceState.value = _voiceState.value.copy(speakBack = enabled)
+    }
+
+    fun showVoiceModelDialog(show: Boolean) {
+        _voiceState.value = _voiceState.value.copy(showModelDialog = show, error = null)
+    }
+
+    fun dismissVoiceError() {
+        _voiceState.value = _voiceState.value.copy(error = null)
+    }
+
+    fun downloadVoiceModel() = loadVoiceModel { onProgress -> modelManager.download(onProgress) }
+
+    fun importVoiceModel(uri: Uri) = loadVoiceModel { onProgress -> modelManager.importFromUri(uri, onProgress) }
+
+    private fun loadVoiceModel(load: suspend ((Float) -> Unit) -> Unit) {
+        if (_voiceState.value.downloading) return
+        _voiceState.value = _voiceState.value.copy(downloading = true, downloadProgress = 0f, error = null)
+        viewModelScope.launch {
+            val result = runCatching {
+                load { progress -> _voiceState.value = _voiceState.value.copy(downloadProgress = progress) }
+            }
+            _voiceState.value = _voiceState.value.copy(
+                downloading = false,
+                modelReady = modelManager.isReady,
+                showModelDialog = !modelManager.isReady,
+                error = result.exceptionOrNull()?.let { "Модель не загрузилась: ${it.message ?: it.javaClass.simpleName}" },
+            )
+            if (modelManager.isReady) startVoice()
+        }
+    }
+
+    /** Включить микрофон. Без модели — показываем окно загрузки модели. */
+    fun startVoice() {
+        val path = modelManager.modelPath
+        if (path == null) {
+            showVoiceModelDialog(true)
+            return
+        }
+        val engine = voice ?: KubaturnikVoice(getApplication()).also { voice = it }
+        _voiceState.value = _voiceState.value.copy(starting = true, listening = false, partial = "", error = null)
+        engine.start(path, voiceVocabulary(), object : KubaturnikVoice.Listener {
+            override fun onReady() {
+                _voiceState.value = _voiceState.value.copy(starting = false, listening = true)
+            }
+
+            override fun onPartial(text: String) {
+                _voiceState.value = _voiceState.value.copy(partial = text)
+            }
+
+            override fun onPhrase(text: String) = handlePhrase(text)
+
+            override fun onError(message: String) {
+                _voiceState.value = _voiceState.value.copy(starting = false, listening = false, partial = "", error = message)
+            }
+        })
+    }
+
+    fun stopVoice() {
+        voice?.stop()
+        _voiceState.value = _voiceState.value.copy(starting = false, listening = false, partial = "")
+    }
+
+    /** Словарь распознавателя: числа и команды + слова из названий сортов («сорт пиловочник»). */
+    private fun voiceVocabulary(): Set<String> =
+        VoiceCommandParser.vocabulary + _uiState.value.sorts.flatMap { sortWords(it) }
+
+    private fun sortWords(sort: String): List<String> =
+        sort.lowercase(Locale("ru")).replace('ё', 'е').split(Regex("[^\\p{L}]+")).filter { it.length >= 2 }
+
+    /** Разбирает фразу и применяет команды по порядку; отвечает голосом одной фразой на всё сразу. */
+    fun handlePhrase(text: String) {
+        val parsed = VoiceCommandParser.parse(text)
+        val replies = mutableListOf<String>()
+        val applied = mutableListOf<VoiceDelta>()
+        var ok = parsed.commands.isNotEmpty()
+
+        for (command in parsed.commands) {
+            when (command) {
+                is VoiceCommand.Count -> {
+                    val (reply, done) = applyVoiceCount(command, applied)
+                    replies += reply
+                    if (!done) ok = false
+                }
+                is VoiceCommand.SetDestination -> {
+                    setDestination(command.destination)
+                    replies += command.destination.label
+                }
+                is VoiceCommand.SetSort -> {
+                    val sort = resolveSort(command)
+                    if (sort != null) {
+                        setActiveSort(sort)
+                        replies += "Сорт $sort"
+                    } else {
+                        replies += "Нет такого сорта"
+                        ok = false
+                    }
+                }
+                VoiceCommand.Undo -> replies += undoLastVoice()
+                VoiceCommand.Total -> replies += totalPhrase()
+                VoiceCommand.Stop -> {
+                    stopVoice()
+                    replies += "Выключаю"
+                }
+            }
+        }
+        if (applied.isNotEmpty()) {
+            voiceUndo.addLast(applied)
+            while (voiceUndo.size > MAX_VOICE_UNDO) voiceUndo.removeFirst()
+            persist()
+        }
+
+        val result = replies.joinToString(", ").ifEmpty { "не понял" }
+        val log = (listOf(VoiceLogEntry(text, result, ok)) + _voiceState.value.log).take(MAX_VOICE_LOG)
+        _voiceState.value = _voiceState.value.copy(partial = "", log = log)
+        if (_voiceState.value.speakBack && replies.isNotEmpty()) voice?.speak(replies.joinToString(". "))
+    }
+
+    /** Возвращает (ответ, успешно ли). Диаметр подгоняется к плиткам: нечётный при шаге 2 — вверх (25 → 26). */
+    private fun applyVoiceCount(command: VoiceCommand.Count, applied: MutableList<VoiceDelta>): Pair<String, Boolean> {
+        val state = _uiState.value
+        val block = state.selectedBlock ?: return "Сначала выбери длину" to false
+        val buttons = state.diameterButtonValues
+        if (buttons.isEmpty() || command.diameter < buttons.first() || command.diameter > buttons.last()) {
+            return "${command.diameter} нет в таблице" to false
+        }
+        val diameter = buttons.first { it >= command.diameter }
+        val volume = block.volumeFor(diameter, state.selectedLengthIndex) ?: return "$diameter нет в таблице" to false
+
+        if (command.count > 0) {
+            _uiState.value = state.copy(
+                counts = state.countsWith(state.activeSort, state.destination, diameter, command.count),
+                lastTap = diameter to volume,
+            )
+            applied += VoiceDelta(state.activeSort, state.destination, diameter, command.count)
+            return (if (command.count == 1) "$diameter" else "$diameter, ${piecesPhrase(command.count)}") to true
+        }
+
+        val current = state.currentCombo[diameter] ?: 0
+        if (current <= 0) return "$diameter и так нет" to false
+        val removed = minOf(current, -command.count)
+        val lastTap = if (current == removed && state.lastTap?.first == diameter) null else state.lastTap
+        _uiState.value = state.copy(
+            counts = state.countsWith(state.activeSort, state.destination, diameter, -removed),
+            lastTap = lastTap,
+        )
+        applied += VoiceDelta(state.activeSort, state.destination, diameter, -removed)
+        return (if (removed == 1) "Минус $diameter" else "Минус $diameter, ${piecesPhrase(removed)}") to true
+    }
+
+    private fun resolveSort(command: VoiceCommand.SetSort): String? {
+        val sorts = _uiState.value.sorts
+        command.number?.let { return sorts.getOrNull(it - 1) }
+        val name = command.name ?: return null
+        return sorts.firstOrNull { sort ->
+            sortWords(sort).any { word -> word.startsWith(name.take(3)) && name.startsWith(word.take(3)) }
+        }
+    }
+
+    private fun undoLastVoice(): String {
+        val deltas = voiceUndo.removeLastOrNull() ?: return "Нечего отменять"
+        var state = _uiState.value
+        for (d in deltas.asReversed()) {
+            state = state.copy(counts = state.countsWith(d.sort, d.destination, d.diameter, -d.delta))
+        }
+        _uiState.value = state.copy(lastTap = null)
+        persist()
+        val what = deltas.joinToString(", ") { d ->
+            val n = kotlin.math.abs(d.delta)
+            if (n == 1) "${d.diameter}" else "${d.diameter}, ${piecesPhrase(n)}"
+        }
+        return "Отменил $what"
+    }
+
+    /** «Итого»: текущая связка сорт·машина/прицеп и вся партия. */
+    private fun totalPhrase(): String {
+        val state = _uiState.value
+        val rows = state.currentComboRows
+        val comboCount = rows.sumOf { it.count }
+        val comboVolume = rows.sumOf { it.totalVolume }
+        return "${state.destination.label}, сорт ${state.activeSort}: ${piecesPhrase(comboCount)}, ${cubes(comboVolume)}. " +
+            "Вся партия: ${piecesPhrase(state.totalLogCount)}, ${cubes(state.totalVolume)}"
+    }
+
+    private fun cubes(volume: Double): String = String.format(Locale("ru"), "%.2f куба", volume)
+
+    override fun onCleared() {
+        voice?.release()
+        voice = null
+        super.onCleared()
+    }
+
     private fun persist() {
         val state = _uiState.value
         if (!state.lengthChosen) return
         store.saveDraft(currentSnapshot(state))
     }
 }
+
+/** Новая карта счётчиков: к (сорт, назначение, диаметр) прибавлено [delta]; ноль и меньше — запись убирается. */
+private fun KubaturnikUiState.countsWith(
+    sort: String,
+    destination: KubaturnikDestination,
+    diameter: Int,
+    delta: Int,
+): Map<String, Map<KubaturnikDestination, DiameterCounts>> {
+    val newCounts = counts.toMutableMap()
+    val bySort = newCounts[sort]?.toMutableMap() ?: mutableMapOf()
+    val byDest = bySort[destination]?.toMutableMap() ?: mutableMapOf()
+    val value = (byDest[diameter] ?: 0) + delta
+    if (value <= 0) byDest.remove(diameter) else byDest[diameter] = value
+    bySort[destination] = byDest
+    newCounts[sort] = bySort
+    return newCounts
+}
+
+private const val MAX_VOICE_UNDO = 30
+private const val MAX_VOICE_LOG = 5

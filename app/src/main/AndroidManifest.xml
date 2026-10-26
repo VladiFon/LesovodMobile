@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Обновления вне Google Play: установка APK, скачанного с GitHub Releases. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Голосовой ввод диаметров в кубатурнике (распознавание Vosk — на телефоне, звук никуда не уходит). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Напоминания по заметкам — обычные локальные уведомления, будильник не точечный (setAndAllowWhileIdle),
          поэтому SCHEDULE_EXACT_ALARM не требуется. -->
 

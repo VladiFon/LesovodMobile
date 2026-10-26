@@ -71,6 +71,8 @@ fun KubaturnikScreen(
     viewModel: KubaturnikViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val voice by viewModel.voiceState.collectAsState()
+    VoiceLifecycleGuard(viewModel)
 
     Column(
         modifier = Modifier
@@ -92,6 +94,7 @@ fun KubaturnikScreen(
                 !state.lengthChosen -> LengthPicker(state = state, viewModel = viewModel)
                 else -> KubaturnikMain(
                     state = state,
+                    voice = voice,
                     viewModel = viewModel,
                     onAddToReport = { s ->
                         WorkReportPrefillRequest.set(s.toReportPrefill())
@@ -108,6 +111,7 @@ fun KubaturnikScreen(
     if (state.showResetConfirm) {
         ResetConfirmDialog(onConfirm = viewModel::confirmReset, onDismiss = viewModel::dismissReset)
     }
+    VoiceModelDialog(voice = voice, viewModel = viewModel)
 }
 
 @Composable
@@ -180,6 +184,7 @@ private fun LengthPicker(state: KubaturnikUiState, viewModel: KubaturnikViewMode
 @Composable
 private fun KubaturnikMain(
     state: KubaturnikUiState,
+    voice: VoiceUiState,
     viewModel: KubaturnikViewModel,
     onAddToReport: (KubaturnikUiState) -> Unit,
 ) {
@@ -194,7 +199,7 @@ private fun KubaturnikMain(
 
         Box(modifier = Modifier.weight(1f)) {
             when (tab) {
-                0 -> KubaturnikCounting(state = state, viewModel = viewModel, onAddToReport = onAddToReport)
+                0 -> KubaturnikCounting(state = state, voice = voice, viewModel = viewModel, onAddToReport = onAddToReport)
                 1 -> KubaturnikSummary(state = state)
                 else -> KubaturnikHistory(state = state, viewModel = viewModel, onAddToReport = onAddToReport)
             }
@@ -205,11 +210,13 @@ private fun KubaturnikMain(
 @Composable
 private fun KubaturnikCounting(
     state: KubaturnikUiState,
+    voice: VoiceUiState,
     viewModel: KubaturnikViewModel,
     onAddToReport: (KubaturnikUiState) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        KubaturnikHeader(state = state, viewModel = viewModel, onAddToReport = onAddToReport)
+        KubaturnikHeader(state = state, voice = voice, viewModel = viewModel, onAddToReport = onAddToReport)
+        VoiceBar(state = state, voice = voice, viewModel = viewModel)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         ScoreBody(
@@ -234,6 +241,7 @@ private fun KubaturnikCounting(
 @Composable
 private fun KubaturnikHeader(
     state: KubaturnikUiState,
+    voice: VoiceUiState,
     viewModel: KubaturnikViewModel,
     onAddToReport: (KubaturnikUiState) -> Unit,
 ) {
@@ -250,6 +258,7 @@ private fun KubaturnikHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
+            VoiceMicButton(voice = voice, viewModel = viewModel)
             IconButton(onClick = viewModel::toggleTilesSide) {
                 Icon(
                     imageVector = Icons.Filled.SwapHoriz,
