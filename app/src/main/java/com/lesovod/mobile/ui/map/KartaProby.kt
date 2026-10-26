@@ -166,6 +166,8 @@ data class ProbaDraft(
     /** Отмеченные вешки (углы) и точность каждой; center — вешка, у которой стоим сейчас. */
     val veshki: List<LatLon> = emptyList(),
     val veshkiTochnost: List<Float?> = emptyList(),
+    /** Подогнать вешки под ровный прямоугольник dlina × shirina (GPS в лесу гуляет на метры). */
+    val podgonka: Boolean = true,
     val uchastokId: Int? = null,
     /** Участок выбран сам (по месту), а не человеком. */
     val uchastokAuto: Boolean = true,
@@ -181,6 +183,7 @@ data class ProbaDraft(
     fun previewRing(): List<LatLon>? {
         if (forma == ProbaForma.KONTUR) return kontur.takeIf { it.size >= 3 }
         if (forma == ProbaForma.VESHKI) {
+            podgonkaVeshek()?.let { return it.ring }
             // вместе с вешкой, у которой стоим: видно, как ляжет граница
             val tek = center?.takeIf { veshki.size < VESHEK }
             return uporyadochitUgly(veshki + listOfNotNull(tek)).takeIf { it.size >= 2 }
@@ -201,7 +204,16 @@ data class ProbaDraft(
         ProbaForma.KRUG -> number(radius)?.let { PI * it * it }
         ProbaForma.PRYAMOUGOLNIK -> number(dlina)?.let { d -> number(shirina)?.let { d * it } }
         ProbaForma.KONTUR -> polygonAreaSquareMeters(kontur).takeIf { kontur.size >= 3 }
-        ProbaForma.VESHKI -> polygonAreaSquareMeters(uporyadochitUgly(veshki)).takeIf { veshki.size >= 3 }
+        ProbaForma.VESHKI -> podgonkaVeshek()?.let { it.dlina * it.shirina }
+            ?: polygonAreaSquareMeters(uporyadochitUgly(veshki)).takeIf { veshki.size >= 3 }
+    }
+
+    /** Ровная проба по вешкам, если включена подгонка, размер задан и вешек хотя бы 3. */
+    fun podgonkaVeshek(): PodgonkaVeshek? {
+        if (forma != ProbaForma.VESHKI || !podgonka || veshki.size < 3) return null
+        val d = number(dlina)?.takeIf { it in 0.3..500.0 } ?: return null
+        val w = number(shirina)?.takeIf { it in 0.3..500.0 } ?: return null
+        return podognatPryamougolnik(veshki, d, w)
     }
 
     /** Середина пробы по вешкам — для номера участка и метки «П1». */
@@ -225,6 +237,97 @@ fun uporyadochitUgly(points: List<LatLon>): List<LatLon> {
     val k = kotlin.math.cos(Math.toRadians(cLat))
     return points.sortedBy { kotlin.math.atan2(it.lat - cLat, (it.lon - cLon) * k) }
 }
+
+/** Вешки, подогнанные под ровный прямоугольник: центр, азимут длинной стороны и насколько вешки от него отошли. */
+class PodgonkaVeshek(
+    val center: LatLon,
+    val dlina: Double,
+    val shirina: Double,
+    val azimut: Double,
+    val ring: List<LatLon>,
+    /** Самая дальняя вешка от своего угла ровной пробы, м. */
+    val maxOtklonenieM: Double,
+)
+
+/** Типовые размеры прямоугольных проб, м (длина вдоль ряда × ширина). */
+val PRYAMOUGOLNIK_PRESETS: List<Pair<Int, Int>> = listOf(10 to 10, 20 to 5, 25 to 4, 50 to 2)
+
+/**
+ * Подгонка вешек под прямоугольник известного размера. GPS под пологом ошибается на 3–10 м,
+ * поэтому углы «как сняли» дают кривой четырёхугольник с чужой площадью. Размер пробы люди
+ * знают точно (отмеряли рулеткой), а вешки нужны, чтобы понять, где проба и как повёрнута.
+ * Перебираем поворот через полградуса, на каждом — каждую вешку к ближайшему углу,
+ * центр сдвигаем на среднюю невязку; берём поворот с наименьшей суммой квадратов.
+ * Хватает и трёх вешек.
+ */
+fun podognatPryamougolnik(veshki: List<LatLon>, dlina: Double, shirina: Double): PodgonkaVeshek? {
+    if (veshki.size < 3) return null
+    val ref = LatLon(veshki.sumOf { it.lat } / veshki.size, veshki.sumOf { it.lon } / veshki.size)
+    val mLat = PI * EARTH_R / 180.0
+    val mLon = mLat * cos(Math.toRadians(ref.lat))
+    val pts = veshki.map { doubleArrayOf((it.lon - ref.lon) * mLon, (it.lat - ref.lat) * mLat) }
+    val hl = dlina / 2
+    val hw = shirina / 2
+    fun corners(az: Double): List<DoubleArray> {
+        val a = Math.toRadians(az)
+        val ux = sin(a)
+        val uy = cos(a)
+        return listOf(1 to 1, 1 to -1, -1 to -1, -1 to 1).map { (sx, sy) ->
+            doubleArrayOf(sx * hl * ux + sy * hw * uy, sx * hl * uy - sy * hw * ux)
+        }
+    }
+    // Начальный центр: у трёх вешек — середина самой длинной пары (диагональ), иначе среднее.
+    var cx = 0.0
+    var cy = 0.0
+    if (pts.size == 3) {
+        var best = -1.0
+        for (i in 0 until 3) for (j in i + 1 until 3) {
+            val dx = pts[i][0] - pts[j][0]
+            val dy = pts[i][1] - pts[j][1]
+            if (dx * dx + dy * dy > best) {
+                best = dx * dx + dy * dy
+                cx = (pts[i][0] + pts[j][0]) / 2
+                cy = (pts[i][1] + pts[j][1]) / 2
+            }
+        }
+    }
+    var bestAz = 0.0
+    repeat(4) {
+        var stepBestAz = bestAz
+        var stepBestCost = Double.MAX_VALUE
+        var az = 0.0
+        while (az < 180.0) {
+            val c = corners(az)
+            var cost = 0.0
+            for (p in pts) {
+                cost += c.minOf { k -> sq(p[0] - cx - k[0]) + sq(p[1] - cy - k[1]) }
+            }
+            if (cost < stepBestCost) {
+                stepBestCost = cost
+                stepBestAz = az
+            }
+            az += 0.5
+        }
+        bestAz = stepBestAz
+        // центр — по средней невязке вешек относительно их углов
+        val c = corners(bestAz)
+        var sx = 0.0
+        var sy = 0.0
+        for (p in pts) {
+            val k = c.minBy { k -> sq(p[0] - cx - k[0]) + sq(p[1] - cy - k[1]) }
+            sx += p[0] - k[0]
+            sy += p[1] - k[1]
+        }
+        cx = sx / pts.size
+        cy = sy / pts.size
+    }
+    val c = corners(bestAz)
+    val maxOtkl = pts.maxOf { p -> sqrt(c.minOf { k -> sq(p[0] - cx - k[0]) + sq(p[1] - cy - k[1]) }) }
+    val center = LatLon(ref.lat + cy / mLat, ref.lon + cx / mLon)
+    return PodgonkaVeshek(center, dlina, shirina, bestAz, pryamougolnikRing(center, dlina, shirina, bestAz), maxOtkl)
+}
+
+private fun sq(v: Double) = v * v
 
 /**
  * Усреднение GPS для центра пробы: точки весом 1/точность², плохие (хуже 25 м) не берём,
