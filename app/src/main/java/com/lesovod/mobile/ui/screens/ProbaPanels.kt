@@ -58,6 +58,7 @@ import com.lesovod.mobile.ui.map.ProbaForma
 import com.lesovod.mobile.ui.map.ProbaShape
 import com.lesovod.mobile.ui.map.bearingDegrees
 import com.lesovod.mobile.ui.map.bearingName
+import com.lesovod.mobile.ui.map.rememberKompas
 import com.lesovod.mobile.ui.map.distanceMeters
 import com.lesovod.mobile.ui.map.formatCoordinates
 import com.lesovod.mobile.ui.map.formatDistance
@@ -126,10 +127,26 @@ internal fun ProbaDraftCard(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
                             NumberField("Длина, м", draft.dlina, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(dlina = v) } }
                             NumberField("Ширина, м", draft.shirina, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(shirina = v) } }
-                            NumberField("Азимут, °", draft.azimut, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(azimut = v) } }
+                        }
+                        var kompasOpen by remember { mutableStateOf(false) }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 8.dp),
+                        ) {
+                            NumberField("Азимут ряда, °", draft.azimut, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(azimut = v) } }
+                            OutlinedButton(onClick = { kompasOpen = true }, enabled = enabled) { Text("🧭 По телефону") }
+                        }
+                        if (kompasOpen) {
+                            KompasDialog(
+                                place = draft.center,
+                                onTake = { az -> kompasOpen = false; onChange { it.copy(azimut = az.roundToInt().toString()) } },
+                                onDismiss = { kompasOpen = false },
+                            )
                         }
                         Text(
-                            "Длина — вдоль ряда, азимут — направление ряда (0 — север, 90 — восток)",
+                            "Длина — вдоль ряда. Азимут проще всего взять «🧭 По телефону»; " +
+                                "если направление не важно — оставь 0, проба ляжет север–юг. Как легла — видно на карте.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
@@ -283,6 +300,53 @@ private fun NumberField(label: String, value: String, enabled: Boolean, modifier
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = modifier,
+    )
+}
+
+/**
+ * Азимут ряда по компасу телефона: встал в ряд, направил верх телефона вдоль
+ * ряда, нажал «Взять». Ряд в обе стороны одинаков, так что куда именно
+ * смотреть — вперёд или назад — не важно.
+ */
+@Composable
+private fun KompasDialog(place: LatLon?, onTake: (Double) -> Unit, onDismiss: () -> Unit) {
+    val az by rememberKompas(place)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Азимут ряда по телефону") },
+        text = {
+            Column {
+                Text(
+                    "Встань в ряд, держи телефон экраном вверх, ровно, верхним краем вдоль ряда. " +
+                        "Отойди от машины и железа — компас врёт рядом с металлом.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                val a = az
+                Text(
+                    if (a == null) "Компас не отвечает…" else "${a.roundToInt()}° · ${bearingName(a)}",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                if (a == null) {
+                    Text(
+                        "Если цифра так и не появилась — в телефоне нет компаса, впиши азимут руками или оставь 0.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                } else {
+                    Text(
+                        "Если цифра врёт — покрути телефон восьмёркой пару раз, компас откалибруется.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { az?.let(onTake) }, enabled = az != null) { Text("Взять") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }
 
