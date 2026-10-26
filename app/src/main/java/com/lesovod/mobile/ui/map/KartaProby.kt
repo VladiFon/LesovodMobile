@@ -33,7 +33,9 @@ import kotlin.math.sqrt
 enum class ProbaForma(val code: String, val label: String) {
     KRUG("krug", "Круг"),
     PRYAMOUGOLNIK("pryamougolnik", "Прямоугольник"),
-    KONTUR("kontur", "Обход");
+    KONTUR("kontur", "Обход"),
+    /** Углы по вешкам: стоишь на каждой, GPS усредняется. На сервер уходит как контур. */
+    VESHKI("veshki", "По вешкам");
 
     companion object {
         fun fromCode(code: String?) = entries.firstOrNull { it.code == code } ?: KRUG
@@ -136,7 +138,7 @@ fun KartaProbaDto.razmerText(): String {
     val size = when (forma) {
         ProbaForma.KRUG -> radiusM?.let { "круг R ${fmt(it)} м" } ?: "круг"
         ProbaForma.PRYAMOUGOLNIK -> if (dlinaM != null && shirinaM != null) "${fmt(dlinaM)}×${fmt(shirinaM)} м" else "прямоугольник"
-        ProbaForma.KONTUR -> "обход по GPS"
+        ProbaForma.KONTUR, ProbaForma.VESHKI -> "граница по GPS"
     }
     return listOfNotNull(size, ploshadM2?.let { "${fmt(it)} м²" }).joinToString(" · ")
 }
@@ -161,6 +163,9 @@ data class ProbaDraft(
     val accuracy: Float? = null,
     val manualCenter: Boolean = false,
     val kontur: List<LatLon> = emptyList(),
+    /** Отмеченные вешки (углы) и точность каждой; center — вешка, у которой стоим сейчас. */
+    val veshki: List<LatLon> = emptyList(),
+    val veshkiTochnost: List<Float?> = emptyList(),
     val uchastokId: Int? = null,
     /** Участок выбран сам (по месту), а не человеком. */
     val uchastokAuto: Boolean = true,
@@ -175,6 +180,11 @@ data class ProbaDraft(
     /** Граница для предпросмотра на карте; null — размеры ещё не заданы. */
     fun previewRing(): List<LatLon>? {
         if (forma == ProbaForma.KONTUR) return kontur.takeIf { it.size >= 3 }
+        if (forma == ProbaForma.VESHKI) {
+            // вместе с вешкой, у которой стоим: видно, как ляжет граница
+            val tek = center?.takeIf { veshki.size < VESHEK }
+            return uporyadochitUgly(veshki + listOfNotNull(tek)).takeIf { it.size >= 2 }
+        }
         val c = center ?: return null
         return when (forma) {
             ProbaForma.KRUG -> number(radius)?.takeIf { it in 0.3..200.0 }?.let { krugRing(c, it) }
@@ -191,7 +201,29 @@ data class ProbaDraft(
         ProbaForma.KRUG -> number(radius)?.let { PI * it * it }
         ProbaForma.PRYAMOUGOLNIK -> number(dlina)?.let { d -> number(shirina)?.let { d * it } }
         ProbaForma.KONTUR -> polygonAreaSquareMeters(kontur).takeIf { kontur.size >= 3 }
+        ProbaForma.VESHKI -> polygonAreaSquareMeters(uporyadochitUgly(veshki)).takeIf { veshki.size >= 3 }
     }
+
+    /** Середина пробы по вешкам — для номера участка и метки «П1». */
+    fun veshkiCenter(): LatLon? = veshki.takeIf { it.isNotEmpty() }
+        ?.let { v -> LatLon(v.sumOf { it.lat } / v.size, v.sumOf { it.lon } / v.size) }
+
+    companion object {
+        /** Обычно у пробы 4 вешки; больше — можно, меньше 3 — нельзя. */
+        const val VESHEK = 4
+    }
+}
+
+/**
+ * Углы по кругу вокруг середины: обошёл вешки «крест-накрест» — граница
+ * всё равно не перекрутится восьмёркой.
+ */
+fun uporyadochitUgly(points: List<LatLon>): List<LatLon> {
+    if (points.size < 3) return points
+    val cLat = points.sumOf { it.lat } / points.size
+    val cLon = points.sumOf { it.lon } / points.size
+    val k = kotlin.math.cos(Math.toRadians(cLat))
+    return points.sortedBy { kotlin.math.atan2(it.lat - cLat, (it.lon - cLon) * k) }
 }
 
 /**

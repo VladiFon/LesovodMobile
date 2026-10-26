@@ -58,6 +58,7 @@ import com.lesovod.mobile.ui.map.ProbaForma
 import com.lesovod.mobile.ui.map.ProbaShape
 import com.lesovod.mobile.ui.map.bearingDegrees
 import com.lesovod.mobile.ui.map.bearingName
+import com.lesovod.mobile.ui.map.rememberKompas
 import com.lesovod.mobile.ui.map.distanceMeters
 import com.lesovod.mobile.ui.map.formatCoordinates
 import com.lesovod.mobile.ui.map.formatDistance
@@ -80,6 +81,8 @@ internal fun ProbaDraftCard(
     onSave: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onTakeVeshka: () -> Unit = {},
+    onUndoVeshka: () -> Unit = {},
 ) {
     val enabled = !draft.saving
     FloatingCard(modifier = modifier) {
@@ -108,11 +111,13 @@ internal fun ProbaDraftCard(
                     )
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 10.dp)) {
-                        listOf(ProbaForma.KRUG, ProbaForma.PRYAMOUGOLNIK).forEach { f ->
+                        listOf(ProbaForma.KRUG, ProbaForma.PRYAMOUGOLNIK, ProbaForma.VESHKI).forEach { f ->
                             ChoiceChip(f.label, draft.forma == f, enabled) { onChange { it.copy(forma = f) } }
                         }
                     }
-                    if (draft.forma == ProbaForma.KRUG) {
+                    if (draft.forma == ProbaForma.VESHKI) {
+                        VeshkiBlock(draft, enabled, onTakeVeshka, onUndoVeshka)
+                    } else if (draft.forma == ProbaForma.KRUG) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp),
@@ -126,10 +131,26 @@ internal fun ProbaDraftCard(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
                             NumberField("Длина, м", draft.dlina, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(dlina = v) } }
                             NumberField("Ширина, м", draft.shirina, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(shirina = v) } }
-                            NumberField("Азимут, °", draft.azimut, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(azimut = v) } }
+                        }
+                        var kompasOpen by remember { mutableStateOf(false) }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 8.dp),
+                        ) {
+                            NumberField("Азимут ряда, °", draft.azimut, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(azimut = v) } }
+                            OutlinedButton(onClick = { kompasOpen = true }, enabled = enabled) { Text("🧭 По телефону") }
+                        }
+                        if (kompasOpen) {
+                            KompasDialog(
+                                place = draft.center,
+                                onTake = { az -> kompasOpen = false; onChange { it.copy(azimut = az.roundToInt().toString()) } },
+                                onDismiss = { kompasOpen = false },
+                            )
                         }
                         Text(
-                            "Длина — вдоль ряда, азимут — направление ряда (0 — север, 90 — восток)",
+                            "Длина — вдоль ряда. Азимут проще всего взять «🧭 По телефону»; " +
+                                "если направление не важно — оставь 0, проба ляжет север–юг. Как легла — видно на карте.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
@@ -191,7 +212,13 @@ private fun CenterStatus(draft: ProbaDraft, enabled: Boolean, onRestartGps: () -
     Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             val acc = draft.accuracy?.let { "±${it.roundToInt()} м" }
-            val text = when {
+            val n = draft.veshki.size + 1
+            val text = if (draft.forma == ProbaForma.VESHKI) when {
+                draft.center == null -> "Вешка $n: жду GPS — встань у вешки (или нажми на карту)"
+                draft.manualCenter -> "Вешка $n поставлена вручную (тап по карте)"
+                draft.averaging -> "Вешка $n: уточняю GPS — ${draft.fixes} точек${acc?.let { ", $it" } ?: ""}, стой у вешки"
+                else -> "Вешка $n по GPS готова: ${draft.fixes} точек${acc?.let { ", $it" } ?: ""}"
+            } else when {
                 draft.center == null -> "Нет точки центра — дождитесь GPS или нажмите на карту"
                 draft.manualCenter -> "Центр поставлен вручную (тап по карте)"
                 draft.averaging -> "Уточняю центр по GPS: ${draft.fixes} точек${acc?.let { ", $it" } ?: ""} — постойте в центре пробы"
@@ -213,9 +240,48 @@ private fun CenterStatus(draft: ProbaDraft, enabled: Boolean, onRestartGps: () -
             if (!draft.averaging || draft.manualCenter) {
                 TextButton(onClick = onRestartGps, enabled = enabled) {
                     Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Text(if (draft.manualCenter) "Взять центр по GPS" else "Уточнить заново", modifier = Modifier.padding(start = 6.dp))
+                    Text(
+                        when {
+                            draft.manualCenter -> if (draft.forma == ProbaForma.VESHKI) "Взять вешку по GPS" else "Взять центр по GPS"
+                            else -> "Уточнить заново"
+                        },
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Проба по вешкам: встал у вешки → телефон копит GPS → «Вешка N здесь» → к следующей.
+ * Порядок обхода не важен — углы сами встанут по кругу.
+ */
+@Composable
+private fun VeshkiBlock(draft: ProbaDraft, enabled: Boolean, onTake: () -> Unit, onUndo: () -> Unit) {
+    val n = draft.veshki.size
+    Text(
+        if (n < ProbaDraft.VESHEK) "Обойди вешки по очереди: у каждой постой, пока наберутся точки (чем больше, тем точнее), и жми «Вешка здесь». Порядок не важен."
+        else "Все $n вешки есть — можно сохранять. Если вешек больше — отметь и их.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    if (n > 0) {
+        Text(
+            draft.veshki.indices.joinToString("  ") { i ->
+                "${i + 1}" + (draft.veshkiTochnost.getOrNull(i)?.let { " ±${it.roundToInt()} м" } ?: " (вручную)")
+            }.let { "Вешки: $it" },
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+        Button(onClick = onTake, enabled = enabled && draft.center != null, modifier = Modifier.weight(1f)) {
+            Text("📍 Вешка ${n + 1} здесь")
+        }
+        if (n > 0) {
+            OutlinedButton(onClick = onUndo, enabled = enabled) { Text("↺ Убрать ${n}-ю") }
         }
     }
 }
@@ -283,6 +349,53 @@ private fun NumberField(label: String, value: String, enabled: Boolean, modifier
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = modifier,
+    )
+}
+
+/**
+ * Азимут ряда по компасу телефона: встал в ряд, направил верх телефона вдоль
+ * ряда, нажал «Взять». Ряд в обе стороны одинаков, так что куда именно
+ * смотреть — вперёд или назад — не важно.
+ */
+@Composable
+private fun KompasDialog(place: LatLon?, onTake: (Double) -> Unit, onDismiss: () -> Unit) {
+    val az by rememberKompas(place)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Азимут ряда по телефону") },
+        text = {
+            Column {
+                Text(
+                    "Встань в ряд, держи телефон экраном вверх, ровно, верхним краем вдоль ряда. " +
+                        "Отойди от машины и железа — компас врёт рядом с металлом.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                val a = az
+                Text(
+                    if (a == null) "Компас не отвечает…" else "${a.roundToInt()}° · ${bearingName(a)}",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                if (a == null) {
+                    Text(
+                        "Если цифра так и не появилась — в телефоне нет компаса, впиши азимут руками или оставь 0.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                } else {
+                    Text(
+                        "Если цифра врёт — покрути телефон восьмёркой пару раз, компас откалибруется.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { az?.let(onTake) }, enabled = az != null) { Text("Взять") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }
 

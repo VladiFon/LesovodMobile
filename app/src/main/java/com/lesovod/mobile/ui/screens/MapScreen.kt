@@ -497,6 +497,8 @@ fun MapScreen(
                     onSave = viewModel::saveProbaDraft,
                     onDismiss = viewModel::dismissProbaDraft,
                     modifier = measureBottom,
+                    onTakeVeshka = viewModel::takeVeshka,
+                    onUndoVeshka = viewModel::undoVeshka,
                 )
             }
         }
