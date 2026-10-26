@@ -1302,14 +1302,27 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             uchastokId = center?.let { autoUchastok(it) },
         )
         _uiState.value = state.copy(
-            tool = MapTool.PROBA, probaDraft = draft, walk = WalkState(), selection = null, cardOpen = false,
+            tool = MapTool.PROBA, probaDraft = if (forma == ProbaForma.VESHKI) draft.zhdyotVeshku() else draft,
+            walk = WalkState(), selection = null, cardOpen = false,
             selectedProba = null, selectedGeoNote = null, noteDraft = null,
         )
     }
 
     fun updateProbaDraft(change: (ProbaDraft) -> ProbaDraft) {
         val draft = _uiState.value.probaDraft ?: return
-        _uiState.value = _uiState.value.copy(probaDraft = change(draft).copy(error = null))
+        var next = change(draft).copy(error = null)
+        // переключились на вешки — точки, набранные до этого, к вешке не относятся
+        if (draft.forma != ProbaForma.VESHKI && next.forma == ProbaForma.VESHKI && next.veshki.isEmpty()) next = next.zhdyotVeshku()
+        _uiState.value = _uiState.value.copy(probaDraft = next)
+    }
+
+    /**
+     * Вешки: GPS копим, только когда человек встал у вешки и нажал «Я у вешки» — иначе в
+     * среднее попадают точки с дороги между вешками и угол уезжает в сторону.
+     */
+    private fun ProbaDraft.zhdyotVeshku(): ProbaDraft {
+        probaGps.reset()
+        return copy(center = null, fixes = 0, accuracy = null, averaging = false, manualCenter = false)
     }
 
     /** «Уточнить ещё раз»: заново набрать GPS-точки, стоя в центре пробы. */
@@ -1325,17 +1338,16 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** «Вешка здесь»: берём усреднённую точку как угол и начинаем копить следующую. */
+    /** «Вешка здесь»: берём усреднённую точку как угол; следующую копим, только когда встанут у неё. */
     fun takeVeshka() {
         val draft = _uiState.value.probaDraft ?: return
         val point = draft.center ?: return
-        probaGps.reset()
         _uiState.value = _uiState.value.copy(
             probaDraft = draft.copy(
                 veshki = draft.veshki + point,
                 veshkiTochnost = draft.veshkiTochnost + draft.accuracy.takeIf { !draft.manualCenter },
-                center = null, fixes = 0, accuracy = null, averaging = true, manualCenter = false, error = null,
-            ),
+                error = null,
+            ).zhdyotVeshku(),
         )
     }
 
@@ -1376,11 +1388,14 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         val state = _uiState.value
         val draft = state.probaDraft ?: return
         if (draft.saving) return
-        val veshki = draft.forma == ProbaForma.VESHKI
-        val center = if (veshki) draft.veshkiCenter() else draft.center
+        val podgonka = draft.podgonkaVeshek()
+        // подогнанная по вешкам проба уходит ровным прямоугольником точного размера
+        val veshki = draft.forma == ProbaForma.VESHKI && podgonka == null
+        val pryam = draft.forma == ProbaForma.PRYAMOUGOLNIK
+        val center = podgonka?.center ?: if (veshki) draft.veshkiCenter() else draft.center
         val error = when {
             draft.forma == ProbaForma.KONTUR && draft.kontur.size < 3 -> "Для обхода нужно минимум 3 точки"
-            veshki && draft.veshki.size < 3 -> "Отметь минимум 3 вешки (обычно 4)"
+            draft.forma == ProbaForma.VESHKI && draft.veshki.size < 3 -> "Отметь минимум 3 вешки (обычно 4)"
             draft.forma != ProbaForma.KONTUR && center == null -> "Нет точки центра — дождитесь GPS или нажмите на карту"
             draft.forma == ProbaForma.KRUG && draft.number(draft.radius)?.takeIf { it in 0.3..200.0 } == null -> "Радиус — от 0,3 до 200 м"
             draft.forma == ProbaForma.PRYAMOUGOLNIK && (draft.number(draft.dlina)?.takeIf { it in 0.3..500.0 } == null ||
@@ -1393,22 +1408,26 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
         val place = center?.let { c -> state.vydela.lastOrNull { it.contains(c.lat, c.lon) } }
         val request = KartaProbaCreateRequest(
-            forma = if (veshki) ProbaForma.KONTUR.code else draft.forma.code,
+            forma = when {
+                podgonka != null -> ProbaForma.PRYAMOUGOLNIK.code
+                veshki -> ProbaForma.KONTUR.code
+                else -> draft.forma.code
+            },
             lat = center?.lat,
             lon = center?.lon,
             radiusM = draft.number(draft.radius).takeIf { draft.forma == ProbaForma.KRUG },
-            dlinaM = draft.number(draft.dlina).takeIf { draft.forma == ProbaForma.PRYAMOUGOLNIK },
-            shirinaM = draft.number(draft.shirina).takeIf { draft.forma == ProbaForma.PRYAMOUGOLNIK },
-            azimut = (draft.number(draft.azimut) ?: 0.0).let { ((it % 360) + 360) % 360 }.takeIf { draft.forma == ProbaForma.PRYAMOUGOLNIK },
+            dlinaM = podgonka?.dlina ?: draft.number(draft.dlina).takeIf { pryam },
+            shirinaM = podgonka?.shirina ?: draft.number(draft.shirina).takeIf { pryam },
+            azimut = podgonka?.azimut ?: (draft.number(draft.azimut) ?: 0.0).let { ((it % 360) + 360) % 360 }.takeIf { pryam },
             tochki = when {
                 veshki -> uporyadochitUgly(draft.veshki).map { listOf(it.lon, it.lat) }
                 draft.forma == ProbaForma.KONTUR -> draft.kontur.map { listOf(it.lon, it.lat) }
                 else -> null
             },
-            tochnostM = if (veshki) draft.veshkiTochnost.filterNotNull().takeIf { it.isNotEmpty() }?.average()
+            tochnostM = if (draft.forma == ProbaForma.VESHKI) draft.veshkiTochnost.filterNotNull().takeIf { it.isNotEmpty() }?.average()
             else draft.accuracy?.toDouble()?.takeIf { !draft.manualCenter },
             nomer = draft.nomer.trim().ifEmpty { null },
-            uchastokId = if (veshki && draft.uchastokAuto && center != null) autoUchastok(center) ?: draft.uchastokId else draft.uchastokId,
+            uchastokId = if (draft.forma == ProbaForma.VESHKI && draft.uchastokAuto && center != null) autoUchastok(center) ?: draft.uchastokId else draft.uchastokId,
             lesnichestvo = state.selectedLesnichestvo,
             kvartal = place?.kvartal ?: state.here?.kvartal,
             vydel = place?.vydel ?: state.here?.vydel,
@@ -1416,7 +1435,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         )
         hub.prefs.lastProbaForma = draft.forma.code.takeIf { draft.forma != ProbaForma.KONTUR } ?: hub.prefs.lastProbaForma
         if (draft.forma == ProbaForma.KRUG) hub.prefs.lastProbaRadius = draft.radius.trim()
-        if (draft.forma == ProbaForma.PRYAMOUGOLNIK) {
+        if (pryam || podgonka != null) {
             hub.prefs.lastProbaDlina = draft.dlina.trim()
             hub.prefs.lastProbaShirina = draft.shirina.trim()
         }

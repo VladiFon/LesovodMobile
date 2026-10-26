@@ -52,6 +52,7 @@ import com.lesovod.mobile.ui.components.SendStatusChip
 import com.lesovod.mobile.ui.map.AuthPhoto
 import com.lesovod.mobile.ui.map.GpsAverager
 import com.lesovod.mobile.ui.map.KRUG_PRESETS
+import com.lesovod.mobile.ui.map.PRYAMOUGOLNIK_PRESETS
 import com.lesovod.mobile.ui.map.LatLon
 import com.lesovod.mobile.ui.map.ProbaDraft
 import com.lesovod.mobile.ui.map.ProbaForma
@@ -116,7 +117,7 @@ internal fun ProbaDraftCard(
                         }
                     }
                     if (draft.forma == ProbaForma.VESHKI) {
-                        VeshkiBlock(draft, enabled, onTakeVeshka, onUndoVeshka)
+                        VeshkiBlock(draft, enabled, onTakeVeshka, onUndoVeshka, onUVeshki = onRestartGps, onChange = onChange)
                     } else if (draft.forma == ProbaForma.KRUG) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -213,8 +214,10 @@ private fun CenterStatus(draft: ProbaDraft, enabled: Boolean, onRestartGps: () -
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             val acc = draft.accuracy?.let { "±${it.roundToInt()} м" }
             val n = draft.veshki.size + 1
+            val zhdyom = draft.forma == ProbaForma.VESHKI && draft.center == null && !draft.averaging
             val text = if (draft.forma == ProbaForma.VESHKI) when {
-                draft.center == null -> "Вешка $n: жду GPS — встань у вешки (или нажми на карту)"
+                zhdyom -> "Иди к вешке $n. Встал — жми «Я у вешки $n»: точки, снятые по дороге, не берём"
+                draft.center == null -> "Вешка $n: жду GPS — стой у вешки (или нажми на карту)"
                 draft.manualCenter -> "Вешка $n поставлена вручную (тап по карте)"
                 draft.averaging -> "Вешка $n: уточняю GPS — ${draft.fixes} точек${acc?.let { ", $it" } ?: ""}, стой у вешки"
                 else -> "Вешка $n по GPS готова: ${draft.fixes} точек${acc?.let { ", $it" } ?: ""}"
@@ -237,7 +240,7 @@ private fun CenterStatus(draft: ProbaDraft, enabled: Boolean, onRestartGps: () -
             draft.center?.let {
                 Text(formatCoordinates(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
             }
-            if (!draft.averaging || draft.manualCenter) {
+            if ((!draft.averaging || draft.manualCenter) && !zhdyom) {
                 TextButton(onClick = onRestartGps, enabled = enabled) {
                     Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(16.dp))
                     Text(
@@ -258,10 +261,18 @@ private fun CenterStatus(draft: ProbaDraft, enabled: Boolean, onRestartGps: () -
  * Порядок обхода не важен — углы сами встанут по кругу.
  */
 @Composable
-private fun VeshkiBlock(draft: ProbaDraft, enabled: Boolean, onTake: () -> Unit, onUndo: () -> Unit) {
+private fun VeshkiBlock(
+    draft: ProbaDraft,
+    enabled: Boolean,
+    onTake: () -> Unit,
+    onUndo: () -> Unit,
+    onUVeshki: () -> Unit,
+    onChange: ((ProbaDraft) -> ProbaDraft) -> Unit,
+) {
     val n = draft.veshki.size
+    val zhdyom = draft.center == null && !draft.averaging
     Text(
-        if (n < ProbaDraft.VESHEK) "Обойди вешки по очереди: у каждой постой, пока наберутся точки (чем больше, тем точнее), и жми «Вешка здесь». Порядок не важен."
+        if (n < ProbaDraft.VESHEK) "Обойди вешки по очереди: подошёл, жми «Я у вешки», постой, пока наберутся точки (чем больше, тем точнее), и «Вешка здесь». Порядок не важен."
         else "Все $n вешки есть — можно сохранять. Если вешек больше — отметь и их.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -277,14 +288,64 @@ private fun VeshkiBlock(draft: ProbaDraft, enabled: Boolean, onTake: () -> Unit,
         )
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-        Button(onClick = onTake, enabled = enabled && draft.center != null, modifier = Modifier.weight(1f)) {
-            Text("📍 Вешка ${n + 1} здесь")
+        if (zhdyom) {
+            Button(onClick = onUVeshki, enabled = enabled, modifier = Modifier.weight(1f)) {
+                Text("🚶 Я у вешки ${n + 1}")
+            }
+        } else {
+            Button(onClick = onTake, enabled = enabled && draft.center != null, modifier = Modifier.weight(1f)) {
+                Text("📍 Вешка ${n + 1} здесь")
+            }
         }
         if (n > 0) {
             OutlinedButton(onClick = onUndo, enabled = enabled) { Text("↺ Убрать ${n}-ю") }
         }
     }
+
+    // Размер пробы известен точно (рулетка) — по нему вешки встанут ровным прямоугольником.
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 10.dp)) {
+        ChoiceChip("Подогнать под размер", draft.podgonka, enabled) { onChange { it.copy(podgonka = true) } }
+        ChoiceChip("Как сняли по GPS", !draft.podgonka, enabled) { onChange { it.copy(podgonka = false) } }
+    }
+    if (draft.podgonka) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp),
+        ) {
+            PRYAMOUGOLNIK_PRESETS.forEach { (d, w) ->
+                val active = draft.number(draft.dlina) == d.toDouble() && draft.number(draft.shirina) == w.toDouble()
+                ChoiceChip("$d×$w м", active, enabled) { onChange { it.copy(dlina = d.toString(), shirina = w.toString()) } }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            NumberField("Длина, м", draft.dlina, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(dlina = v) } }
+            NumberField("Ширина, м", draft.shirina, enabled, Modifier.weight(1f)) { v -> onChange { it.copy(shirina = v) } }
+        }
+        val fit = draft.podgonkaVeshek()
+        Text(
+            when {
+                fit == null && n < 3 -> "После 3-й вешки программа сама положит ровную пробу этого размера — видно на карте."
+                fit == null -> "Укажи длину и ширину пробы — от 0,3 до 500 м."
+                else -> "Ровная проба ${fmtM(fit.dlina)}×${fmtM(fit.shirina)} м, азимут длины ${fit.azimut.roundToInt()}°. " +
+                    "Вешки отходят от неё до ${fmtM(fit.maxOtklonenieM)} м."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        if (fit != null && fit.maxOtklonenieM > maxOf(8.0, minOf(fit.dlina, fit.shirina) / 2)) {
+            Text(
+                "Слишком далеко — проверь размер пробы или переснимай вешку, где GPS был плохой.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
 }
+
+private fun fmtM(v: Double): String =
+    if (v == Math.floor(v)) v.toLong().toString() else String.format(java.util.Locale("ru"), "%.1f", v)
 
 @Composable
 private fun UchastokPicker(draft: ProbaDraft, uchastki: List<LesokulturyMapDto>, enabled: Boolean, onPick: (Int?) -> Unit) {
