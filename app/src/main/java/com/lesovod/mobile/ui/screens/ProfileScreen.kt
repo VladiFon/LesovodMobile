@@ -221,6 +221,7 @@ private fun PendingActionType.labelRu(): String = when (this) {
     PendingActionType.NOTE -> "заметки"
     PendingActionType.LESOKULTURY -> "лесные культуры"
     PendingActionType.GEO_NOTE -> "метки на карте"
+    PendingActionType.KARTA_PROBA -> "пробы на карте"
 }
 
 /** Выбор темы: «Тёмная» (по умолчанию) / «Светлая» / «Как в системе» — применяется сразу. */

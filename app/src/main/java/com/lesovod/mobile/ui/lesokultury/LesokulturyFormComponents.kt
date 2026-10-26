@@ -1,11 +1,13 @@
 package com.lesovod.mobile.ui.lesokultury
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -28,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.lesovod.mobile.data.network.dto.KartaProbaDto
 import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.PorodaDropdown
 import com.lesovod.mobile.ui.components.SecondaryButton
@@ -36,6 +39,7 @@ import com.lesovod.mobile.ui.theme.Spacing
 import com.lesovod.mobile.ui.theme.softCard
 import kotlinx.serialization.json.JsonElement
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 fun GodPicker(god: Int, onSelect: (Int) -> Unit) {
@@ -58,15 +62,39 @@ fun ProbyList(
     onRazmerChange: (id: String, value: String) -> Unit,
     onRemove: (id: String) -> Unit,
     onAdd: () -> Unit,
+    kartaProby: List<KartaProbaDto> = emptyList(),
+    onPickKarta: (KartaProbaDto) -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Пробы", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        // пробы, поставленные на карте на этом участке: учёт должен идти на тех же
+        if (kartaProby.isNotEmpty()) {
+            Text(
+                "Пробы этого участка на карте — нажмите, чтобы учёт был на той же пробе:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            ) {
+                kartaProby.forEach { k ->
+                    val used = proby.any { it.kartaProbaId == k.id }
+                    FilterChip(
+                        selected = used,
+                        onClick = { if (!used) onPickKarta(k) },
+                        enabled = enabled,
+                        label = { Text("📍 П${k.nomer.orEmpty()}" + (k.ploshadM2?.let { " · ${it.roundToInt()} м²" } ?: "")) },
+                    )
+                }
+            }
+        }
         proby.forEach { proba ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = proba.nomer,
                     onValueChange = { onNomerChange(proba.id, it) },
-                    label = { Text("Номер пробы") },
+                    label = { Text(if (proba.kartaProbaId != null) "📍 Проба с карты" else "Номер пробы") },
                     singleLine = true,
                     enabled = enabled,
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),

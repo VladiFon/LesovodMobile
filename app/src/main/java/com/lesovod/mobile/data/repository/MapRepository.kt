@@ -3,6 +3,7 @@ package com.lesovod.mobile.data.repository
 import com.lesovod.mobile.data.local.MapCache
 import com.lesovod.mobile.data.network.ApiService
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
+import com.lesovod.mobile.data.network.dto.KartaProbaDto
 import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.ui.map.GeoJsonStreamParser
 import com.lesovod.mobile.ui.map.GeoNoteMarker
@@ -168,6 +169,19 @@ class MapRepository(
         force = force,
         fetch = { api.getLesokulturyForMap(requireToken(), num.toString()) },
         decode = { json.decodeFromString<List<LesokulturyMapDto>>(it.readBytes().decodeToString()) },
+        encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
+    )
+
+    /**
+     * Пробные площади лесничества (GET /api/proby) — общие для всех, не только свои. Кэш на
+     * устройстве: проба нужна именно в лесу, где связи часто нет.
+     */
+    suspend fun getKartaProby(num: Int, force: Boolean = false): Result<List<KartaProbaDto>> = cached(
+        key = "karta_proby_$num",
+        ttlMs = GEO_NOTES_TTL_MS,
+        force = force,
+        fetch = { api.listKartaProby(requireToken(), num.toString()) },
+        decode = { json.decodeFromString<List<KartaProbaDto>>(it.readBytes().decodeToString()) },
         encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
     )
 

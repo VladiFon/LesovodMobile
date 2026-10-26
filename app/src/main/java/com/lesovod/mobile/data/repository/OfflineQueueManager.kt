@@ -9,6 +9,7 @@ import com.lesovod.mobile.data.local.PendingActionType
 import com.lesovod.mobile.data.local.PendingAttendancePayload
 import com.lesovod.mobile.data.local.PendingBreakdownPayload
 import com.lesovod.mobile.data.local.PendingGeoNotePayload
+import com.lesovod.mobile.data.local.PendingKartaProbaPayload
 import com.lesovod.mobile.data.local.PendingNotePayload
 import com.lesovod.mobile.data.local.PendingLesokulturyPayload
 import com.lesovod.mobile.data.local.PendingProbaPayload
@@ -20,6 +21,7 @@ import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.ConnectivityObserver
 import com.lesovod.mobile.data.network.NetworkModule
 import com.lesovod.mobile.data.network.dto.AttendanceStatus
+import com.lesovod.mobile.data.network.dto.KartaProbaCreateRequest
 import com.lesovod.mobile.data.network.dto.ProbaFormRequest
 import com.lesovod.mobile.data.network.dto.ProbaRowRequest
 import com.lesovod.mobile.data.network.dto.ProbaSaveRequest
@@ -145,6 +147,13 @@ class OfflineQueueManager private constructor(context: Context) {
         enqueue(id, PendingActionType.GEO_NOTE, json.encodeToString(payload), localPhotoPath)
     }
 
+    /** Проба на карте без сети — уйдёт на сервер сама; фото ориентира копируется к себе, как у меток. */
+    suspend fun enqueueKartaProba(request: KartaProbaCreateRequest, photoUri: Uri?) {
+        val id = UUID.randomUUID().toString()
+        val localPhotoPath = photoUri?.let { copyUriToLocalFile(id, it) }
+        enqueue(id, PendingActionType.KARTA_PROBA, json.encodeToString(PendingKartaProbaPayload(request)), localPhotoPath)
+    }
+
     fun enqueueNote(text: String, recipientId: Int?) {
         val payload = PendingNotePayload(text, recipientId)
         enqueue(UUID.randomUUID().toString(), PendingActionType.NOTE, json.encodeToString(payload), null)
@@ -257,6 +266,24 @@ class OfflineQueueManager private constructor(context: Context) {
         PendingActionType.NOTE -> processNote(action)
         PendingActionType.LESOKULTURY -> processLesokultury(action)
         PendingActionType.GEO_NOTE -> processGeoNote(action)
+        PendingActionType.KARTA_PROBA -> processKartaProba(action)
+    }
+
+    private suspend fun processKartaProba(action: PendingAction): FlushOutcome {
+        val payload = decode<PendingKartaProbaPayload>(action.payload)
+            ?: return FlushOutcome.Failed("Повреждённые данные действия")
+        var request = payload.request
+        if (request.photoPath == null && action.photoLocalPath != null) {
+            when (val photoOutcome = uploadLocalPhoto(action.photoLocalPath)) {
+                is PhotoOutcome.Uploaded -> {
+                    request = request.copy(photoPath = photoOutcome.path)
+                    store.update(action.copy(payload = json.encodeToString(PendingKartaProbaPayload(request))))
+                }
+                PhotoOutcome.StillOffline -> return FlushOutcome.StillOffline
+                is PhotoOutcome.Failed -> return FlushOutcome.Failed(photoOutcome.message)
+            }
+        }
+        return repository.createKartaProba(request).fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
     }
 
     private suspend fun processGeoNote(action: PendingAction): FlushOutcome {

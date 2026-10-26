@@ -2,13 +2,14 @@ package com.lesovod.mobile.data.local
 
 import com.lesovod.mobile.data.network.dto.ProbaRowRequest
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
+import com.lesovod.mobile.data.network.dto.KartaProbaCreateRequest
 import com.lesovod.mobile.data.network.dto.PerevodRequest
 import com.lesovod.mobile.data.network.dto.UchastokPolyaRequest
 import kotlinx.serialization.Serializable
 
 /** Виды действий, которые можно выполнить офлайн и отправить позже. */
 enum class PendingActionType {
-    REPORT, BREAKDOWN, ATTENDANCE, TASK_COMPLETE, TRELEVKA, PROBA, NOTE, LESOKULTURY, GEO_NOTE
+    REPORT, BREAKDOWN, ATTENDANCE, TASK_COMPLETE, TRELEVKA, PROBA, NOTE, LESOKULTURY, GEO_NOTE, KARTA_PROBA
 }
 
 /**
@@ -107,4 +108,10 @@ data class PendingGeoNotePayload(
     val noteText: String? = null,
     val kategoriya: String? = null,
     val photoPath: String? = null,
+)
+
+/** Проба на карте, поставленная без сети. Фото ориентира — в photoLocalPath действия. */
+@Serializable
+data class PendingKartaProbaPayload(
+    val request: KartaProbaCreateRequest,
 )

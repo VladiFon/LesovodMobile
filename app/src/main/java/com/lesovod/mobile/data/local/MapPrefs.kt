@@ -21,7 +21,28 @@ class MapPrefs(context: Context) {
         get() = prefs.getString(KEY_OFFLINE_BASE, null)
         set(value) = prefs.edit { if (value == null) remove(KEY_OFFLINE_BASE) else putString(KEY_OFFLINE_BASE, value) }
 
+    /** Последняя форма и размеры пробы — следующую ставят так же, не вводя заново. */
+    var lastProbaForma: String?
+        get() = prefs.getString(KEY_PROBA_FORMA, null)
+        set(value) = prefs.edit { if (value == null) remove(KEY_PROBA_FORMA) else putString(KEY_PROBA_FORMA, value) }
+
+    var lastProbaRadius: String?
+        get() = prefs.getString(KEY_PROBA_RADIUS, null)
+        set(value) = prefs.edit { if (value.isNullOrBlank()) remove(KEY_PROBA_RADIUS) else putString(KEY_PROBA_RADIUS, value) }
+
+    var lastProbaDlina: String?
+        get() = prefs.getString(KEY_PROBA_DLINA, null)
+        set(value) = prefs.edit { if (value.isNullOrBlank()) remove(KEY_PROBA_DLINA) else putString(KEY_PROBA_DLINA, value) }
+
+    var lastProbaShirina: String?
+        get() = prefs.getString(KEY_PROBA_SHIRINA, null)
+        set(value) = prefs.edit { if (value.isNullOrBlank()) remove(KEY_PROBA_SHIRINA) else putString(KEY_PROBA_SHIRINA, value) }
+
     private companion object {
+        const val KEY_PROBA_FORMA = "proba_forma"
+        const val KEY_PROBA_RADIUS = "proba_radius"
+        const val KEY_PROBA_DLINA = "proba_dlina"
+        const val KEY_PROBA_SHIRINA = "proba_shirina"
         const val KEY_OFFLINE_BASE = "offline_base_path"
         const val KEY_DEFAULT = "default_lesnichestvo"
         const val KEY_DOWNLOAD = "download_at_"

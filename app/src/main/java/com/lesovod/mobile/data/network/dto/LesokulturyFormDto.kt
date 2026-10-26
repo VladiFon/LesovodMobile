@@ -8,6 +8,8 @@ import kotlinx.serialization.Serializable
 data class ProbaRowIn(
     val nomer: String,
     val razmer: Double,
+    /** Проба с карты (сервер 26.10.2026+): учёт на той же пробе, что и в прошлый раз. */
+    @SerialName("karta_proba_id") val kartaProbaId: Int? = null,
 )
 
 /** Результаты обследования — список общий на всю карточку, не привязан к конкретной пробе. */

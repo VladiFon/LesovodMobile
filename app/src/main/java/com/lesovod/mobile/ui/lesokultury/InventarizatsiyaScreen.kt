@@ -99,6 +99,8 @@ fun InventarizatsiyaScreen(onBack: () -> Unit, viewModel: InventarizatsiyaViewMo
                     onRazmerChange = viewModel::onProbaRazmerChange,
                     onRemove = viewModel::removeProba,
                     onAdd = viewModel::addProba,
+                    kartaProby = state.kartaProby,
+                    onPickKarta = viewModel::pickKartaProba,
                 )
             }
 
