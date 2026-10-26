@@ -328,7 +328,7 @@ class TabelViewModel(application: Application) : AndroidViewModel(application) {
 
     fun applyBrigada(
         brigada: TabelBrigadaDto,
-        mesto: TabelDelyankaDto?,
+        mesto: TabelPlace?,
         vid: VidRabotyDto?,
         choices: Map<Int, BrigadaChoice>,
     ) {
@@ -338,7 +338,7 @@ class TabelViewModel(application: Application) : AndroidViewModel(application) {
                 BrigadaChoice.WITH_BRIGADA -> updateRow(member.sotrudnikId) {
                     it.copy(
                         status = TabelStatus.WORKED,
-                        place = mesto?.let { m -> TabelPlace.Delyanka(m.itemId, m.label) },
+                        place = mesto,
                         vidRabotyId = vid?.id,
                         vidRabotyNazvanie = vid?.nazvanie,
                         dirty = true,
