@@ -53,8 +53,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.network.dto.TabelBrigadaDto
-import com.lesovod.mobile.data.network.dto.TabelDelyankaDto
-import com.lesovod.mobile.data.network.dto.TabelLesokulturyUchastokDto
 import com.lesovod.mobile.data.network.dto.VidRabotyDto
 import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.EmptyState
@@ -373,19 +371,7 @@ private fun PlaceOfWorkSheet(
     onSelect: (TabelPlace) -> Unit,
     onClear: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
-    var tab by remember { mutableStateOf(if (row.place is TabelPlace.Lesokultury) PlaceTab.LESOKULTURY else PlaceTab.DELYANKA) }
-    var delyankaQuery by remember { mutableStateOf("") }
-    val delyankaState by viewModel.delyankaSearch.collectAsState()
-    var selectedDelyanka by remember { mutableStateOf<TabelDelyankaDto?>(null) }
-    var lesokulturyQuery by remember { mutableStateOf("") }
-    val lesokulturyState by viewModel.lesokulturySearch.collectAsState()
-    var selectedLesokultury by remember { mutableStateOf<TabelLesokulturyUchastokDto?>(null) }
-
-    LaunchedEffect(Unit) {
-        viewModel.resetLesokulturySearch()
-        viewModel.searchDelyanki("")
-    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s)) {
@@ -394,177 +380,204 @@ private fun PlaceOfWorkSheet(
                 row.fio,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = Spacing.m),
+                modifier = Modifier.padding(bottom = Spacing.s),
             )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
-                FilterChip(
-                    selected = tab == PlaceTab.DELYANKA,
-                    onClick = { tab = PlaceTab.DELYANKA },
-                    label = { Text("Делянка") },
-                    modifier = Modifier.weight(1f),
-                )
-                FilterChip(
-                    selected = tab == PlaceTab.LESOKULTURY,
-                    onClick = { tab = PlaceTab.LESOKULTURY },
-                    label = { Text("Лесные культуры") },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
+            // Кнопка сверху: при открытой клавиатуре и длинном списке нижние кнопки уезжали за экран.
+            SecondaryButton(text = "Без места", onClick = onClear, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(Spacing.m))
-
-            when (tab) {
-                PlaceTab.LESOKULTURY -> {
-                    OutlinedTextField(
-                        value = lesokulturyQuery,
-                        onValueChange = {
-                            lesokulturyQuery = it
-                            selectedLesokultury = null
-                            viewModel.searchLesokultury(it)
-                        },
-                        singleLine = true,
-                        placeholder = { Text("Квартал, выдел, лесничество или порода") },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(Spacing.s))
-                    when (val s = lesokulturyState) {
-                        is LesokulturySearchState.Idle -> Text(
-                            "Поиск по кварталу, выделу, лесничеству и породе · от 2 символов",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        is LesokulturySearchState.Loading -> Column(
-                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                        ) { repeat(3) { SkeletonBlock() } }
-                        is LesokulturySearchState.Empty -> Text(
-                            "По запросу «$lesokulturyQuery» ничего не найдено. Место можно оставить пустым.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        is LesokulturySearchState.Results -> Column(
-                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                        ) {
-                            s.items.forEach { item ->
-                                val label = "Кв. ${item.kvartal.orEmpty()} · выд. ${item.vydel.orEmpty()}"
-                                val selected = selectedLesokultury?.id == item.id
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .softCard()
-                                        .clickable { selectedLesokultury = item }
-                                        .padding(Spacing.s),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Column {
-                                        Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            listOfNotNull(item.lesnichestvo?.let { "$it лесничество" }, item.glavnayaPoroda)
-                                                .joinToString(" · "),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    if (selected) StatusChip(text = "Выбрано", tone = ChipTone.OK)
-                                }
-                            }
-                        }
-                    }
-                }
-                PlaceTab.DELYANKA -> {
-                    OutlinedTextField(
-                        value = delyankaQuery,
-                        onValueChange = {
-                            delyankaQuery = it
-                            selectedDelyanka = null
-                            viewModel.searchDelyanki(it)
-                        },
-                        singleLine = true,
-                        placeholder = { Text("12/5, лесосека, название, лесничество") },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(Spacing.s))
-                    when (val d = delyankaState) {
-                        is DelyankaSearchState.Loading -> Column(
-                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                        ) { repeat(3) { SkeletonBlock() } }
-                        is DelyankaSearchState.Empty -> Text(
-                            "Ничего не найдено. Место можно оставить пустым.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        is DelyankaSearchState.Error -> Text(
-                            d.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        is DelyankaSearchState.Results -> Column(
-                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                            modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
-                        ) {
-                            d.items.forEach { item ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .softCard()
-                                        .clickable { selectedDelyanka = item }
-                                        .padding(Spacing.s),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            "Кв. ${item.kvartal.orEmpty()} · выд. ${item.vydel.orEmpty()}" +
-                                                (item.lesosekaNomer?.takeIf { it.isNotBlank() }?.let { " · лесосека $it" } ?: ""),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.Bold,
-                                        )
-                                        Text(
-                                            listOfNotNull(item.nazvanie, item.lesnichestvo, item.status).joinToString(" · "),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    if (selectedDelyanka?.itemId == item.itemId) StatusChip(text = "Выбрано", tone = ChipTone.OK)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(Spacing.l))
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
-                SecondaryButton(text = "Без места", onClick = onClear, modifier = Modifier.weight(1f))
-                PrimaryButton(
-                    text = "Выбрать",
-                    onClick = {
-                        if (tab == PlaceTab.DELYANKA) {
-                            selectedDelyanka?.let { onSelect(TabelPlace.Delyanka(it.itemId, it.label)) }
-                        } else {
-                            selectedLesokultury?.let {
-                                onSelect(
-                                    TabelPlace.Lesokultury(
-                                        it.id,
-                                        "кв. ${it.kvartal.orEmpty()} · выд. ${it.vydel.orEmpty()} · культуры",
-                                    ),
-                                )
-                            }
-                        }
-                    },
-                    enabled = if (tab == PlaceTab.DELYANKA) selectedDelyanka != null else selectedLesokultury != null,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            PlacePicker(
+                viewModel = viewModel,
+                initialTab = if (row.place is TabelPlace.Lesokultury) PlaceTab.LESOKULTURY else PlaceTab.DELYANKA,
+                selected = row.place,
+                onPick = onSelect,
+            )
             Spacer(Modifier.height(Spacing.m))
         }
     }
 }
+
+/**
+ * Поиск делянки или участка лесных культур. Выбор — тапом по строке, без отдельной кнопки «Выбрать»:
+ * она пряталась под клавиатурой и списком результатов.
+ */
+@Composable
+private fun PlacePicker(
+    viewModel: TabelViewModel,
+    initialTab: PlaceTab,
+    selected: TabelPlace?,
+    onPick: (TabelPlace) -> Unit,
+) {
+    var tab by remember { mutableStateOf(initialTab) }
+    var delyankaQuery by remember { mutableStateOf("") }
+    val delyankaState by viewModel.delyankaSearch.collectAsState()
+    var lesokulturyQuery by remember { mutableStateOf("") }
+    val lesokulturyState by viewModel.lesokulturySearch.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.resetLesokulturySearch()
+        viewModel.searchDelyanki("")
+    }
+
+    Column {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
+            FilterChip(
+                selected = tab == PlaceTab.DELYANKA,
+                onClick = { tab = PlaceTab.DELYANKA },
+                label = { Text("Делянка") },
+                modifier = Modifier.weight(1f),
+            )
+            FilterChip(
+                selected = tab == PlaceTab.LESOKULTURY,
+                onClick = { tab = PlaceTab.LESOKULTURY },
+                label = { Text("Лесные культуры") },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        Spacer(Modifier.height(Spacing.s))
+        Text(
+            "Нажмите на строку, чтобы выбрать",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Spacing.s))
+
+        when (tab) {
+            PlaceTab.LESOKULTURY -> {
+                OutlinedTextField(
+                    value = lesokulturyQuery,
+                    onValueChange = {
+                        lesokulturyQuery = it
+                        viewModel.searchLesokultury(it)
+                    },
+                    singleLine = true,
+                    placeholder = { Text("Квартал, выдел, лесничество или порода") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(Spacing.s))
+                when (val s = lesokulturyState) {
+                    is LesokulturySearchState.Idle -> Text(
+                        "Поиск по кварталу, выделу, лесничеству и породе · от 2 символов",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    is LesokulturySearchState.Loading -> Column(
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    ) { repeat(3) { SkeletonBlock() } }
+                    is LesokulturySearchState.Empty -> Text(
+                        "По запросу «$lesokulturyQuery» ничего не найдено. Место можно оставить пустым.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    is LesokulturySearchState.Results -> Column(
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+                    ) {
+                        s.items.forEach { item ->
+                            val isSelected = (selected as? TabelPlace.Lesokultury)?.uchastokId == item.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .softCard()
+                                    .clickable {
+                                        onPick(
+                                            TabelPlace.Lesokultury(
+                                                item.id,
+                                                "кв. ${item.kvartal.orEmpty()} · выд. ${item.vydel.orEmpty()} · культуры",
+                                            ),
+                                        )
+                                    }
+                                    .padding(Spacing.s),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Кв. ${item.kvartal.orEmpty()} · выд. ${item.vydel.orEmpty()}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        listOfNotNull(item.lesnichestvo?.let { "$it лесничество" }, item.glavnayaPoroda)
+                                            .joinToString(" · "),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (isSelected) StatusChip(text = "Выбрано", tone = ChipTone.OK)
+                            }
+                        }
+                    }
+                }
+            }
+            PlaceTab.DELYANKA -> {
+                OutlinedTextField(
+                    value = delyankaQuery,
+                    onValueChange = {
+                        delyankaQuery = it
+                        viewModel.searchDelyanki(it)
+                    },
+                    singleLine = true,
+                    placeholder = { Text("12/5, лесосека, название, лесничество") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(Spacing.s))
+                when (val d = delyankaState) {
+                    is DelyankaSearchState.Loading -> Column(
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    ) { repeat(3) { SkeletonBlock() } }
+                    is DelyankaSearchState.Empty -> Text(
+                        "Ничего не найдено. Место можно оставить пустым.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    is DelyankaSearchState.Error -> Text(
+                        d.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    is DelyankaSearchState.Results -> Column(
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+                    ) {
+                        d.items.forEach { item ->
+                            val isSelected = (selected as? TabelPlace.Delyanka)?.delyankaItemId == item.itemId
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .softCard()
+                                    .clickable { onPick(TabelPlace.Delyanka(item.itemId, item.label)) }
+                                    .padding(Spacing.s),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Кв. ${item.kvartal.orEmpty()} · выд. ${item.vydel.orEmpty()}" +
+                                            (item.lesosekaNomer?.takeIf { it.isNotBlank() }?.let { " · лесосека $it" } ?: ""),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        listOfNotNull(item.nazvanie, item.lesnichestvo, item.status).joinToString(" · "),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (isSelected) StatusChip(text = "Выбрано", tone = ChipTone.OK)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 // ---------- «Вид работы» ----------
 
@@ -658,13 +671,14 @@ private fun BrigadaSheet(
     viewModel: TabelViewModel,
     vidyRabot: List<VidRabotyDto>,
     onDismiss: () -> Unit,
-    onApply: (TabelBrigadaDto, TabelDelyankaDto?, VidRabotyDto?, Map<Int, BrigadaChoice>) -> Unit,
+    onApply: (TabelBrigadaDto, TabelPlace?, VidRabotyDto?, Map<Int, BrigadaChoice>) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val brigady by viewModel.brigady.collectAsState()
     val error by viewModel.brigadyError.collectAsState()
     var selected by remember { mutableStateOf<TabelBrigadaDto?>(null) }
-    var mesto by remember { mutableStateOf<TabelDelyankaDto?>(null) }
+    var mesto by remember { mutableStateOf<TabelPlace?>(null) }
+    var otherPlaceOpen by remember { mutableStateOf(false) }
     var vid by remember { mutableStateOf<VidRabotyDto?>(null) }
     var choices by remember { mutableStateOf<Map<Int, BrigadaChoice>>(emptyMap()) }
 
@@ -695,7 +709,8 @@ private fun BrigadaSheet(
                                 .softCard()
                                 .clickable {
                                     selected = b
-                                    mesto = b.mesta.firstOrNull()
+                                    mesto = b.mesta.firstOrNull()?.let { TabelPlace.Delyanka(it.itemId, it.label) }
+                                    otherPlaceOpen = b.mesta.isEmpty()
                                     choices = b.sostav.associate { it.sotrudnikId to BrigadaChoice.WITH_BRIGADA }
                                 }
                                 .padding(Spacing.s),
@@ -720,16 +735,44 @@ private fun BrigadaSheet(
                 Text("Где работали", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 if (b.mesta.isEmpty()) {
                     Text(
-                        "У бригады нет назначения на этот день — место можно указать в строках.",
+                        "У бригады нет назначения на этот день — найдите делянку или участок культур ниже.",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                } else {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                        b.mesta.forEach { m ->
-                            FilterChip(selected = mesto?.itemId == m.itemId, onClick = { mesto = m }, label = { Text(m.label) })
-                        }
-                        FilterChip(selected = mesto == null, onClick = { mesto = null }, label = { Text("Не указывать") })
+                }
+                val assigned = b.mesta.map { TabelPlace.Delyanka(it.itemId, it.label) }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                    assigned.forEach { m ->
+                        FilterChip(
+                            selected = mesto == m,
+                            onClick = { mesto = m; otherPlaceOpen = false },
+                            label = { Text(m.label) },
+                        )
+                    }
+                    // Место не из назначения — найденное через поиск; показываем его отдельным чипом.
+                    mesto?.takeIf { it !in assigned }?.let { m ->
+                        FilterChip(selected = true, onClick = { otherPlaceOpen = true }, label = { Text(m.label) })
+                    }
+                    FilterChip(
+                        selected = otherPlaceOpen,
+                        onClick = { otherPlaceOpen = !otherPlaceOpen },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        label = { Text("Другое место") },
+                    )
+                    FilterChip(
+                        selected = mesto == null,
+                        onClick = { mesto = null; otherPlaceOpen = false },
+                        label = { Text("Не указывать") },
+                    )
+                }
+                if (otherPlaceOpen) {
+                    Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.s)) {
+                        PlacePicker(
+                            viewModel = viewModel,
+                            initialTab = if (mesto is TabelPlace.Lesokultury) PlaceTab.LESOKULTURY else PlaceTab.DELYANKA,
+                            selected = mesto,
+                            onPick = { mesto = it; otherPlaceOpen = false },
+                        )
                     }
                 }
                 Text("Вид работы", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
