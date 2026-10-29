@@ -27,6 +27,7 @@ data class LesokulturyUchastokDto(
     @SerialName("gustota_posadki") val gustotaPosadki: Double? = null,
     @SerialName("posadochnyy_material") val posadochnyyMaterial: String? = null,
     @SerialName("sostav_formula") val sostavFormula: String? = null,
+    val status: String? = null,
 )
 
 /** Поля участка для ведомостей текущих изменений — видны и дописываются в карточке на телефоне. */
@@ -70,7 +71,9 @@ fun LesokulturyUchastokDto.toLesokulturyUchastok(): LesokulturyUchastok {
         god?.let { "$it г." },
         lesnichestvo?.takeIf { it.isNotBlank() },
     ).joinToString(", ")
-    val label = delyankaNazvanie?.takeIf { it.isNotBlank() }?.let { "$base ($it)" } ?: base
+    val withDelyanka = delyankaNazvanie?.takeIf { it.isNotBlank() }?.let { "$base ($it)" } ?: base
+    // Переведённые/списанные приходят только по переключателю — помечаем их.
+    val label = status?.takeIf { it.isNotBlank() && it != "активен" }?.let { "$withDelyanka · $it" } ?: withDelyanka
     return LesokulturyUchastok(
         id = id,
         label = label.ifBlank { "Участок №$id" },

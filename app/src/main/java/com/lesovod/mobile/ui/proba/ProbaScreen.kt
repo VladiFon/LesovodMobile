@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -253,6 +254,19 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
     val context = LocalContext.current
 
     if (!state.manualPlace) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !state.isSubmitting) { viewModel.setPokazatVse(!state.pokazatVse) },
+        ) {
+            Checkbox(
+                checked = state.pokazatVse,
+                onCheckedChange = viewModel::setPokazatVse,
+                enabled = !state.isSubmitting,
+            )
+            Text("Показывать переведённые и списанные", style = MaterialTheme.typography.bodyMedium)
+        }
         UchastokSelector(
             uchastki = state.lesokulturyUchastki,
             selected = state.selectedUchastok,
