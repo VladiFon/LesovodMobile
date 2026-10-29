@@ -193,6 +193,8 @@ interface ApiService {
     @GET("api/lesokultury/uchastki")
     suspend fun listLesokulturyUchastki(
         @Header("Authorization") bearerToken: String,
+        /** true — ещё переведённые и списанные (по умолчанию сервер отдаёт только активные). */
+        @Query("include_spisannye") includeSpisannye: Boolean? = null,
     ): List<LesokulturyUchastokDto>
 
     @POST("api/lesokultury/{uchastok_id}/inventarizatsiya")

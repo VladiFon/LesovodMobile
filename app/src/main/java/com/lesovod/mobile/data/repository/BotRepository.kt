@@ -278,8 +278,9 @@ class BotRepository(
         api.getLesokulturyDannye(requireToken(), uchastokId.toString(), dataZamera).firstOrNull()
     }
 
-    suspend fun listLesokulturyUchastki(): Result<List<LesokulturyUchastok>> = safeCall {
-        api.listLesokulturyUchastki(requireToken()).map { it.toLesokulturyUchastok() }
+    suspend fun listLesokulturyUchastki(vse: Boolean = false): Result<List<LesokulturyUchastok>> = safeCall {
+        api.listLesokulturyUchastki(requireToken(), includeSpisannye = vse.takeIf { it })
+            .map { it.toLesokulturyUchastok() }
     }
 
     suspend fun submitInventarizatsiya(uchastokId: Int, request: InventarizatsiyaRequest): Result<JsonElement> = safeCall {

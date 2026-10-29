@@ -48,6 +48,8 @@ data class ProbaUiState(
     val lesokulturyUchastki: List<LesokulturyUchastok> = emptyList(),
     /** Участок л/к, где взята проба — квартал/выдел/площадь подставляются из него. */
     val selectedUchastok: LesokulturyUchastok? = null,
+    /** Показывать в списке и переведённые/списанные участки (по умолчанию только активные). */
+    val pokazatVse: Boolean = false,
     /** Данные культур выбранного участка — сервер подставит их в шапку пробы. */
     val lkDannye: LesokulturyDannyeDto? = null,
     /** Квартал/выдел вручную — для проб не на участке лесных культур. */
@@ -83,11 +85,7 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadReference() {
-        viewModelScope.launch {
-            repository.listLesokulturyUchastki().onSuccess {
-                _uiState.value = _uiState.value.copy(lesokulturyUchastki = it)
-            }
-        }
+        loadUchastki()
         viewModelScope.launch {
             repository.listPorody().onSuccess {
                 _uiState.value = _uiState.value.copy(porody = it)
@@ -136,6 +134,23 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    private fun loadUchastki() {
+        val vse = _uiState.value.pokazatVse
+        viewModelScope.launch {
+            repository.listLesokulturyUchastki(vse).onSuccess {
+                if (_uiState.value.pokazatVse == vse) {
+                    _uiState.value = _uiState.value.copy(lesokulturyUchastki = it)
+                }
+            }
+        }
+    }
+
+    fun setPokazatVse(vse: Boolean) {
+        if (_uiState.value.pokazatVse == vse) return
+        _uiState.value = _uiState.value.copy(pokazatVse = vse)
+        loadUchastki()
     }
 
     fun setManualPlace(manual: Boolean) {
@@ -332,6 +347,7 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
     /** Новая пустая форма, но справочники, история и выбранный режим места сохраняются. */
     private fun freshState(from: ProbaUiState) = ProbaUiState(
         lesokulturyUchastki = from.lesokulturyUchastki,
+        pokazatVse = from.pokazatVse,
         porody = from.porody,
         manualPlace = from.manualPlace,
         history = historyStore.list(),
