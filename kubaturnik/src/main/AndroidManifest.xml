@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Только для скачивания голосовой модели (один раз). Сам счёт работает без сети. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Голосовой ввод диаметров (распознавание Vosk — на телефоне, звук никуда не уходит). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Голосовой ответ (TextToSpeech) на Android 11+ требует объявить запрос к движку синтеза. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Lesovod">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Lesovod">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

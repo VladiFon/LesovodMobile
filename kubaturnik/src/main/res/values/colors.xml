@@ -1,0 +1,4 @@
+<resources>
+    <!-- Цвет древесины — чтобы на рабочем столе не путать со значком Лесовода (зелёный). -->
+    <color name="ic_launcher_background">#6B4423</color>
+</resources>
