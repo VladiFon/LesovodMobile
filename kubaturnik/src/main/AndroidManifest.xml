@@ -5,9 +5,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Голосовой ввод диаметров (распознавание Vosk — на телефоне, звук никуда не уходит). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Обновления Кубатурника и установка основного Лесовода — APK с GitHub Releases. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Голосовой ответ (TextToSpeech) на Android 11+ требует объявить запрос к движку синтеза. -->
     <queries>
+        <!-- Проверка, установлен ли основной Лесовод (Android 11+ без этого его «не видно»). -->
+        <package android:name="com.lesovod.mobile" />
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
@@ -31,6 +35,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".update.UpdateDownloadReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

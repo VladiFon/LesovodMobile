@@ -16,6 +16,8 @@ import com.lesovod.kubaturnik.data.TilesSide
 import com.lesovod.kubaturnik.data.diameterButtons
 import com.lesovod.kubaturnik.data.volumeFor
 import com.lesovod.kubaturnik.data.KubaturnikVoice
+import com.lesovod.kubaturnik.data.TapSound
+import com.lesovod.kubaturnik.update.AppUpdateManager
 import com.lesovod.kubaturnik.data.VoskModelManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -306,6 +308,20 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.value = _uiState.value.copy(tilesSide = next)
     }
 
+    private val tapSound = TapSound()
+    private val _tapSoundOn = MutableStateFlow(settingsStore.tapSound)
+    val tapSoundOn = _tapSoundOn.asStateFlow()
+
+    fun toggleTapSound() {
+        val next = !_tapSoundOn.value
+        settingsStore.tapSound = next
+        _tapSoundOn.value = next
+        if (next) tapSound.added()
+    }
+
+    // ---- Обновления и основной Лесовод ----
+    val updates = AppUpdateManager.getInstance(application)
+
     /** Тема: тёмная по умолчанию, переключается значком в заголовке и запоминается. */
     private val _darkTheme = MutableStateFlow(settingsStore.darkTheme)
     val darkTheme = _darkTheme.asStateFlow()
@@ -325,6 +341,7 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
             counts = state.countsWith(state.activeSort, state.destination, diameter, +1),
             lastTap = diameter to volume,
         )
+        if (_tapSoundOn.value) tapSound.added()
         persist()
     }
 
@@ -340,6 +357,7 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
             counts = state.countsWith(state.activeSort, state.destination, diameter, -1),
             lastTap = lastTap,
         )
+        if (_tapSoundOn.value) tapSound.removed()
         persist()
     }
 
@@ -580,6 +598,7 @@ class KubaturnikViewModel(application: Application) : AndroidViewModel(applicati
     override fun onCleared() {
         voice?.release()
         voice = null
+        tapSound.release()
         super.onCleared()
     }
 
