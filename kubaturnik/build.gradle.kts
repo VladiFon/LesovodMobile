@@ -15,8 +15,8 @@ android {
         applicationId = "com.lesovod.kubaturnik"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         // Vosk: нативная библиотека ~10 МБ на архитектуру — только ARM-телефоны.
         ndk {
@@ -55,6 +55,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

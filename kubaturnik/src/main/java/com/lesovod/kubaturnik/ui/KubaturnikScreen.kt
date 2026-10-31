@@ -60,6 +60,8 @@ import android.content.Intent
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -75,6 +77,7 @@ fun KubaturnikScreen(
     val state by viewModel.uiState.collectAsState()
     val voice by viewModel.voiceState.collectAsState()
     val darkTheme by viewModel.darkTheme.collectAsState()
+    val tapSoundOn by viewModel.tapSoundOn.collectAsState()
     val context = LocalContext.current
     VoiceLifecycleGuard(viewModel)
 
@@ -83,7 +86,13 @@ fun KubaturnikScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        AppTitle(darkTheme = darkTheme, onToggleTheme = viewModel::toggleTheme)
+        AppTitle(
+            darkTheme = darkTheme,
+            onToggleTheme = viewModel::toggleTheme,
+            tapSoundOn = tapSoundOn,
+            onToggleTapSound = viewModel::toggleTapSound,
+        )
+        AppBanners(updates = viewModel.updates)
 
         Box(modifier = Modifier.weight(1f)) {
             when {
@@ -114,7 +123,12 @@ fun KubaturnikScreen(
 
 /** Заголовок приложения: «Лесовод · Кубатурник» и переключатель тёмной/светлой темы. */
 @Composable
-private fun AppTitle(darkTheme: Boolean, onToggleTheme: () -> Unit) {
+private fun AppTitle(
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    tapSoundOn: Boolean,
+    onToggleTapSound: () -> Unit,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -131,6 +145,13 @@ private fun AppTitle(darkTheme: Boolean, onToggleTheme: () -> Unit) {
                 "Кубатурник",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        IconButton(onClick = onToggleTapSound) {
+            Icon(
+                imageVector = if (tapSoundOn) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
+                contentDescription = if (tapSoundOn) "Звук нажатия включён — выключить" else "Звук нажатия выключен — включить",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         IconButton(onClick = onToggleTheme) {
