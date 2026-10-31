@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "LesovodMobile"
 include(":app")
+include(":kubaturnik")
