@@ -18,6 +18,8 @@ object NetworkModule {
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
+        // null в поле с значением по умолчанию — берём умолчание, а не роняем весь ответ
+        coerceInputValues = true
     }
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {

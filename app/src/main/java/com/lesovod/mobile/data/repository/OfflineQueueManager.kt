@@ -17,6 +17,8 @@ import com.lesovod.mobile.data.local.ProbaHistoryStore
 import com.lesovod.mobile.data.local.PendingReportPayload
 import com.lesovod.mobile.data.local.PendingTaskCompletePayload
 import com.lesovod.mobile.data.local.PendingTrelevkaPayload
+import com.lesovod.mobile.data.local.PendingSmenaPayload
+import com.lesovod.mobile.data.network.dto.SmenaRequest
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.ConnectivityObserver
 import com.lesovod.mobile.data.network.NetworkModule
@@ -123,6 +125,11 @@ class OfflineQueueManager private constructor(context: Context) {
     fun enqueueTrelevka(otkuda: String, kuda: String, obyom: Double, delyankaItemId: Int?) {
         val payload = PendingTrelevkaPayload(otkuda, kuda, obyom, delyankaItemId)
         enqueue(UUID.randomUUID().toString(), PendingActionType.TRELEVKA, json.encodeToString(payload), null)
+    }
+
+    fun enqueueSmena(request: SmenaRequest, opisanie: String) {
+        val payload = PendingSmenaPayload(request, opisanie)
+        enqueue(request.clientId ?: UUID.randomUUID().toString(), PendingActionType.SMENA, json.encodeToString(payload), null)
     }
 
     fun enqueueLesokultury(payload: PendingLesokulturyPayload) {
@@ -267,6 +274,13 @@ class OfflineQueueManager private constructor(context: Context) {
         PendingActionType.LESOKULTURY -> processLesokultury(action)
         PendingActionType.GEO_NOTE -> processGeoNote(action)
         PendingActionType.KARTA_PROBA -> processKartaProba(action)
+        PendingActionType.SMENA -> processSmena(action)
+    }
+
+    private suspend fun processSmena(action: PendingAction): FlushOutcome {
+        val payload = decode<PendingSmenaPayload>(action.payload)
+            ?: return FlushOutcome.Failed("Повреждённые данные действия")
+        return repository.submitSmena(payload.request).fold(onSuccess = { FlushOutcome.Sent }, onFailure = { toOutcome(it) })
     }
 
     private suspend fun processKartaProba(action: PendingAction): FlushOutcome {

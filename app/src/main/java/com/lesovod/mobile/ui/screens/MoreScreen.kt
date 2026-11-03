@@ -22,6 +22,9 @@ import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.EventNote
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.LocalShipping
+import com.lesovod.mobile.data.local.IgraPrefs
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -61,12 +64,15 @@ fun MoreScreen(
     onOpenInventarizatsiya: () -> Unit,
     onOpenPerevod: () -> Unit,
     onOpenTabel: () -> Unit,
+    onOpenSmena: () -> Unit = {},
+    onOpenIgra: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val session by SessionManager.getInstance(context).session.collectAsState()
     val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
     val unreadCount by badgeManager.unreadCount.collectAsState()
     val role = session?.role
+    val igra by remember { IgraPrefs.getInstance(context) }.enabled.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         ScreenTitle("Ещё")
@@ -86,6 +92,10 @@ fun MoreScreen(
                 onClick = onOpenNotifications,
             )
             MoreRow(icon = Icons.Filled.PostAdd, label = "Отчёт", onClick = onOpenWorkReport)
+            MoreRow(icon = Icons.Filled.LocalShipping, label = "Отчёт за смену (трелёвка, уход, ремонт)", onClick = onOpenSmena)
+            if (igra) {
+                MoreRow(icon = Icons.Filled.EmojiEvents, label = "🎮 Мой герой, рейтинг, челленджи", onClick = onOpenIgra)
+            }
 
             if (role?.canViewProba == true) {
                 MoreRow(icon = Icons.Filled.Science, label = "Проба рубок ухода", onClick = onOpenProba)

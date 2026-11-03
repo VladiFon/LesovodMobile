@@ -59,6 +59,9 @@ import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.canInputProba
 import com.lesovod.mobile.ui.bot.TasksViewModel
+import com.lesovod.mobile.data.local.IgraPrefs
+import com.lesovod.mobile.ui.components.UpdateBanner
+import com.lesovod.mobile.ui.igra.HomeIgraCard
 import com.lesovod.mobile.ui.components.ChipTone
 import com.lesovod.mobile.ui.components.EmptyState
 import com.lesovod.mobile.ui.components.ErrorState
@@ -88,6 +91,7 @@ fun TasksScreen(
     onOpenStock: () -> Unit = {},
     onOpenTrelevka: () -> Unit = {},
     onOpenBreakdown: () -> Unit = {},
+    onOpenIgra: () -> Unit = {},
     viewModel: TasksViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -103,12 +107,13 @@ fun TasksScreen(
         add(HomeAction("Мои задачи", Icons.Rounded.TaskAlt) { scope.launch { listState.animateScrollToItem(1) } })
         if (role?.canSeeStock == true) add(HomeAction("Остатки", Icons.Rounded.Inventory2, onOpenStock))
         add(HomeAction("Отчёт за день", Icons.Rounded.PostAdd, onOpenWorkReport))
-        if (size < 4 && role?.canTrelevka == true) add(HomeAction("Трелёвка", Icons.Rounded.LocalShipping, onOpenTrelevka))
+        if (size < 4 && role?.canTrelevka == true) add(HomeAction("Отчёт за смену", Icons.Rounded.LocalShipping, onOpenTrelevka))
         if (size < 4 && role?.canReportBreakdown == true) add(HomeAction("Поломка", Icons.Rounded.Build, onOpenBreakdown))
         if (size < 4 && canInputProba) add(HomeAction("Проба", Icons.Rounded.Forest, onOpenProba))
     }
 
     val context = LocalContext.current
+    val igraOn by remember { IgraPrefs.getInstance(context) }.enabled.collectAsState()
     val queueManager = remember { OfflineQueueManager.getInstance(context) }
     val pending by queueManager.pending.collectAsState()
     val isSyncing by queueManager.isSyncing.collectAsState()
@@ -157,6 +162,8 @@ fun TasksScreen(
             ) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
+                        UpdateBanner()
+                        if (igraOn) HomeIgraCard(onOpen = onOpenIgra)
                         HomeActionsGrid(homeActions)
                         if (canInputProba && homeActions.none { it.label == "Проба" }) {
                             ProbaRow(onClick = onOpenProba)

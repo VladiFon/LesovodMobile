@@ -4,12 +4,13 @@ import com.lesovod.mobile.data.network.dto.ProbaRowRequest
 import com.lesovod.mobile.data.network.dto.InventarizatsiyaRequest
 import com.lesovod.mobile.data.network.dto.KartaProbaCreateRequest
 import com.lesovod.mobile.data.network.dto.PerevodRequest
+import com.lesovod.mobile.data.network.dto.SmenaRequest
 import com.lesovod.mobile.data.network.dto.UchastokPolyaRequest
 import kotlinx.serialization.Serializable
 
 /** Виды действий, которые можно выполнить офлайн и отправить позже. */
 enum class PendingActionType {
-    REPORT, BREAKDOWN, ATTENDANCE, TASK_COMPLETE, TRELEVKA, PROBA, NOTE, LESOKULTURY, GEO_NOTE, KARTA_PROBA
+    REPORT, BREAKDOWN, ATTENDANCE, TASK_COMPLETE, TRELEVKA, PROBA, NOTE, LESOKULTURY, GEO_NOTE, KARTA_PROBA, SMENA
 }
 
 /**
@@ -114,4 +115,11 @@ data class PendingGeoNotePayload(
 @Serializable
 data class PendingKartaProbaPayload(
     val request: KartaProbaCreateRequest,
+)
+
+/** «Отчёт за смену» без сети; client_id внутри — сервер не задвоит при повторной отправке. */
+@Serializable
+data class PendingSmenaPayload(
+    val request: SmenaRequest,
+    val opisanie: String = "",
 )

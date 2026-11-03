@@ -6,6 +6,11 @@ import com.lesovod.mobile.data.network.ApiService
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.buildPhotoPart
 import com.lesovod.mobile.data.network.dto.CoworkerDto
+import com.lesovod.mobile.data.network.dto.IgraDto
+import com.lesovod.mobile.data.network.dto.SmenaCreatedDto
+import com.lesovod.mobile.data.network.dto.SmenaMoiDto
+import com.lesovod.mobile.data.network.dto.SmenaRequest
+import com.lesovod.mobile.data.network.dto.SmenaSpravochnikDto
 import com.lesovod.mobile.data.network.dto.GeoNoteShareDto
 import com.lesovod.mobile.data.network.dto.GeoNoteShareRequest
 import com.lesovod.mobile.data.network.dto.GeoNoteShareResultDto
@@ -183,6 +188,19 @@ class BotRepository(
         api.createTrelevka(requireToken(), TrelevkaRequest(otkuda, kuda, obyom, delyankaItemId))
         Unit
     }
+
+    suspend fun smenaSpravochnik(): Result<SmenaSpravochnikDto> = safeCall { api.smenaSpravochnik(requireToken()) }
+
+    suspend fun submitSmena(body: SmenaRequest): Result<SmenaCreatedDto> = safeCall { api.createSmena(requireToken(), body) }
+
+    suspend fun smenaMoi(dney: Int = 14): Result<SmenaMoiDto> = safeCall { api.smenaMoi(requireToken(), dney) }
+
+    suspend fun deleteSmena(id: Int): Result<Unit> = safeCall {
+        api.deleteSmena(requireToken(), id)
+        Unit
+    }
+
+    suspend fun igraMoy(period: String): Result<IgraDto> = safeCall { api.igraMoy(requireToken(), period) }
 
     suspend fun listRecipients(): Result<List<RecipientDto>> = safeCall {
         api.listRecipients(requireToken())
