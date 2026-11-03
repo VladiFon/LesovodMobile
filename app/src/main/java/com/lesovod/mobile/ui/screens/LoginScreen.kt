@@ -1,7 +1,11 @@
 package com.lesovod.mobile.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,11 +60,19 @@ fun LoginScreen(
         }
     }
 
-    Column(
+    // Прокрутка — чтобы карточка «Адрес сервера» помещалась на маленьком экране;
+    // heightIn(min = maxHeight) держит форму по центру, пока всё влезает.
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = Spacing.xxl),
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .heightIn(min = maxHeight)
+            .padding(horizontal = Spacing.xxl, vertical = Spacing.xxl),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -147,5 +159,15 @@ fun LoginScreen(
         TextButton(onClick = onRegisterClick, modifier = Modifier.padding(top = Spacing.s)) {
             Text("Нет аккаунта? Как получить доступ")
         }
+
+        // Домен недоступен — без этого не войти: адрес сервера меняется прямо здесь.
+        var pokazatAdres by remember { mutableStateOf(false) }
+        TextButton(onClick = { pokazatAdres = !pokazatAdres }) {
+            Text(if (pokazatAdres) "Скрыть адрес сервера" else "Не подключается? Адрес сервера")
+        }
+        if (pokazatAdres) {
+            com.lesovod.mobile.ui.components.ServerAddressCard()
+        }
+    }
     }
 }

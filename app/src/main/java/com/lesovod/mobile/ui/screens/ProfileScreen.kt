@@ -142,6 +142,7 @@ fun ProfileScreen(
             MapSettingsCard()
 
             GuideCard()
+            com.lesovod.mobile.ui.components.ServerAddressCard(modifier = Modifier.padding(top = Spacing.l))
 
             UpdateCard()
 
