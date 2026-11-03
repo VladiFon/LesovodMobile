@@ -273,9 +273,9 @@ fun WorkReportScreen(
                 )
             }
 
-            if (canTrelevka) {
+            run {
                 SecondaryButton(
-                    text = "Отметить трелёвку",
+                    text = "Отчёт за смену: трелёвка, уход, ремонт",
                     onClick = onReportTrelevka,
                     icon = { Icon(Icons.Filled.LocalShipping, contentDescription = null) },
                 )

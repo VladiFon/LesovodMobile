@@ -1,6 +1,24 @@
 package com.lesovod.mobile.data.update
 
+import android.Manifest
 import android.app.DownloadManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import com.lesovod.mobile.MainActivity
+import com.lesovod.mobile.R
+import java.util.concurrent.TimeUnit
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -40,6 +58,56 @@ class AppUpdateManager private constructor(context: Context) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
+    /** Проверка без мигания «Проверка…», если уже знаем ответ — для главного экрана. */
+    fun checkQuietly() {
+        if (_state.value is UpdateState.Available || _state.value is UpdateState.Downloading || _state.value is UpdateState.Checking) return
+        checkForUpdate()
+    }
+
+    /** Синхронная проверка для фонового WorkManager — только уведомление. */
+    fun checkInBackground() {
+        val release = runCatching { fetchLatestRelease() }.getOrNull() ?: return
+        if (!isNewerVersion(release.tagName, BuildConfig.VERSION_NAME)) return
+        val apkUrl = release.assets.firstOrNull { it.name.endsWith(".apk") }?.browserDownloadUrl ?: return
+        val info = UpdateInfo(release.tagName.removePrefix("v"), apkUrl, release.body.orEmpty())
+        notifyOnce(info)
+        if (_state.value !is UpdateState.Downloading) _state.value = UpdateState.Available(info)
+    }
+
+    /**
+     * Уведомление Android «Вышла новая версия» — один раз на версию (часть людей не замечала
+     * обновления в Профиле, просьба 03.11.2026). Нажатие открывает приложение, где на главном
+     * экране висит плашка с кнопкой «Обновить».
+     */
+    private fun notifyOnce(info: UpdateInfo) {
+        if (prefs.getString(KEY_NOTIFIED, null) == info.versionName) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ActivityCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Обновления приложения", NotificationManager.IMPORTANCE_HIGH))
+        }
+        val open = PendingIntent.getActivity(
+            appContext,
+            7,
+            Intent(appContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val text = "Сейчас у вас ${BuildConfig.VERSION_NAME}. Откройте Лесовод и нажмите «Обновить» на главном экране."
+        val n = NotificationCompat.Builder(appContext, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Вышла новая версия Лесовода ${info.versionName}")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        runCatching { NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID, n) }
+        prefs.edit().putString(KEY_NOTIFIED, info.versionName).apply()
+    }
+
     fun checkForUpdate() {
         _state.value = UpdateState.Checking
         scope.launch {
@@ -52,9 +120,9 @@ class AppUpdateManager private constructor(context: Context) {
                 else -> {
                     val apkUrl = release.assets.firstOrNull { it.name.endsWith(".apk") }?.browserDownloadUrl
                     if (apkUrl == null) UpdateState.UpToDate
-                    else UpdateState.Available(
-                        UpdateInfo(versionName = release.tagName.removePrefix("v"), downloadUrl = apkUrl, notes = release.body.orEmpty()),
-                    )
+                    else UpdateInfo(versionName = release.tagName.removePrefix("v"), downloadUrl = apkUrl, notes = release.body.orEmpty())
+                        .also { notifyOnce(it) }
+                        .let { UpdateState.Available(it) }
                 }
             }
         }
@@ -98,6 +166,18 @@ class AppUpdateManager private constructor(context: Context) {
         private const val GITHUB_OWNER = "VladiFon"
         private const val GITHUB_REPO = "LesovodMobile"
         private const val KEY_DOWNLOAD_ID = "download_id"
+        private const val KEY_NOTIFIED = "notified_version"
+        private const val CHANNEL_ID = "app_update"
+        private const val NOTIFICATION_ID = 770_001
+        private const val WORK_NAME = "app_update_check"
+
+        /** Раз в 6 часов спрашиваем GitHub в фоне — уведомление придёт, даже если приложение не открывали. */
+        fun schedule(context: Context) {
+            val request = PeriodicWorkRequestBuilder<UpdateCheckWorker>(6, TimeUnit.HOURS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+        }
 
         @Volatile
         private var instance: AppUpdateManager? = null
@@ -167,5 +247,12 @@ class UpdateDownloadReceiver : BroadcastReceiver() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         runCatching { context.startActivity(installIntent) }
+    }
+}
+
+class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        runCatching { AppUpdateManager.getInstance(applicationContext).checkInBackground() }
+        return Result.success()
     }
 }

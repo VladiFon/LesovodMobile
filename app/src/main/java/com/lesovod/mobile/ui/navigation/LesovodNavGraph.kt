@@ -71,7 +71,8 @@ import com.lesovod.mobile.ui.screens.StockScreen
 import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
 import com.lesovod.mobile.ui.tabel.TabelScreen
-import com.lesovod.mobile.ui.trelevka.TrelevkaScreen
+import com.lesovod.mobile.ui.igra.IgraScreen
+import com.lesovod.mobile.ui.smena.SmenaScreen
 
 @Composable
 fun LesovodNavGraph() {
@@ -115,6 +116,7 @@ fun LesovodNavGraph() {
                     onOpenStock = { navController.openStock() },
                     onOpenTrelevka = { navController.navigate(Screen.Trelevka.route) },
                     onOpenBreakdown = { navController.navigate(Screen.Breakdown.route) },
+                    onOpenIgra = { navController.navigate(Screen.Igra.route) },
                 )
             }
         }
@@ -133,7 +135,10 @@ fun LesovodNavGraph() {
             BreakdownScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Trelevka.route) {
-            TrelevkaScreen(onBack = { navController.popBackStack() })
+            SmenaScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Screen.Igra.route) {
+            IgraScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Proba.route) {
             ProbaScreen(onBack = { navController.popBackStack() })
@@ -173,6 +178,8 @@ fun LesovodNavGraph() {
                     onOpenInventarizatsiya = { navController.navigate(Screen.Inventarizatsiya.route) },
                     onOpenPerevod = { navController.navigate(Screen.Perevod.route) },
                     onOpenTabel = { navController.navigate(Screen.Tabel.route) },
+                    onOpenSmena = { navController.navigate(Screen.Trelevka.route) },
+                    onOpenIgra = { navController.navigate(Screen.Igra.route) },
                 )
             }
         }
@@ -233,6 +240,7 @@ private fun MainScaffold(
     LaunchedEffect(session != null) {
         if (session == null) return@LaunchedEffect
         IncomingMarks.schedule(context)
+        com.lesovod.mobile.data.update.AppUpdateManager.schedule(context)
         while (true) {
             IncomingMarks.check(context)
             badgeManager.refresh()
@@ -246,9 +254,7 @@ private fun MainScaffold(
             if (role?.canReportBreakdown == true) {
                 add(QuickAction("Поломка", QuickActionIcons.Breakdown) { navController.navigate(Screen.Breakdown.route) })
             }
-            if (role?.canTrelevka == true) {
-                add(QuickAction("Трелёвка", QuickActionIcons.Trelevka) { navController.navigate(Screen.Trelevka.route) })
-            }
+            add(QuickAction("Отчёт за смену", QuickActionIcons.Trelevka) { navController.navigate(Screen.Trelevka.route) })
             if (role?.canSeeStock == true) {
                 add(QuickAction("Остатки", QuickActionIcons.Stock) { navController.navigate(Screen.Stock.route) })
             }

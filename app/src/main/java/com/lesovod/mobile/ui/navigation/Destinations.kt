@@ -24,7 +24,9 @@ sealed class Screen(val route: String) {
     data object Attendance : Screen("attendance")
     data object Kubaturnik : Screen("kubaturnik")
     data object Proba : Screen("proba")
+    /** «Отчёт за смену» (бывш. «Трелёвка», маршрут прежний). */
     data object Trelevka : Screen("trelevka")
+    data object Igra : Screen("igra")
     data object Notes : Screen("notes")
     data object Notifications : Screen("notifications")
     data object Inventarizatsiya : Screen("lesokultury_inventarizatsiya")

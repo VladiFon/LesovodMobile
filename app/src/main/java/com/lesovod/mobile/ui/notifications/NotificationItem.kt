@@ -37,7 +37,7 @@ fun JsonObject.toNotificationItem(): NotificationItem? {
         "breakdown", "polomka", "поломка" -> NotificationType.BREAKDOWN
         "note", "zametka", "заметка" -> NotificationType.NOTE
         "proba", "проба" -> NotificationType.PROBA
-        "trelevka", "трелёвка", "трелевка" -> NotificationType.TRELEVKA
+        "trelevka", "трелёвка", "трелевка", "smena" -> NotificationType.TRELEVKA
         // освоение делянки перешло 90/100/110% лимита
         "osvoenie", "освоение" -> NotificationType.OSVOENIE
         // напоминание о сроке

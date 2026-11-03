@@ -13,6 +13,11 @@ import com.lesovod.mobile.data.network.dto.KartaProbaDto
 import com.lesovod.mobile.data.network.dto.KartaProbaMoveRequest
 import com.lesovod.mobile.data.network.dto.GeoNoteDto
 import com.lesovod.mobile.data.network.dto.CoworkerDto
+import com.lesovod.mobile.data.network.dto.IgraDto
+import com.lesovod.mobile.data.network.dto.SmenaCreatedDto
+import com.lesovod.mobile.data.network.dto.SmenaMoiDto
+import com.lesovod.mobile.data.network.dto.SmenaRequest
+import com.lesovod.mobile.data.network.dto.SmenaSpravochnikDto
 import com.lesovod.mobile.data.network.dto.GeoNoteShareDto
 import com.lesovod.mobile.data.network.dto.GeoNoteShareRequest
 import com.lesovod.mobile.data.network.dto.GeoNoteShareResultDto
@@ -444,4 +449,33 @@ interface ApiService {
         @Header("Authorization") bearerToken: String,
         @Query("search") search: String? = null,
     ): List<TabelLesokulturyUchastokDto>
+
+    // --- «Отчёт за смену» (сервер 03.11.2026+, routers/smena.py) ---
+    @GET("api/bot/smena/spravochnik")
+    suspend fun smenaSpravochnik(@Header("Authorization") bearerToken: String): SmenaSpravochnikDto
+
+    @POST("api/bot/smena")
+    suspend fun createSmena(
+        @Header("Authorization") bearerToken: String,
+        @Body body: SmenaRequest,
+    ): SmenaCreatedDto
+
+    @GET("api/bot/smena/moi")
+    suspend fun smenaMoi(
+        @Header("Authorization") bearerToken: String,
+        @Query("dney") dney: Int = 14,
+    ): SmenaMoiDto
+
+    @DELETE("api/bot/smena/{id}")
+    suspend fun deleteSmena(
+        @Header("Authorization") bearerToken: String,
+        @Path("id") id: Int,
+    ): ResponseBody
+
+    // --- игровой режим (сервер 03.11.2026+, routers/igra_bot.py) ---
+    @GET("api/bot/igra/moy")
+    suspend fun igraMoy(
+        @Header("Authorization") bearerToken: String,
+        @Query("period") period: String = "mesyac",
+    ): IgraDto
 }

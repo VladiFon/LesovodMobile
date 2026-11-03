@@ -44,6 +44,7 @@ import com.lesovod.mobile.ui.components.SendStatusChip
 import com.lesovod.mobile.data.local.ThemePrefs
 import com.lesovod.mobile.BuildConfig
 import com.lesovod.mobile.data.update.AppUpdateManager
+import com.lesovod.mobile.data.local.IgraPrefs
 import com.lesovod.mobile.data.update.UpdateState
 import com.lesovod.mobile.ui.map.MapSettingsViewModel
 import java.text.SimpleDateFormat
@@ -136,6 +137,7 @@ fun ProfileScreen(
             }
 
             ThemeCard()
+            IgraCard()
 
             QueueCard()
 
@@ -223,6 +225,7 @@ private fun PendingActionType.labelRu(): String = when (this) {
     PendingActionType.LESOKULTURY -> "лесные культуры"
     PendingActionType.GEO_NOTE -> "метки на карте"
     PendingActionType.KARTA_PROBA -> "пробы на карте"
+    PendingActionType.SMENA -> "отчёты за смену"
 }
 
 /** Выбор темы: «Тёмная» (по умолчанию) / «Светлая» / «Как в системе» — применяется сразу. */
@@ -260,6 +263,35 @@ private fun ThemeCard() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = Spacing.xs),
         )
+    }
+}
+
+/** Игровой режим (03.11.2026): по умолчанию выключен, приложение обычное. */
+@Composable
+private fun IgraCard() {
+    val context = LocalContext.current
+    val prefs = remember { IgraPrefs.getInstance(context) }
+    val on by prefs.enabled.collectAsState()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = Spacing.l)
+            .softCard()
+            .clickable { prefs.setEnabled(!on) }
+            .padding(Spacing.l),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("🎮 Игровой режим", style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (on) "Включён: на главном — уровень и карточка героя, в «Ещё» — рейтинг и челленджи"
+                else "Уровни, карточка героя, рейтинг с соперником и челленджи команды. Выключен — приложение обычное.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+        }
+        androidx.compose.material3.Switch(checked = on, onCheckedChange = { prefs.setEnabled(it) })
     }
 }
 
