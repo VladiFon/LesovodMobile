@@ -20,12 +20,18 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Lesovod">
+        android:theme="@style/Theme.Lesovod"
+        android:usesCleartextTraffic="true">
+        <!-- http разрешён ради запасного адреса в локальной сети (http://lesovod.local,
+             http://192.168.x.x) — основной адрес по-прежнему https. -->
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.Lesovod">
+            android:theme="@style/Theme.Lesovod"
+        android:usesCleartextTraffic="true">
+        <!-- http разрешён ради запасного адреса в локальной сети (http://lesovod.local,
+             http://192.168.x.x) — основной адрес по-прежнему https. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

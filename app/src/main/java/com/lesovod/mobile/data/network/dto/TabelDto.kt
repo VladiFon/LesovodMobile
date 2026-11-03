@@ -45,12 +45,15 @@ data class TabelDelyankaDto(
     val vydel: String? = null,
     @SerialName("lesoseka_nomer") val lesosekaNomer: String? = null,
     val status: String? = null,
+    /** Сторонняя заготовка: кто рубит. null — делянка наша. */
+    val zagotovitel: String? = null,
 ) {
     val label: String
         get() = listOfNotNull(
             "кв. ${kvartal.orEmpty()} · выд. ${vydel.orEmpty()}",
             lesosekaNomer?.takeIf { it.isNotBlank() }?.let { "лесосека $it" },
             nazvanie?.takeIf { it.isNotBlank() },
+            zagotovitel?.takeIf { it.isNotBlank() }?.let { "рубит $it" },
         ).joinToString(" · ")
 }
 

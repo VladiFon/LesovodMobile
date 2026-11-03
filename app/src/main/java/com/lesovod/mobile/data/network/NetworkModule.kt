@@ -12,7 +12,8 @@ import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
 
 object NetworkModule {
-    const val BASE_URL = "https://lesovodapipom.store/"
+    /** Текущий адрес сервера (основной или запасной) — см. [ServerConfig]. */
+    val BASE_URL: String get() = ServerConfig.baseUrl()
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -63,13 +64,15 @@ object NetworkModule {
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        // первым: подставляет текущий адрес сервера и переключает на запасной
+        .addInterceptor(ServerConfig.rewriteInterceptor)
         .addInterceptor(authHeaderInterceptor)
         .addInterceptor(authExpiryInterceptor)
         .addInterceptor(loggingInterceptor)
         .build()
 
     private val retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
+        .baseUrl(ServerConfig.PLACEHOLDER)
         .client(okHttpClient)
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()

@@ -19,6 +19,12 @@ class SessionManager private constructor(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("lesovod_session", Context.MODE_PRIVATE)
 
+    init {
+        // адрес сервера нужен раньше первого запроса; SessionManager создаётся везде,
+        // где есть сеть (экраны, фоновая очередь, напоминания)
+        com.lesovod.mobile.data.network.ServerConfig.init(context)
+    }
+
     private val _session = MutableStateFlow(readFromPrefs())
     val session = _session.asStateFlow()
 

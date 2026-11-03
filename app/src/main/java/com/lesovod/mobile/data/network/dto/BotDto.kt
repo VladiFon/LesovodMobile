@@ -36,6 +36,8 @@ data class DelyankaDto(
     /** С сервера новее 2026-09-30: остаток спрашивается по всей делянке (как на вебе). */
     @SerialName("delyanka_id") val delyankaId: Int? = null,
     val nazvanie: String? = null,
+    /** Сторонняя заготовка: кто рубит (наряды при этом пишем мы). null — делянка наша. */
+    val zagotovitel: String? = null,
 )
 
 /**
@@ -55,6 +57,8 @@ data class MyDelyankaDto(
     val level: String? = null,
     @SerialName("mozhno_do_100") val mozhnoDo100: Double? = null,
     @SerialName("mozhno_do_110") val mozhnoDo110: Double? = null,
+    /** Сторонняя заготовка: кто рубит (наряды при этом пишем мы). null — делянка наша. */
+    val zagotovitel: String? = null,
 )
 
 @Serializable
