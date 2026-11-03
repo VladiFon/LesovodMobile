@@ -230,6 +230,14 @@ private fun MyDelyankaRow(d: MyDelyankaDto, onClick: () -> Unit) {
             if (place.isNotBlank() && place != d.title()) {
                 Text(place, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            d.zagotovitel?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    "рубит $it",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
             d.mozhnoDo110?.let {
                 Text(
                     "до 110%: ${it.fmt()} м³",

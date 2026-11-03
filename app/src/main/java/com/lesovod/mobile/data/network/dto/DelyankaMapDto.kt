@@ -18,4 +18,8 @@ data class DelyankaMapRefDto(
     @SerialName("vid_rubki_color") val vidRubkiColor: String? = null,
     @SerialName("gruppa_label") val gruppaLabel: String? = null,
     @SerialName("gruppa_color") val gruppaColor: String? = null,
+    /** Сторонняя заготовка (сервер 03.11.2026+): кто рубит; null — делянка наша. */
+    val zagotovitel: String? = null,
+    /** false — наряды по сторонней делянке пишет сам заготовитель: для отчёта не предлагаем. */
+    @SerialName("nashi_naryady") val nashiNaryady: Boolean = true,
 )

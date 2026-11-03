@@ -318,6 +318,7 @@ private fun SelectedDelyankaCard(delyanka: DelyankaMapRefDto, enabled: Boolean, 
                 delyanka.kvartal?.let { "квартал $it" },
                 delyanka.vydel?.let { "выдел $it" },
                 delyanka.lesnichestvo,
+                delyanka.zagotovitel?.takeIf { it.isNotBlank() }?.let { "рубит $it" },
             ).joinToString(" · ")
             if (details.isNotBlank()) {
                 Text(
@@ -418,6 +419,7 @@ private fun DelyankaRow(delyanka: DelyankaMapRefDto, onClick: () -> Unit) {
             delyanka.kvartal?.let { "квартал $it" },
             delyanka.vydel?.let { "выдел $it" },
             delyanka.lesnichestvo,
+            delyanka.zagotovitel?.takeIf { it.isNotBlank() }?.let { "рубит $it" },
         ).joinToString(" · ")
         if (details.isNotBlank()) {
             Text(

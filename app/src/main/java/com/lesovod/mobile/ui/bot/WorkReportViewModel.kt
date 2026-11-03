@@ -243,7 +243,8 @@ class WorkReportViewModel(application: Application) : AndroidViewModel(applicati
     private fun loadDelyanki() {
         _uiState.value = _uiState.value.copy(isLoadingDelyanki = true, delyankiError = null)
         viewModelScope.launch {
-            val result = repository.getDelyankiForMap()
+            // Чужие делянки, где наряды пишет сам заготовитель, — не для наших отчётов.
+            val result = repository.getDelyankiForMap().map { all -> all.filter { it.nashiNaryady } }
             _uiState.value = result.fold(
                 onSuccess = { list ->
                     // делянка, на которой человек стоит по GPS, — выбрана сразу
