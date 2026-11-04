@@ -452,7 +452,11 @@ interface ApiService {
 
     // --- «Отчёт за смену» (сервер 03.11.2026+, routers/smena.py) ---
     @GET("api/bot/smena/spravochnik")
-    suspend fun smenaSpravochnik(@Header("Authorization") bearerToken: String): SmenaSpravochnikDto
+    suspend fun smenaSpravochnik(
+        @Header("Authorization") bearerToken: String,
+        /** Сервер vse63+: отдать и списанные / переведённые участки культур (со статусом). */
+        @Query("vse") vse: Boolean? = true,
+    ): SmenaSpravochnikDto
 
     @POST("api/bot/smena")
     suspend fun createSmena(

@@ -48,8 +48,8 @@ enum class SmenaVid(val code: String, val title: String, val emoji: String) {
     val poUchastku get() = this == UHOD || this == POCHVA || this == POSADKA
     /** Га копятся по выделу делянки: сделано / осталось. */
     val gaPoVydelu get() = this == RUBKA_UHODA || this == SANRUBKA || this == OCHISTKA
-    /** Можно вести и по делянке, и по участку лесных культур (рубка ухода в культурах). */
-    val mozhnoNaKulturah get() = this == RUBKA_UHODA
+    /** Место — проба экрана «Рубки ухода» (учёт после закладки пробы). */
+    val poProbe get() = this == RUBKA_UHODA
     /** Вводят га (участок или выдел). */
     val sGa get() = poUchastku || gaPoVydelu
     /** Вводят кубы. */
@@ -101,13 +101,17 @@ data class SmenaForm(
     val sTehnikoy: Boolean = false,
     val kommentariy: String = "",
     val naparniki: Set<Int> = emptySet(),
-    /** Рубка ухода: на участке лесных культур, а не на делянке. */
-    val naKulturah: Boolean = false,
+    /** Рубка ухода: проба «Рубок ухода». */
+    val probaId: Int? = null,
+    /** Показывать списанные / переведённые участки культур. */
+    val pokazatVse: Boolean = false,
 ) {
+    /** Место работы — проба рубок ухода. */
+    val naProbe get() = vid.poProbe
     /** Место работы — участок лесных культур. */
-    val naUchastke get() = vid.poUchastku || (vid.mozhnoNaKulturah && naKulturah)
+    val naUchastke get() = vid.poUchastku
     /** Место работы — делянка / выдел. */
-    val naDelyanke get() = vid.poDelyanke && !naUchastke
+    val naDelyanke get() = vid.poDelyanke && !naProbe
 }
 
 sealed interface SmenaResult {
@@ -241,6 +245,7 @@ class SmenaViewModel(application: Application) : AndroidViewModel(application) {
             f.vid.kubyObyazatelny && (obyom == null || obyom <= 0) -> "Укажи кубы"
             f.vid == SmenaVid.NASELENIYU && f.poluchatel.isBlank() -> "Укажи, кому везли"
             f.naUchastke && f.uchastokId == null -> "Выбери участок"
+            f.naProbe && f.probaId == null -> "Выбери пробу (или заложи новую)"
             gaNado && !f.proyden && (ga == null || ga <= 0) -> "Укажи, сколько га сделал (или отметь «пройден полностью»)"
             f.vid == SmenaVid.SANRUBKA && !f.proyden && (ga ?: 0.0) <= 0 && (obyom ?: 0.0) <= 0 -> "Укажи га или кубы"
             f.vid == SmenaVid.DRUGOE && f.kommentariy.isBlank() -> "Напиши, что делал"
@@ -257,6 +262,7 @@ class SmenaViewModel(application: Application) : AndroidViewModel(application) {
             data = LocalDate.now().minusDays(f.dneyNazad.toLong()).toString(),
             delyankaItemId = if (f.naDelyanke) f.delyankaItemId else null,
             lesokulturyUchastokId = if (f.naUchastke) f.uchastokId else null,
+            uhodyProbaId = if (f.naProbe) f.probaId else null,
             reysov = if (f.vid == SmenaVid.TRELEVKA || f.vid == SmenaVid.NASELENIYU) reysov else null,
             obyom = if (f.vid.sKubami) obyom else null,
             ga = if (f.vid.sGa) ga else null,
@@ -267,7 +273,7 @@ class SmenaViewModel(application: Application) : AndroidViewModel(application) {
             toplivoRashod = rashod,
             zapravka = zapravka,
             kommentariy = f.kommentariy.trim().takeIf { it.isNotEmpty() },
-            uchastokProyden = f.vid.sGa && f.proyden,
+            uchastokProyden = f.vid.sGa && f.proyden && !f.naProbe,
             naparniki = if (professiya.sNaparnikami) f.naparniki.toList() else emptyList(),
             clientId = UUID.randomUUID().toString(),
         )
@@ -313,6 +319,7 @@ class SmenaViewModel(application: Application) : AndroidViewModel(application) {
         val s = _state.value.spravochnik
         val mesto = when {
             f.naDelyanke -> s?.delyanki?.firstOrNull { it.itemId == f.delyankaItemId }?.label
+            f.naProbe -> s?.proby?.firstOrNull { it.id == f.probaId }?.label
             f.naUchastke -> s?.uchastki?.firstOrNull { it.id == f.uchastokId }?.label
             else -> s?.mashiny?.firstOrNull { it.id == f.tehnikaId }?.label ?: f.tehnika.trim().ifEmpty { null }
         }
@@ -336,7 +343,7 @@ class SmenaViewModel(application: Application) : AndroidViewModel(application) {
             error = null,
             form = SmenaForm(vid = f.vid, dneyNazad = f.dneyNazad, tehnika = f.tehnika, tehnikaId = f.tehnikaId,
                 sTehnikoy = f.sTehnikoy, naparniki = f.naparniki, delyankaItemId = f.delyankaItemId, uchastokId = f.uchastokId,
-                naKulturah = f.naKulturah),
+                probaId = f.probaId, pokazatVse = f.pokazatVse),
         )
     }
 

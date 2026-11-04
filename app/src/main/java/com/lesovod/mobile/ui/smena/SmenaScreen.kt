@@ -54,6 +54,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.runtime.DisposableEffect
+import com.lesovod.mobile.data.network.dto.SmenaProbaDto
 import com.lesovod.mobile.data.network.dto.SmenaDelyankaDto
 import com.lesovod.mobile.data.network.dto.SmenaOtchetDto
 import com.lesovod.mobile.data.network.dto.SmenaUchastokDto
@@ -78,8 +83,22 @@ import java.time.LocalDate
  * вводить не нужно. Заменил старый экран «Трелёвка».
  */
 @Composable
-fun SmenaScreen(onBack: () -> Unit, viewModel: SmenaViewModel = viewModel()) {
+fun SmenaScreen(onBack: () -> Unit, onOpenProba: (() -> Unit)? = null, viewModel: SmenaViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
+    // Вернулись с экрана пробы — подтянуть свежий список проб.
+    var zhdemProbu by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_RESUME && zhdemProbu) {
+                zhdemProbu = false
+                viewModel.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+    val otkrytProbu = onOpenProba?.let { open -> { zhdemProbu = true; open() } }
     var tab by rememberSaveable { mutableStateOf(0) }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -108,13 +127,13 @@ fun SmenaScreen(onBack: () -> Unit, viewModel: SmenaViewModel = viewModel()) {
                 val posle = o?.takeIf { f.vid.ostatokKubov }?.let { "🌲 По делянке теперь осталось ≈ ${fmt(it.ostatok)} м³ из ${fmt(it.limit)}" }
                 Gotovo(state.result!!, posle = posle, onNew = viewModel::novyy, onDone = onBack)
             }
-            else -> Forma(state, viewModel)
+            else -> Forma(state, viewModel, otkrytProbu)
         }
     }
 }
 
 @Composable
-private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
+private fun Forma(state: SmenaUiState, vm: SmenaViewModel, onOpenProba: (() -> Unit)?) {
     val f = state.form
     val s = state.spravochnik
     val prof = vm.professiya
@@ -181,19 +200,13 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
         }
 
         // --- место работы ---
-        if (f.vid.mozhnoNaKulturah) {
-            Label("Где работал")
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                FilterChip(
-                    selected = !f.naKulturah,
-                    onClick = { vm.update { it.copy(naKulturah = false, proyden = false, ga = "") } },
-                    label = { Text("🌲 Делянка") },
-                )
-                FilterChip(
-                    selected = f.naKulturah,
-                    onClick = { vm.update { it.copy(naKulturah = true, proyden = false, ga = "") } },
-                    label = { Text("🌱 Участок культур") },
-                )
+        if (f.naProbe) {
+            val sel = s?.proby?.firstOrNull { it.id == f.probaId }
+            Label("Участок рубки ухода (проба)")
+            PickerField(text = sel?.label, placeholder = "Выбрать пробу (кв / выд)", onClick = { pickPlace = true })
+            sel?.let { ProbaOstatok(it) }
+            if (onOpenProba != null) {
+                TextButton(onClick = onOpenProba) { Text("＋ Нет участка — заложить пробу") }
             }
         }
         if (f.naDelyanke) {
@@ -232,7 +245,9 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
             sel?.let { UchastokOstatok(it, f.vid.code) }
         }
         if (f.vid.sGa) {
-            val ost = if (f.naUchastke) {
+            val ost = if (f.naProbe) {
+                s?.proby?.firstOrNull { it.id == f.probaId }?.let { p -> p.ostatok ?: p.ploshad }
+            } else if (f.naUchastke) {
                 val u = s?.uchastki?.firstOrNull { it.id == f.uchastokId }
                 u?.cikl(f.vid.code)?.ostatok ?: u?.takeIf { it.cikl(f.vid.code) == null }?.ploshad
             } else {
@@ -247,7 +262,7 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
                 TextButton(onClick = { vm.update { it.copy(ga = fmt(ost)) } }) { Text("Доделал остаток — ${fmt(ost)} га") }
             }
             val chto = if (f.naUchastke) "Участок" else "Выдел"
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { vm.update { it.copy(proyden = !it.proyden) } }) {
+            if (!f.naProbe) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { vm.update { it.copy(proyden = !it.proyden) } }) {
                 Checkbox(checked = f.proyden, onCheckedChange = { c -> vm.update { it.copy(proyden = c) } })
                 Text("$chto пройден полностью", style = MaterialTheme.typography.bodyLarge)
             }
@@ -377,7 +392,26 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
     }
 
     if (pickPlace && s != null) {
-        if (f.naDelyanke) {
+        if (f.naProbe) {
+            PoiskDialog(
+                title = "Проба рубки ухода",
+                items = s.proby,
+                key = { it.id },
+                label = { it.label },
+                sub = { p ->
+                    listOfNotNull(
+                        p.vidRubki,
+                        if (p.gotovo) "✅ сделано ${fmt(p.sdelano)} га" else if (p.sdelano > 0) "⏳ сделано ${fmt(p.sdelano)} га" + (p.ostatok?.let { ", осталось ${fmt(it)} га" } ?: "")
+                        else p.ploshad?.let { "${fmt(it)} га" },
+                        if (p.nedavno != null) "работал ${ruData(p.nedavno)}" else null,
+                    ).joinToString(" · ").ifEmpty { null }
+                },
+                kvVyd = { it.kvartal to it.vydel },
+                selected = setOfNotNull(f.probaId),
+                onPick = { p -> vm.update { it.copy(probaId = p.id, ga = "") }; pickPlace = false },
+                onDismiss = { pickPlace = false },
+            )
+        } else if (f.naDelyanke) {
             val code = f.vid.code
             PoiskDialog(
                 title = "Делянка",
@@ -401,19 +435,32 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
             )
         } else {
             val code = f.vid.code
-            val sorted = remember(s.uchastki, code) { s.uchastki.sortedBy { if (it.cikl(code) != null) 0 else 1 } }
+            val sorted = remember(s.uchastki, code, f.pokazatVse) {
+                s.uchastki.filter { f.pokazatVse || !it.spisanIliPereveden }.sortedBy { if (it.cikl(code) != null) 0 else 1 }
+            }
             PoiskDialog(
                 title = "Участок культур",
+                header = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { vm.update { it.copy(pokazatVse = !it.pokazatVse) } }
+                            .padding(horizontal = Spacing.m),
+                    ) {
+                        Checkbox(checked = f.pokazatVse, onCheckedChange = { c -> vm.update { it.copy(pokazatVse = c) } })
+                        Text("Показывать переведённые и списанные", style = MaterialTheme.typography.bodyMedium)
+                    }
+                },
                 items = sorted,
                 key = { it.id },
                 label = { it.label },
                 sub = { u ->
                     val c = u.cikl(code)
-                    when {
+                    val st = u.status?.takeIf { u.spisanIliPereveden }?.let { "($it) " }.orEmpty()
+                    (st + when {
                         c != null -> "⏳ в работе: сделано ${fmt(c.sdelano)} га" + (c.ostatok?.let { ", осталось ${fmt(it)} га" } ?: "")
                         u.ploshad != null -> "${fmt(u.ploshad)} га"
-                        else -> null
-                    }
+                        else -> ""
+                    }).ifEmpty { null }
                 },
                 kvVyd = { it.kvartal to it.vydel },
                 selected = setOfNotNull(f.uchastokId),
@@ -500,6 +547,18 @@ private fun VydelOstatok(d: SmenaDelyankaDto, vid: String) {
         else -> null
     } ?: return
     StatusChip(text, if (c != null) ChipTone.WARN else ChipTone.NEUTRAL)
+}
+
+@Composable
+private fun ProbaOstatok(p: SmenaProbaDto) {
+    val text = when {
+        p.sdelano > 0 -> "⏳ Сделано ${fmt(p.sdelano)} га" + (p.ploshad?.let { " из ${fmt(it)}" } ?: "") +
+            (p.ostatok?.let { " · осталось ${fmt(it)} га" } ?: "") + (if (p.kubov > 0) " · ${fmt(p.kubov)} м³" else "")
+        p.ploshad != null -> "Площадь ${fmt(p.ploshad)} га — начинаешь с нуля" +
+            (if (p.zapasNa1ga > 0) " · ${fmt(p.zapasNa1ga)} м³/га" else "")
+        else -> null
+    } ?: return
+    StatusChip(text, if (p.sdelano > 0) ChipTone.WARN else ChipTone.NEUTRAL)
 }
 
 @Composable
@@ -630,6 +689,8 @@ private fun <T> PoiskDialog(
     multi: Boolean = false,
     /** Квартал и выдел элемента — тогда сверху два поля «Кв» и «Выд» с точным совпадением. */
     kvVyd: ((T) -> Pair<String?, String?>)? = null,
+    /** Что-то над списком (переключатель и т.п.). */
+    header: (@Composable () -> Unit)? = null,
 ) {
     var q by remember { mutableStateOf("") }
     var kv by remember { mutableStateOf("") }
@@ -683,6 +744,7 @@ private fun <T> PoiskDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l),
                 )
+                header?.invoke()
                 LazyColumn(Modifier.fillMaxSize().padding(top = Spacing.s)) {
                     if (shown.isEmpty()) item {
                         Text("Ничего не нашлось", modifier = Modifier.padding(Spacing.l), color = MaterialTheme.colorScheme.onSurfaceVariant)
