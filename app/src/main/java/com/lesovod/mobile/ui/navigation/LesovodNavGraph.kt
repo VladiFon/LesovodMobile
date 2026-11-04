@@ -50,7 +50,7 @@ import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.data.session.canReportBreakdown
 import com.lesovod.mobile.data.session.canSeeStock
-import com.lesovod.mobile.data.session.canTrelevka
+import com.lesovod.mobile.data.session.canSmena
 import com.lesovod.mobile.ui.components.QuickAction
 import com.lesovod.mobile.ui.components.QuickActionIcons
 import com.lesovod.mobile.ui.components.QuickActionsSheet
@@ -126,8 +126,8 @@ fun LesovodNavGraph() {
         composable(Screen.WorkReport.route) {
             val ctx = LocalContext.current
             val sess by SessionManager.getInstance(ctx).session.collectAsState()
-            // Тракторист отчитывается только через «Отчёт за смену» — старый экран ему не нужен.
-            if (sess?.role?.canTrelevka == true) {
+            // Тракторист, харвестерщик, вальщик/лесоруб/лесовод отчитываются через «Отчёт за смену» — старый экран им не нужен.
+            if (sess?.role?.canSmena == true) {
                 SmenaScreen(onBack = { navController.popBackStack() })
             } else MainScaffold(navController) {
                 WorkReportScreen(
@@ -259,7 +259,7 @@ private fun MainScaffold(
             if (role?.canReportBreakdown == true) {
                 add(QuickAction("Поломка", QuickActionIcons.Breakdown) { navController.navigate(Screen.Breakdown.route) })
             }
-            if (role?.canTrelevka == true) {
+            if (role?.canSmena == true) {
                 add(QuickAction("Отчёт за смену", QuickActionIcons.Trelevka) { navController.navigate(Screen.Trelevka.route) })
             }
             if (role?.canSeeStock == true) {

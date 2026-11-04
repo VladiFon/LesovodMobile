@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.session.canReportBreakdown
-import com.lesovod.mobile.data.session.canTrelevka
+import com.lesovod.mobile.data.session.canSmena
 import com.lesovod.mobile.ui.bot.WorkReportLocationMode
 import com.lesovod.mobile.ui.bot.WorkReportViewModel
 import com.lesovod.mobile.ui.bot.filterBySearch
@@ -74,7 +74,7 @@ fun WorkReportScreen(
     val state by viewModel.uiState.collectAsState()
     val session by viewModel.session.collectAsState()
     val canReportBreakdown = session?.role?.canReportBreakdown == true
-    val canTrelevka = session?.role?.canTrelevka == true
+    val canSmena = session?.role?.canSmena == true
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -273,7 +273,7 @@ fun WorkReportScreen(
                 )
             }
 
-            if (canTrelevka) {
+            if (canSmena) {
                 SecondaryButton(
                     text = "Отчёт за смену: трелёвка, уход, ремонт",
                     onClick = onReportTrelevka,

@@ -42,7 +42,7 @@ import com.lesovod.mobile.data.repository.NotificationsBadgeManager
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.data.session.canManageLesokultury
 import com.lesovod.mobile.data.session.canManageTabel
-import com.lesovod.mobile.data.session.canTrelevka
+import com.lesovod.mobile.data.session.canSmena
 import com.lesovod.mobile.data.session.canViewProba
 import com.lesovod.mobile.ui.components.ScreenTitle
 import com.lesovod.mobile.ui.theme.Dimens
@@ -92,8 +92,8 @@ fun MoreScreen(
                 badgeCount = unreadCount,
                 onClick = onOpenNotifications,
             )
-            if (role?.canTrelevka == true) {
-                MoreRow(icon = Icons.Filled.LocalShipping, label = "Отчёт за смену (трелёвка, уход, ремонт)", onClick = onOpenSmena)
+            if (role?.canSmena == true) {
+                MoreRow(icon = Icons.Filled.LocalShipping, label = "Отчёт за смену", onClick = onOpenSmena)
             } else {
                 MoreRow(icon = Icons.Filled.PostAdd, label = "Отчёт", onClick = onOpenWorkReport)
             }
