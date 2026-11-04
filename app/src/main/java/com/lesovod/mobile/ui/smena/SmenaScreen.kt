@@ -181,7 +181,22 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
         }
 
         // --- место работы ---
-        if (f.vid.poDelyanke) {
+        if (f.vid.mozhnoNaKulturah) {
+            Label("Где работал")
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                FilterChip(
+                    selected = !f.naKulturah,
+                    onClick = { vm.update { it.copy(naKulturah = false, proyden = false, ga = "") } },
+                    label = { Text("🌲 Делянка") },
+                )
+                FilterChip(
+                    selected = f.naKulturah,
+                    onClick = { vm.update { it.copy(naKulturah = true, proyden = false, ga = "") } },
+                    label = { Text("🌱 Участок культур") },
+                )
+            }
+        }
+        if (f.naDelyanke) {
             val sel = s?.delyanki?.firstOrNull { it.itemId == f.delyankaItemId }
             Label(if (f.vid.gaPoVydelu) "Делянка / выдел" else "Делянка")
             PickerField(text = sel?.label, placeholder = "Выбрать делянку (кв / выд)", onClick = { pickPlace = true })
@@ -210,14 +225,14 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
                 Podskazki(s?.poluchateli.orEmpty()) { v -> vm.update { it.copy(poluchatel = v) } }
             }
         }
-        if (f.vid.poUchastku) {
+        if (f.naUchastke) {
             val sel = s?.uchastki?.firstOrNull { it.id == f.uchastokId }
             Label("Участок культур")
             PickerField(text = sel?.label, placeholder = "Выбрать участок (кв / выд)", onClick = { pickPlace = true })
             sel?.let { UchastokOstatok(it, f.vid.code) }
         }
         if (f.vid.sGa) {
-            val ost = if (f.vid.poUchastku) {
+            val ost = if (f.naUchastke) {
                 val u = s?.uchastki?.firstOrNull { it.id == f.uchastokId }
                 u?.cikl(f.vid.code)?.ostatok ?: u?.takeIf { it.cikl(f.vid.code) == null }?.ploshad
             } else {
@@ -231,7 +246,7 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
             if (ost != null && ost > 0 && !f.proyden) {
                 TextButton(onClick = { vm.update { it.copy(ga = fmt(ost)) } }) { Text("Доделал остаток — ${fmt(ost)} га") }
             }
-            val chto = if (f.vid.poUchastku) "Участок" else "Выдел"
+            val chto = if (f.naUchastke) "Участок" else "Выдел"
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { vm.update { it.copy(proyden = !it.proyden) } }) {
                 Checkbox(checked = f.proyden, onCheckedChange = { c -> vm.update { it.copy(proyden = c) } })
                 Text("$chto пройден полностью", style = MaterialTheme.typography.bodyLarge)
@@ -362,7 +377,7 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
     }
 
     if (pickPlace && s != null) {
-        if (f.vid.poDelyanke) {
+        if (f.naDelyanke) {
             val code = f.vid.code
             PoiskDialog(
                 title = "Делянка",
