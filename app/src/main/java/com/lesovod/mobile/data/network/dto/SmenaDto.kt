@@ -84,11 +84,13 @@ data class SmenaUchastokDto(
     val uhod: SmenaCiklDto? = null,
     val pochva: SmenaCiklDto? = null,
     val posadka: SmenaCiklDto? = null,
+    @SerialName("rubka_uhoda") val rubkaUhoda: SmenaCiklDto? = null,
 ) {
     fun cikl(vid: String): SmenaCiklDto? = when (vid) {
         "uhod" -> uhod
         "pochva" -> pochva
         "posadka" -> posadka
+        "rubka_uhoda" -> rubkaUhoda
         else -> null
     }
 }

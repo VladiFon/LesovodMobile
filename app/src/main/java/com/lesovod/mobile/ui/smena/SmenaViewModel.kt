@@ -48,6 +48,8 @@ enum class SmenaVid(val code: String, val title: String, val emoji: String) {
     val poUchastku get() = this == UHOD || this == POCHVA || this == POSADKA
     /** Га копятся по выделу делянки: сделано / осталось. */
     val gaPoVydelu get() = this == RUBKA_UHODA || this == SANRUBKA || this == OCHISTKA
+    /** Можно вести и по делянке, и по участку лесных культур (рубка ухода в культурах). */
+    val mozhnoNaKulturah get() = this == RUBKA_UHODA
     /** Вводят га (участок или выдел). */
     val sGa get() = poUchastku || gaPoVydelu
     /** Вводят кубы. */
@@ -99,7 +101,14 @@ data class SmenaForm(
     val sTehnikoy: Boolean = false,
     val kommentariy: String = "",
     val naparniki: Set<Int> = emptySet(),
-)
+    /** Рубка ухода: на участке лесных культур, а не на делянке. */
+    val naKulturah: Boolean = false,
+) {
+    /** Место работы — участок лесных культур. */
+    val naUchastke get() = vid.poUchastku || (vid.mozhnoNaKulturah && naKulturah)
+    /** Место работы — делянка / выдел. */
+    val naDelyanke get() = vid.poDelyanke && !naUchastke
+}
 
 sealed interface SmenaResult {
     /** Отправлено. [created] — ответ сервера (остаток по участку и т.п.). */
@@ -222,16 +231,16 @@ class SmenaViewModel(application: Application) : AndroidViewModel(application) {
         val sTehnikoy = professiya.tehnikaVsegda || f.sTehnikoy || f.vid == SmenaVid.REMONT
         val rashod = if (sTehnikoy) num(f.toplivoRashod) else null
         val zapravka = if (sTehnikoy) num(f.zapravka) else null
-        val gaNado = f.vid == SmenaVid.RUBKA_UHODA || f.vid == SmenaVid.OCHISTKA || f.vid.poUchastku
+        val gaNado = f.vid == SmenaVid.RUBKA_UHODA || f.vid == SmenaVid.OCHISTKA || f.naUchastke
         val err = when {
             f.chasy.isNotBlank() && (chasy == null || chasy < 0 || chasy > 24) -> "Часы — числом от 0 до 24"
             f.reysov.isNotBlank() && (reysov == null || reysov < 0) -> "Рейсы — целым числом"
             sTehnikoy && f.toplivoRashod.isNotBlank() && (rashod == null || rashod < 0 || rashod > 2000) -> "Топливо — числом, литры"
             sTehnikoy && f.zapravka.isNotBlank() && (zapravka == null || zapravka < 0 || zapravka > 2000) -> "Заправка — числом, литры"
-            f.vid.poDelyanke && f.delyankaItemId == null -> "Выбери делянку"
+            f.naDelyanke && f.delyankaItemId == null -> "Выбери делянку"
             f.vid.kubyObyazatelny && (obyom == null || obyom <= 0) -> "Укажи кубы"
             f.vid == SmenaVid.NASELENIYU && f.poluchatel.isBlank() -> "Укажи, кому везли"
-            f.vid.poUchastku && f.uchastokId == null -> "Выбери участок"
+            f.naUchastke && f.uchastokId == null -> "Выбери участок"
             gaNado && !f.proyden && (ga == null || ga <= 0) -> "Укажи, сколько га сделал (или отметь «пройден полностью»)"
             f.vid == SmenaVid.SANRUBKA && !f.proyden && (ga ?: 0.0) <= 0 && (obyom ?: 0.0) <= 0 -> "Укажи га или кубы"
             f.vid == SmenaVid.DRUGOE && f.kommentariy.isBlank() -> "Напиши, что делал"
@@ -246,8 +255,8 @@ class SmenaViewModel(application: Application) : AndroidViewModel(application) {
         val request = SmenaRequest(
             vid = f.vid.code,
             data = LocalDate.now().minusDays(f.dneyNazad.toLong()).toString(),
-            delyankaItemId = if (f.vid.poDelyanke) f.delyankaItemId else null,
-            lesokulturyUchastokId = if (f.vid.poUchastku) f.uchastokId else null,
+            delyankaItemId = if (f.naDelyanke) f.delyankaItemId else null,
+            lesokulturyUchastokId = if (f.naUchastke) f.uchastokId else null,
             reysov = if (f.vid == SmenaVid.TRELEVKA || f.vid == SmenaVid.NASELENIYU) reysov else null,
             obyom = if (f.vid.sKubami) obyom else null,
             ga = if (f.vid.sGa) ga else null,
@@ -303,8 +312,8 @@ class SmenaViewModel(application: Application) : AndroidViewModel(application) {
     ): String {
         val s = _state.value.spravochnik
         val mesto = when {
-            f.vid.poDelyanke -> s?.delyanki?.firstOrNull { it.itemId == f.delyankaItemId }?.label
-            f.vid.poUchastku -> s?.uchastki?.firstOrNull { it.id == f.uchastokId }?.label
+            f.naDelyanke -> s?.delyanki?.firstOrNull { it.itemId == f.delyankaItemId }?.label
+            f.naUchastke -> s?.uchastki?.firstOrNull { it.id == f.uchastokId }?.label
             else -> s?.mashiny?.firstOrNull { it.id == f.tehnikaId }?.label ?: f.tehnika.trim().ifEmpty { null }
         }
         return listOfNotNull(
@@ -326,7 +335,8 @@ class SmenaViewModel(application: Application) : AndroidViewModel(application) {
             result = null,
             error = null,
             form = SmenaForm(vid = f.vid, dneyNazad = f.dneyNazad, tehnika = f.tehnika, tehnikaId = f.tehnikaId,
-                sTehnikoy = f.sTehnikoy, naparniki = f.naparniki, delyankaItemId = f.delyankaItemId, uchastokId = f.uchastokId),
+                sTehnikoy = f.sTehnikoy, naparniki = f.naparniki, delyankaItemId = f.delyankaItemId, uchastokId = f.uchastokId,
+                naKulturah = f.naKulturah),
         )
     }
 
