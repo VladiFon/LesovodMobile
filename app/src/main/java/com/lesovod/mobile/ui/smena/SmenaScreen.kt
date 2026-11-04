@@ -102,6 +102,9 @@ fun SmenaScreen(onBack: () -> Unit, viewModel: SmenaViewModel = viewModel()) {
     }
 }
 
+/** Напарники в отчёте смены — выключены, пока экран только у трактористов. */
+private const val POKAZAT_NAPARNIKOV = false
+
 @Composable
 private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
     val f = state.form
@@ -229,41 +232,45 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
         )
 
         // --- напарники ---
-        Label("С кем работал")
-        val vse = s?.naparniki.orEmpty()
-        if (f.naparniki.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                f.naparniki.mapNotNull { id -> vse.firstOrNull { it.id == id } }.forEach { n ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().softCard(RoundedCornerShape(12.dp)).padding(start = Spacing.m),
-                    ) {
-                        Text("👷 ${n.fio}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        IconButton(onClick = { vm.toggleNaparnik(n.id) }) { Icon(Icons.Rounded.Close, contentDescription = "Убрать") }
+        // Экран смены теперь только у тракториста, а ему напарник не нужен (решение Влада 2026-11-04).
+        // Блок оставлен выключенным — пригодится для будущего экрана вальщика/лесоруба.
+        if (POKAZAT_NAPARNIKOV) {
+            Label("С кем работал")
+            val vse = s?.naparniki.orEmpty()
+            if (f.naparniki.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    f.naparniki.mapNotNull { id -> vse.firstOrNull { it.id == id } }.forEach { n ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().softCard(RoundedCornerShape(12.dp)).padding(start = Spacing.m),
+                        ) {
+                            Text("👷 ${n.fio}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                            IconButton(onClick = { vm.toggleNaparnik(n.id) }) { Icon(Icons.Rounded.Close, contentDescription = "Убрать") }
+                        }
                     }
                 }
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
-            SecondaryButton(
-                text = if (f.naparniki.isEmpty()) "Отметить напарника" else "Ещё напарник",
-                onClick = { pickNaparnik = true },
-                modifier = Modifier.weight(1f),
-                icon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.padding(end = 6.dp)) },
-            )
-        }
-        val last = vm.lastNaparniki().filter { id -> vse.any { it.id == id } }
-        if (f.naparniki.isEmpty() && last.isNotEmpty()) {
-            TextButton(onClick = { vm.update { it.copy(naparniki = last.toSet()) } }) {
-                Text("Как в прошлый раз: " + last.mapNotNull { id -> vse.firstOrNull { it.id == id }?.fio?.substringBefore(' ') }.joinToString(", "))
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
+                SecondaryButton(
+                    text = if (f.naparniki.isEmpty()) "Отметить напарника" else "Ещё напарник",
+                    onClick = { pickNaparnik = true },
+                    modifier = Modifier.weight(1f),
+                    icon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.padding(end = 6.dp)) },
+                )
             }
-        }
-        if (f.naparniki.isNotEmpty()) {
-            Text(
-                "Напарникам вводить отчёт не нужно — он засчитается всем.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            val last = vm.lastNaparniki().filter { id -> vse.any { it.id == id } }
+            if (f.naparniki.isEmpty() && last.isNotEmpty()) {
+                TextButton(onClick = { vm.update { it.copy(naparniki = last.toSet()) } }) {
+                    Text("Как в прошлый раз: " + last.mapNotNull { id -> vse.firstOrNull { it.id == id }?.fio?.substringBefore(' ') }.joinToString(", "))
+                }
+            }
+            if (f.naparniki.isNotEmpty()) {
+                Text(
+                    "Напарникам вводить отчёт не нужно — он засчитается всем.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         state.error?.let { StatusChip(it, ChipTone.ERROR) }

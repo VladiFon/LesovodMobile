@@ -273,7 +273,7 @@ fun WorkReportScreen(
                 )
             }
 
-            run {
+            if (canTrelevka) {
                 SecondaryButton(
                     text = "Отчёт за смену: трелёвка, уход, ремонт",
                     onClick = onReportTrelevka,

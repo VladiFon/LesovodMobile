@@ -390,7 +390,7 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
     )
 
     Text(
-        "Обязательные фото",
+        "Фото столбов (по желанию)",
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 8.dp),
@@ -410,7 +410,7 @@ private fun ProbaForm(state: ProbaUiState, viewModel: ProbaViewModel) {
         StatusChip(text = state.error, tone = ChipTone.ERROR)
     }
 
-    val canSubmit = !state.isSubmitting && state.fotoStolbDelyankiUri != null && state.fotoStolbProbyUri != null
+    val canSubmit = !state.isSubmitting
     PrimaryButton(
         text = "Рассчитать и сохранить",
         onClick = viewModel::submit,
