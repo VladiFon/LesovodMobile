@@ -28,7 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.lesovod.mobile.data.session.canReportBreakdown
 import com.lesovod.mobile.data.session.canSeeStock
-import com.lesovod.mobile.data.session.canTrelevka
+import com.lesovod.mobile.data.session.canSmena
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.NotificationsNone
@@ -106,8 +106,8 @@ fun TasksScreen(
         add(HomeAction("Отметиться", Icons.Rounded.HowToReg, onOpenAttendance))
         add(HomeAction("Мои задачи", Icons.Rounded.TaskAlt) { scope.launch { listState.animateScrollToItem(1) } })
         if (role?.canSeeStock == true) add(HomeAction("Остатки", Icons.Rounded.Inventory2, onOpenStock))
-        // У тракториста «Отчёт за смену» заменяет старый отчёт за день (решение Влада 2026-11-04).
-        if (role?.canTrelevka == true) add(HomeAction("Отчёт за смену", Icons.Rounded.LocalShipping, onOpenTrelevka))
+        // У тракториста, харвестерщика и бригады «Отчёт за смену» заменяет старый отчёт за день (Влад, 04.11.2026).
+        if (role?.canSmena == true) add(HomeAction("Отчёт за смену", Icons.Rounded.LocalShipping, onOpenTrelevka))
         else add(HomeAction("Отчёт за день", Icons.Rounded.PostAdd, onOpenWorkReport))
         if (size < 4 && role?.canReportBreakdown == true) add(HomeAction("Поломка", Icons.Rounded.Build, onOpenBreakdown))
         if (size < 4 && canInputProba) add(HomeAction("Проба", Icons.Rounded.Forest, onOpenProba))

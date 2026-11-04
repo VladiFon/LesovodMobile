@@ -5,6 +5,7 @@ enum class WorkerRole(val displayName: String) {
     TRAKTORIST("Тракторист"),
     HARVESTERSHIK("Харвестерщик"),
     VALSHIK("Вальщик"),
+    LESOVOD("Лесовод"),
     MASTER("Мастер"),
     POMOSHNIK_LESNICHEGO("Помощник лесничего"),
     LESNICHIY("Лесничий"),
@@ -27,9 +28,12 @@ enum class WorkerRole(val displayName: String) {
             return when {
                 value.isEmpty() -> UNKNOWN
                 "харвестер" in value -> HARVESTERSHIK
+                // «Машинист трелевочной (лесозаготовительной (Форвардер)) машины» — у Влада это харвестерщик
+                "машинист" in value || "форвардер" in value || "лесозаготовит" in value -> HARVESTERSHIK
                 "трактор" in value -> TRAKTORIST
                 "вальщик" in value -> VALSHIK
                 "лесоруб" in value -> LESORUB
+                "лесовод" in value -> LESOVOD
                 "помощник" in value && "леснич" in value -> POMOSHNIK_LESNICHEGO
                 "леснич" in value -> LESNICHIY
                 "мастер" in value -> MASTER

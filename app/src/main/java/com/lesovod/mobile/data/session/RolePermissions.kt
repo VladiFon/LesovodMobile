@@ -21,7 +21,7 @@ val WorkerRole.canUseKubaturnik: Boolean
 
 /** Пробы рубок ухода — ввод: лесоруб, вальщик. */
 val WorkerRole.canInputProba: Boolean
-    get() = this == WorkerRole.LESORUB || this == WorkerRole.VALSHIK
+    get() = this == WorkerRole.LESORUB || this == WorkerRole.VALSHIK || this == WorkerRole.LESOVOD
 
 /** Пробы рубок ухода — просмотр: те же, кто вводит, плюс мастер/пом./лесничий (только просмотр). */
 val WorkerRole.canViewProba: Boolean
@@ -42,3 +42,21 @@ val WorkerRole.canManageLesokultury: Boolean
 /** Табель — ручной ввод — только мастер / пом. лесничего / лесничий (см. require_office_or_master в app/routers/tabel.py). */
 val WorkerRole.canManageTabel: Boolean
     get() = isMasterGroup
+
+/**
+ * «Отчёт за смену» по профессиям (Влад, 04.11.2026): у тракториста, харвестерщика и
+ * вальщика/лесоруба/лесовода он заменяет старый «Отчёт о работе», у каждого свой набор работ.
+ */
+enum class SmenaProfessiya { TRAKTORIST, HARVESTER, BRIGADA }
+
+val WorkerRole.smenaProfessiya: SmenaProfessiya?
+    get() = when (this) {
+        WorkerRole.TRAKTORIST -> SmenaProfessiya.TRAKTORIST
+        WorkerRole.HARVESTERSHIK -> SmenaProfessiya.HARVESTER
+        WorkerRole.LESORUB, WorkerRole.VALSHIK, WorkerRole.LESOVOD -> SmenaProfessiya.BRIGADA
+        else -> null
+    }
+
+/** Есть экран «Отчёт за смену» (вместо старого отчёта). */
+val WorkerRole.canSmena: Boolean
+    get() = smenaProfessiya != null

@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.lesovod.mobile.data.network.dto.SmenaDelyankaDto
 import com.lesovod.mobile.data.network.dto.SmenaOtchetDto
 import com.lesovod.mobile.data.network.dto.SmenaUchastokDto
 import com.lesovod.mobile.ui.components.ChipTone
@@ -66,7 +67,12 @@ import com.lesovod.mobile.ui.theme.softCard
 import java.time.LocalDate
 
 /**
- * «Отчёт за смену» (03.11.2026) — понятный отчёт тракториста и рабочего: трелёвка (делянка,
+ * «Отчёт за смену» по профессиям (04.11.2026): тракторист — трелёвка/населению/уход/почва/ремонт,
+ * харвестерщик — заготовка с остатком по билету, вальщик/лесоруб/лесовод — рубки, рубки ухода с
+ * остатком га по выделу, уходы, посадка, другое (+ напарники). Техника из справочника (своя
+ * подставляется сама) и топливо: сжёг / заправился. Поиск делянки по кв / выд — точный.
+ *
+ * Было (03.11.2026) — понятный отчёт тракториста и рабочего: трелёвка (делянка,
  * рейсы, кубы), вывозка населению, уход за культурами и подготовка почвы (участок, сколько га,
  * остаток виден до конца участка), ремонт (часы). Напарники отмечаются здесь же — им отчёт
  * вводить не нужно. Заменил старый экран «Трелёвка».
@@ -96,21 +102,25 @@ fun SmenaScreen(onBack: () -> Unit, viewModel: SmenaViewModel = viewModel()) {
                 onRetry = viewModel::refresh,
             )
             tab == 1 -> MoiOtchety(state, onDelete = viewModel::delete)
-            state.result != null -> Gotovo(state.result!!, onNew = viewModel::novyy, onDone = onBack)
+            state.result != null -> {
+                val f = state.form
+                val o = state.spravochnik?.delyanki?.firstOrNull { it.itemId == f.delyankaItemId }?.osvoenie
+                val posle = o?.takeIf { f.vid.ostatokKubov }?.let { "🌲 По делянке теперь осталось ≈ ${fmt(it.ostatok)} м³ из ${fmt(it.limit)}" }
+                Gotovo(state.result!!, posle = posle, onNew = viewModel::novyy, onDone = onBack)
+            }
             else -> Forma(state, viewModel)
         }
     }
 }
 
-/** Напарники в отчёте смены — выключены, пока экран только у трактористов. */
-private const val POKAZAT_NAPARNIKOV = false
-
 @Composable
 private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
     val f = state.form
     val s = state.spravochnik
+    val prof = vm.professiya
     var pickPlace by remember { mutableStateOf(false) }
     var pickNaparnik by remember { mutableStateOf(false) }
+    var pickMashina by remember { mutableStateOf(false) }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(Spacing.m),
@@ -124,6 +134,7 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
                     t.reysov.takeIf { it > 0 }?.let { "$it рейс." },
                     t.ga.takeIf { it > 0 }?.let { "${fmt(it)} га" },
                     t.chasy.takeIf { it > 0 }?.let { "${fmt(it)} ч" },
+                    t.toplivoRashod.takeIf { it > 0 }?.let { "⛽ ${fmt(it)} л" },
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -133,14 +144,21 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
             StatusChip("Нет сети — списки с прошлого раза, отчёт уйдёт позже", ChipTone.WARN)
         }
 
-        Label("Что делал")
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-            SmenaVid.entries.forEach { v ->
-                FilterChip(
-                    selected = f.vid == v,
-                    onClick = { vm.setVid(v) },
-                    label = { Text("${v.emoji} ${v.title}", modifier = Modifier.padding(vertical = 10.dp)) },
-                )
+        if (vm.vidy.size > 1) {
+            Label("Что делал")
+            // Крупные кнопки в 2 колонки — видно всё сразу, без прокрутки вбок.
+            vm.vidy.chunked(2).forEach { para ->
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
+                    para.forEach { v ->
+                        FilterChip(
+                            selected = f.vid == v,
+                            onClick = { vm.setVid(v) },
+                            label = { Text("${v.emoji} ${v.title}", modifier = Modifier.padding(vertical = 10.dp)) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (para.size == 1) Spacer(Modifier.weight(1f))
+                }
             }
         }
 
@@ -165,11 +183,20 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
         // --- место работы ---
         if (f.vid.poDelyanke) {
             val sel = s?.delyanki?.firstOrNull { it.itemId == f.delyankaItemId }
-            Label("Делянка")
-            PickerField(text = sel?.label, placeholder = "Выбрать делянку", onClick = { pickPlace = true })
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
-                NumField("Рейсов", f.reysov, KeyboardType.Number, Modifier.weight(1f)) { v -> vm.update { it.copy(reysov = v) } }
-                NumField("Кубов, м³", f.obyom, KeyboardType.Decimal, Modifier.weight(1f)) { v -> vm.update { it.copy(obyom = v) } }
+            Label(if (f.vid.gaPoVydelu) "Делянка / выдел" else "Делянка")
+            PickerField(text = sel?.label, placeholder = "Выбрать делянку (кв / выд)", onClick = { pickPlace = true })
+            if (f.vid.ostatokKubov && sel != null) OstatokKubov(sel)
+            if (f.vid.gaPoVydelu && sel != null) VydelOstatok(sel, f.vid.code)
+            if (f.vid == SmenaVid.TRELEVKA || f.vid == SmenaVid.NASELENIYU) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
+                    NumField("Рейсов", f.reysov, KeyboardType.Number, Modifier.weight(1f)) { v -> vm.update { it.copy(reysov = v) } }
+                    NumField("Кубов, м³", f.obyom, KeyboardType.Decimal, Modifier.weight(1f)) { v -> vm.update { it.copy(obyom = v) } }
+                }
+            } else if (f.vid.sKubami) {
+                NumField(
+                    if (f.vid.kubyObyazatelny) "Кубов за смену, м³" else "Кубов, м³ (если считал)",
+                    f.obyom, KeyboardType.Decimal, Modifier.fillMaxWidth(),
+                ) { v -> vm.update { it.copy(obyom = v) } }
             }
             if (f.vid == SmenaVid.NASELENIYU) {
                 Label("Кому везли")
@@ -186,27 +213,37 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
         if (f.vid.poUchastku) {
             val sel = s?.uchastki?.firstOrNull { it.id == f.uchastokId }
             Label("Участок культур")
-            PickerField(text = sel?.label, placeholder = "Выбрать участок", onClick = { pickPlace = true })
+            PickerField(text = sel?.label, placeholder = "Выбрать участок (кв / выд)", onClick = { pickPlace = true })
             sel?.let { UchastokOstatok(it, f.vid.code) }
-            NumField("Сделал за смену, га", f.ga, KeyboardType.Decimal, Modifier.fillMaxWidth(), enabled = !f.proyden) { v ->
-                vm.update { it.copy(ga = v) }
+        }
+        if (f.vid.sGa) {
+            val ost = if (f.vid.poUchastku) {
+                val u = s?.uchastki?.firstOrNull { it.id == f.uchastokId }
+                u?.cikl(f.vid.code)?.ostatok ?: u?.takeIf { it.cikl(f.vid.code) == null }?.ploshad
+            } else {
+                val d = s?.delyanki?.firstOrNull { it.itemId == f.delyankaItemId }
+                d?.cikl(f.vid.code)?.ostatok ?: d?.takeIf { it.cikl(f.vid.code) == null }?.ploshad
             }
-            val ost = sel?.cikl(f.vid.code)?.ostatok ?: sel?.takeIf { it.cikl(f.vid.code) == null }?.ploshad
+            NumField(
+                if (f.vid == SmenaVid.SANRUBKA) "Сделал за смену, га (если считал)" else "Сделал за смену, га",
+                f.ga, KeyboardType.Decimal, Modifier.fillMaxWidth(), enabled = !f.proyden,
+            ) { v -> vm.update { it.copy(ga = v) } }
             if (ost != null && ost > 0 && !f.proyden) {
                 TextButton(onClick = { vm.update { it.copy(ga = fmt(ost)) } }) { Text("Доделал остаток — ${fmt(ost)} га") }
             }
+            val chto = if (f.vid.poUchastku) "Участок" else "Выдел"
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { vm.update { it.copy(proyden = !it.proyden) } }) {
                 Checkbox(checked = f.proyden, onCheckedChange = { c -> vm.update { it.copy(proyden = c) } })
-                Text("Участок пройден полностью", style = MaterialTheme.typography.bodyLarge)
+                Text("$chto пройден полностью", style = MaterialTheme.typography.bodyLarge)
             }
             Text(
-                "Не успел за день — не беда: в следующий раз увидишь, сколько осталось. Когда участок пройден, уход сам запишется в журнал участка.",
+                "Не успел за день — не беда: в следующий раз увидишь, сколько осталось.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
-        // --- часы и техника ---
+        // --- часы ---
         Label(if (f.vid == SmenaVid.REMONT) "Сколько часов ремонт" else "Часов отработал")
         NumField("Часы", f.chasy, KeyboardType.Decimal, Modifier.fillMaxWidth()) { v -> vm.update { it.copy(chasy = v) } }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
@@ -214,27 +251,68 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
                 FilterChip(selected = f.chasy == h, onClick = { vm.update { it.copy(chasy = h) } }, label = { Text("$h ч") })
             }
         }
-        Label(if (f.vid == SmenaVid.REMONT) "Какая техника" else "Техника (если был на технике)")
-        OutlinedTextField(
-            value = f.tehnika,
-            onValueChange = { v -> vm.update { it.copy(tehnika = v) } },
-            placeholder = { Text("МТЗ-82, ТДТ-55…") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Podskazki(s?.tehnika.orEmpty()) { v -> vm.update { it.copy(tehnika = v) } }
+
+        // --- техника и топливо ---
+        val sTehnikoy = prof.tehnikaVsegda || f.sTehnikoy || f.vid == SmenaVid.REMONT
+        if (!sTehnikoy) {
+            TextButton(onClick = { vm.update { it.copy(sTehnikoy = true) } }) { Text("＋ Был на технике / с пилой — указать технику и топливо") }
+        } else {
+            val mashiny = s?.mashiny.orEmpty()
+            Label(if (f.vid == SmenaVid.REMONT) "Какая техника" else "Техника")
+            if (mashiny.isNotEmpty()) {
+                val m = mashiny.firstOrNull { it.id == f.tehnikaId }
+                PickerField(
+                    text = m?.let { it.label + if (it.moya) " (твоя)" else "" },
+                    placeholder = "Выбрать технику",
+                    onClick = { pickMashina = true },
+                )
+            } else {
+                OutlinedTextField(
+                    value = f.tehnika,
+                    onValueChange = { v -> vm.update { it.copy(tehnika = v) } },
+                    placeholder = { Text("МТЗ-82, ТДТ-55…") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Podskazki(s?.tehnika.orEmpty()) { v -> vm.update { it.copy(tehnika = v) } }
+            }
+            if (f.vid != SmenaVid.REMONT) {
+                val top = mashiny.firstOrNull { it.id == f.tehnikaId }?.toplivo
+                Label("Топливо" + (top?.let { " ($it)" } ?: ""))
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
+                    NumField("Сжёг за смену, л", f.toplivoRashod, KeyboardType.Decimal, Modifier.weight(1f)) { v ->
+                        vm.update { it.copy(toplivoRashod = v) }
+                    }
+                    NumField("Заправился, л", f.zapravka, KeyboardType.Decimal, Modifier.weight(1f)) { v ->
+                        vm.update { it.copy(zapravka = v) }
+                    }
+                }
+                Text(
+                    "Заправку пиши, только если заправлялся в этот день.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         OutlinedTextField(
             value = f.kommentariy,
             onValueChange = { v -> vm.update { it.copy(kommentariy = v) } },
-            label = { Text(if (f.vid == SmenaVid.REMONT) "Что ремонтировали" else "Комментарий (необязательно)") },
-            minLines = if (f.vid == SmenaVid.REMONT) 2 else 1,
+            label = {
+                Text(
+                    when (f.vid) {
+                        SmenaVid.REMONT -> "Что ремонтировали"
+                        SmenaVid.DRUGOE -> "Что делал"
+                        else -> "Комментарий (необязательно)"
+                    },
+                )
+            },
+            minLines = if (f.vid == SmenaVid.REMONT || f.vid == SmenaVid.DRUGOE) 2 else 1,
             modifier = Modifier.fillMaxWidth(),
         )
 
-        // --- напарники ---
-        // Экран смены теперь только у тракториста, а ему напарник не нужен (решение Влада 2026-11-04).
-        // Блок оставлен выключенным — пригодится для будущего экрана вальщика/лесоруба.
-        if (POKAZAT_NAPARNIKOV) {
+        // --- напарники (только бригада; трактористов/харвестерщиков сервер в список не даёт) ---
+        if (prof.sNaparnikami) {
             Label("С кем работал")
             val vse = s?.naparniki.orEmpty()
             if (f.naparniki.isNotEmpty()) {
@@ -250,14 +328,12 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
                     }
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s), modifier = Modifier.fillMaxWidth()) {
-                SecondaryButton(
-                    text = if (f.naparniki.isEmpty()) "Отметить напарника" else "Ещё напарник",
-                    onClick = { pickNaparnik = true },
-                    modifier = Modifier.weight(1f),
-                    icon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.padding(end = 6.dp)) },
-                )
-            }
+            SecondaryButton(
+                text = if (f.naparniki.isEmpty()) "Отметить напарника" else "Ещё напарник",
+                onClick = { pickNaparnik = true },
+                modifier = Modifier.fillMaxWidth(),
+                icon = { Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.padding(end = 6.dp)) },
+            )
             val last = vm.lastNaparniki().filter { id -> vse.any { it.id == id } }
             if (f.naparniki.isEmpty() && last.isNotEmpty()) {
                 TextButton(onClick = { vm.update { it.copy(naparniki = last.toSet()) } }) {
@@ -287,14 +363,25 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
 
     if (pickPlace && s != null) {
         if (f.vid.poDelyanke) {
+            val code = f.vid.code
             PoiskDialog(
                 title = "Делянка",
                 items = s.delyanki,
                 key = { it.itemId },
                 label = { it.label },
-                sub = { if (it.nedavno != null) "работал ${ruData(it.nedavno)}" else null },
+                sub = { d ->
+                    val c = d.cikl(code)
+                    val o = d.osvoenie
+                    listOfNotNull(
+                        if (f.vid.ostatokKubov && o != null) "осталось ≈ ${fmt(o.ostatok)} м³ из ${fmt(o.limit)}" else null,
+                        if (f.vid.gaPoVydelu && c != null) "⏳ сделано ${fmt(c.sdelano)} га" + (c.ostatok?.let { ", осталось ${fmt(it)} га" } ?: "") else null,
+                        if (f.vid.gaPoVydelu && c == null) d.ploshad?.let { "${fmt(it)} га" } else null,
+                        if (d.nedavno != null) "работал ${ruData(d.nedavno)}" else null,
+                    ).joinToString(" · ").ifEmpty { null }
+                },
+                kvVyd = { it.kvartal to it.vydel },
                 selected = setOfNotNull(f.delyankaItemId),
-                onPick = { d -> vm.update { it.copy(delyankaItemId = d.itemId) }; pickPlace = false },
+                onPick = { d -> vm.update { it.copy(delyankaItemId = d.itemId, proyden = false, ga = "") }; pickPlace = false },
                 onDismiss = { pickPlace = false },
             )
         } else {
@@ -313,11 +400,30 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
                         else -> null
                     }
                 },
+                kvVyd = { it.kvartal to it.vydel },
                 selected = setOfNotNull(f.uchastokId),
                 onPick = { u -> vm.update { it.copy(uchastokId = u.id, proyden = false, ga = "") }; pickPlace = false },
                 onDismiss = { pickPlace = false },
             )
         }
+    }
+    if (pickMashina && s != null) {
+        PoiskDialog(
+            title = "Техника",
+            items = s.mashiny,
+            key = { it.id },
+            label = { it.label },
+            sub = { m ->
+                listOfNotNull(
+                    m.tip,
+                    m.toplivo,
+                    if (m.moya) "🔑 твоя" else m.zakreplen?.let { "за: $it" },
+                ).joinToString(" · ").ifEmpty { null }
+            },
+            selected = setOfNotNull(f.tehnikaId),
+            onPick = { m -> vm.update { it.copy(tehnikaId = m.id) }; pickMashina = false },
+            onDismiss = { pickMashina = false },
+        )
     }
     if (pickNaparnik && s != null) {
         val sorted = remember(s.naparniki) { vm.naparnikiSorted() }
@@ -336,6 +442,51 @@ private fun Forma(state: SmenaUiState, vm: SmenaViewModel) {
     }
 }
 
+/** Харвестер / валка: сколько осталось по билету. */
+@Composable
+private fun OstatokKubov(d: SmenaDelyankaDto) {
+    val o = d.osvoenie
+    if (o == null) {
+        StatusChip("По этой делянке нет лимита в базе — остаток не посчитать", ChipTone.NEUTRAL)
+        return
+    }
+    val tone = when {
+        o.ostatok <= 0 -> ChipTone.ERROR
+        (o.pct ?: 0.0) >= 90 -> ChipTone.WARN
+        else -> ChipTone.OK
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        StatusChip(
+            if (o.ostatok > 0) "🌲 Осталось ≈ ${fmt(o.ostatok)} м³ из ${fmt(o.limit)} по билету"
+            else "⛔ Лимит выбран (${fmt(o.fakt)} из ${fmt(o.limit)} м³)" + (o.ostatok110?.takeIf { it > 0 }?.let { " — до +10% ещё ${fmt(it)} м³" } ?: ""),
+            tone,
+        )
+        Text(
+            "Заготовлено ≈ ${fmt(o.fakt)} м³ — большее из: " + listOfNotNull(
+                o.faktNaryad?.let { "наряды ${fmt(it)}" },
+                o.faktEgais?.let { "ЕГАИС ${fmt(it)}" },
+                o.poOtchetam?.let { "отчёты ${fmt(it)}" },
+            ).joinToString(", "),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Рубка ухода / очистка / санрубка: сколько га по выделу уже сделано. */
+@Composable
+private fun VydelOstatok(d: SmenaDelyankaDto, vid: String) {
+    val c = d.cikl(vid)
+    val text = when {
+        c != null -> "⏳ Выдел в работе: сделано ${fmt(c.sdelano)} га" +
+            (d.ploshad?.let { " из ${fmt(it)}" } ?: "") + (c.ostatok?.let { " · осталось ${fmt(it)} га" } ?: "") +
+            (c.posledniy?.let { " (посл. ${ruData(it)})" } ?: "")
+        d.ploshad != null -> "Площадь выдела ${fmt(d.ploshad)} га — начинаешь с нуля"
+        else -> null
+    } ?: return
+    StatusChip(text, if (c != null) ChipTone.WARN else ChipTone.NEUTRAL)
+}
+
 @Composable
 private fun UchastokOstatok(u: SmenaUchastokDto, vid: String) {
     val c = u.cikl(vid)
@@ -350,7 +501,7 @@ private fun UchastokOstatok(u: SmenaUchastokDto, vid: String) {
 }
 
 @Composable
-private fun Gotovo(result: SmenaResult, onNew: () -> Unit, onDone: () -> Unit) {
+private fun Gotovo(result: SmenaResult, posle: String?, onNew: () -> Unit, onDone: () -> Unit) {
     Column(
         verticalArrangement = Arrangement.spacedBy(Spacing.m),
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.l),
@@ -362,11 +513,11 @@ private fun Gotovo(result: SmenaResult, onNew: () -> Unit, onDone: () -> Unit) {
                 val c = result.created
                 when {
                     c.zakrytCikl != null -> Text(
-                        "🎉 Участок пройден целиком (${fmt(c.zakrytCikl.sdelano ?: 0.0)} га) — «${c.zakrytCikl.tip ?: "уход"}» записан в журнал участка.",
+                        "🎉 Пройден целиком (${fmt(c.zakrytCikl.sdelano ?: 0.0)} га) — «${c.zakrytCikl.tip ?: "уход"}» отмечен как сделанный.",
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     c.ostatok != null && c.ostatok > 0 -> Text(
-                        "По участку сделано ${fmt(c.sdelanoVCikle ?: 0.0)} из ${fmt(c.ploshad ?: 0.0)} га — осталось ${fmt(c.ostatok)} га. " +
+                        "Сделано ${fmt(c.sdelanoVCikle ?: 0.0)} из ${fmt(c.ploshad ?: 0.0)} га — осталось ${fmt(c.ostatok)} га. " +
                             "В следующий раз остаток будет виден сразу.",
                         style = MaterialTheme.typography.bodyLarge,
                     )
@@ -382,6 +533,7 @@ private fun Gotovo(result: SmenaResult, onNew: () -> Unit, onDone: () -> Unit) {
                 )
             }
         }
+        if (result is SmenaResult.Sent && posle != null) Text(posle, style = MaterialTheme.typography.bodyLarge)
         PrimaryButton(text = "Ещё отчёт", onClick = onNew)
         SecondaryButton(text = "Готово", onClick = onDone)
     }
@@ -421,11 +573,14 @@ private fun MoiOtchety(state: SmenaUiState, onDelete: (Int) -> Unit) {
                         r.ga?.let { "${fmt(it)} га" },
                         r.chasy?.let { "${fmt(it)} ч" },
                         r.poluchatel?.let { "кому: $it" },
+                        r.tehnika,
+                        r.toplivoRashod?.let { "⛽ ${fmt(it)} л" + (r.toplivo?.let { t -> " $t" } ?: "") },
+                        r.zapravka?.let { "заправка ${fmt(it)} л" },
                     ).joinToString(" · ")
                     if (det.isNotEmpty()) Text(det, style = MaterialTheme.typography.bodyMedium)
                     val kto = if (!r.moy) "отметил(а) ${r.fio}" else r.naparniki.takeIf { it.isNotEmpty() }?.let { n -> "с " + n.joinToString(", ") { it.fio } }
                     kto?.let { Text("👷 $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    if (r.zakrylCikl) Text("✅ участок пройден", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    if (r.zakrylCikl) Text("✅ пройден полностью", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
                 if (r.mozhnoUdalit) {
                     if (state.deletingId == r.id) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -458,12 +613,21 @@ private fun <T> PoiskDialog(
     onPick: (T) -> Unit,
     onDismiss: () -> Unit,
     multi: Boolean = false,
+    /** Квартал и выдел элемента — тогда сверху два поля «Кв» и «Выд» с точным совпадением. */
+    kvVyd: ((T) -> Pair<String?, String?>)? = null,
 ) {
     var q by remember { mutableStateOf("") }
+    var kv by remember { mutableStateOf("") }
+    var vyd by remember { mutableStateOf("") }
     val words = q.trim().lowercase().split(Regex("[\\s/.,]+")).filter { it.isNotEmpty() }
-    val shown = if (words.isEmpty()) items else items.filter { x ->
+    val shown = items.filter { x ->
         val t = (label(x) + " " + sub(x).orEmpty()).lowercase()
-        words.all { it in t }
+        val okSlova = words.all { it in t }
+        val okKv = kvVyd == null || (kv.isBlank() && vyd.isBlank()) || run {
+            val (k, v) = kvVyd(x)
+            sovpadaet(k, kv) && sovpadaet(v, vyd)
+        }
+        okSlova && okKv
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -473,10 +637,33 @@ private fun <T> PoiskDialog(
                     Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                     if (multi) TextButton(onClick = onDismiss) { Text("Готово (${selected.size})") }
                 }
+                if (kvVyd != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.m),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.xs),
+                    ) {
+                        OutlinedTextField(
+                            value = kv,
+                            onValueChange = { kv = it.filter { c -> c.isLetterOrDigit() } },
+                            label = { Text("Квартал") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = vyd,
+                            onValueChange = { vyd = it.filter { c -> c.isLetterOrDigit() } },
+                            label = { Text("Выдел") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
                 OutlinedTextField(
                     value = q,
                     onValueChange = { q = it },
-                    placeholder = { Text("Поиск: фамилия, квартал, выдел…") },
+                    placeholder = { Text(if (kvVyd != null) "Или поиск по названию…" else "Поиск: фамилия, квартал, выдел…") },
                     leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.l),
@@ -570,6 +757,17 @@ private val MES = listOf("янв", "фев", "мар", "апр", "мая", "ию
 private fun data(dneyNazad: Int): String {
     val d = LocalDate.now().minusDays(dneyNazad.toLong())
     return "${d.dayOfMonth} ${MES[d.monthValue - 1]}"
+}
+
+/**
+ * Точное совпадение квартала/выдела: «71» не находит «171». В поле выдела у делянки может
+ * быть список («2,8,9») — тогда ищем среди них.
+ */
+private fun sovpadaet(znachenie: String?, vvod: String): Boolean {
+    val v = vvod.trim().lowercase()
+    if (v.isEmpty()) return true
+    val chasti = znachenie.orEmpty().lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+    return chasti.any { it == v }
 }
 
 internal fun ruData(iso: String): String = runCatching {
