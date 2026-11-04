@@ -124,7 +124,12 @@ fun LesovodNavGraph() {
             AttendanceScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.WorkReport.route) {
-            MainScaffold(navController) {
+            val ctx = LocalContext.current
+            val sess by SessionManager.getInstance(ctx).session.collectAsState()
+            // Тракторист отчитывается только через «Отчёт за смену» — старый экран ему не нужен.
+            if (sess?.role?.canTrelevka == true) {
+                SmenaScreen(onBack = { navController.popBackStack() })
+            } else MainScaffold(navController) {
                 WorkReportScreen(
                     onReportBreakdown = { navController.navigate(Screen.Breakdown.route) },
                     onReportTrelevka = { navController.navigate(Screen.Trelevka.route) },
@@ -254,7 +259,9 @@ private fun MainScaffold(
             if (role?.canReportBreakdown == true) {
                 add(QuickAction("Поломка", QuickActionIcons.Breakdown) { navController.navigate(Screen.Breakdown.route) })
             }
-            add(QuickAction("Отчёт за смену", QuickActionIcons.Trelevka) { navController.navigate(Screen.Trelevka.route) })
+            if (role?.canTrelevka == true) {
+                add(QuickAction("Отчёт за смену", QuickActionIcons.Trelevka) { navController.navigate(Screen.Trelevka.route) })
+            }
             if (role?.canSeeStock == true) {
                 add(QuickAction("Остатки", QuickActionIcons.Stock) { navController.navigate(Screen.Stock.route) })
             }

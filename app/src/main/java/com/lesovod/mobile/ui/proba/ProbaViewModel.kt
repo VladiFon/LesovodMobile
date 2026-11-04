@@ -249,10 +249,7 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
         }
         val fotoStolbDelyankiUri = state.fotoStolbDelyankiUri
         val fotoStolbProbyUri = state.fotoStolbProbyUri
-        if (fotoStolbDelyankiUri == null || fotoStolbProbyUri == null) {
-            _uiState.value = state.copy(error = "Приложите оба фото: столба границы делянки и столба пробной площадки")
-            return
-        }
+        // Фото столбов — по желанию (решение Влада 2026-11-04): без фото проба тоже уходит.
 
         val rows = mutableListOf<ProbaRowRequest>()
         for (row in state.rows) {
@@ -292,7 +289,7 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value = freshState(state).copy(queuedOffline = true)
             }
 
-            val fotoStolbDelyankiResult = repository.uploadPhoto(context, fotoStolbDelyankiUri)
+            val fotoStolbDelyankiResult: Result<String?> = fotoStolbDelyankiUri?.let { repository.uploadPhoto(context, it) } ?: Result.success(null)
             val delyankiError = fotoStolbDelyankiResult.exceptionOrNull()
             if (delyankiError is ConnectivityException) {
                 enqueueOffline(null, null)
@@ -303,7 +300,7 @@ class ProbaViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            val fotoStolbProbyResult = repository.uploadPhoto(context, fotoStolbProbyUri)
+            val fotoStolbProbyResult: Result<String?> = fotoStolbProbyUri?.let { repository.uploadPhoto(context, it) } ?: Result.success(null)
             val probyError = fotoStolbProbyResult.exceptionOrNull()
             if (probyError is ConnectivityException) {
                 enqueueOffline(fotoStolbDelyankiResult.getOrNull(), null)

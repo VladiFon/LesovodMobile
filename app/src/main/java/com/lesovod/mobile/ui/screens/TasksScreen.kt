@@ -106,8 +106,9 @@ fun TasksScreen(
         add(HomeAction("Отметиться", Icons.Rounded.HowToReg, onOpenAttendance))
         add(HomeAction("Мои задачи", Icons.Rounded.TaskAlt) { scope.launch { listState.animateScrollToItem(1) } })
         if (role?.canSeeStock == true) add(HomeAction("Остатки", Icons.Rounded.Inventory2, onOpenStock))
-        add(HomeAction("Отчёт за день", Icons.Rounded.PostAdd, onOpenWorkReport))
-        if (size < 4 && role?.canTrelevka == true) add(HomeAction("Отчёт за смену", Icons.Rounded.LocalShipping, onOpenTrelevka))
+        // У тракториста «Отчёт за смену» заменяет старый отчёт за день (решение Влада 2026-11-04).
+        if (role?.canTrelevka == true) add(HomeAction("Отчёт за смену", Icons.Rounded.LocalShipping, onOpenTrelevka))
+        else add(HomeAction("Отчёт за день", Icons.Rounded.PostAdd, onOpenWorkReport))
         if (size < 4 && role?.canReportBreakdown == true) add(HomeAction("Поломка", Icons.Rounded.Build, onOpenBreakdown))
         if (size < 4 && canInputProba) add(HomeAction("Проба", Icons.Rounded.Forest, onOpenProba))
     }
