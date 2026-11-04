@@ -128,7 +128,7 @@ fun LesovodNavGraph() {
             val sess by SessionManager.getInstance(ctx).session.collectAsState()
             // Тракторист, харвестерщик, вальщик/лесоруб/лесовод отчитываются через «Отчёт за смену» — старый экран им не нужен.
             if (sess?.role?.canSmena == true) {
-                SmenaScreen(onBack = { navController.popBackStack() })
+                SmenaScreen(onBack = { navController.popBackStack() }, onOpenProba = { navController.navigate(Screen.Proba.route) })
             } else MainScaffold(navController) {
                 WorkReportScreen(
                     onReportBreakdown = { navController.navigate(Screen.Breakdown.route) },
@@ -140,7 +140,7 @@ fun LesovodNavGraph() {
             BreakdownScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Trelevka.route) {
-            SmenaScreen(onBack = { navController.popBackStack() })
+            SmenaScreen(onBack = { navController.popBackStack() }, onOpenProba = { navController.navigate(Screen.Proba.route) })
         }
         composable(Screen.Igra.route) {
             IgraScreen(onBack = { navController.popBackStack() })

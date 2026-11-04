@@ -85,7 +85,12 @@ data class SmenaUchastokDto(
     val pochva: SmenaCiklDto? = null,
     val posadka: SmenaCiklDto? = null,
     @SerialName("rubka_uhoda") val rubkaUhoda: SmenaCiklDto? = null,
+    /** «списан» / «переведён» — такие прячутся, пока не включён переключатель. */
+    val status: String? = null,
 ) {
+    val spisanIliPereveden: Boolean
+        get() = status?.lowercase()?.let { it.startsWith("списан") || it.startsWith("переведён") || it.startsWith("переведен") } == true
+
     fun cikl(vid: String): SmenaCiklDto? = when (vid) {
         "uhod" -> uhod
         "pochva" -> pochva
@@ -113,6 +118,26 @@ data class SmenaSpravochnikDto(
     val tehnika: List<String> = emptyList(),
     val mashiny: List<SmenaMashinaDto> = emptyList(),
     @SerialName("moya_mashina_id") val moyaMashinaId: Int? = null,
+    /** Пробы экрана «Рубки ухода» (сервер vse63+): рубка ухода отчитывается по ним. */
+    val proby: List<SmenaProbaDto> = emptyList(),
+)
+
+/** Проба рубки ухода: площадь, сколько сделано (отчёты + офис), осталось, кубы. */
+@Serializable
+data class SmenaProbaDto(
+    val id: Int,
+    val kvartal: String? = null,
+    val vydel: String? = null,
+    val label: String,
+    @SerialName("vid_rubki") val vidRubki: String? = null,
+    @SerialName("data_zamera") val dataZamera: String? = null,
+    val ploshad: Double? = null,
+    @SerialName("zapas_na_1ga") val zapasNa1ga: Double = 0.0,
+    val sdelano: Double = 0.0,
+    val ostatok: Double? = null,
+    val kubov: Double = 0.0,
+    val gotovo: Boolean = false,
+    val nedavno: String? = null,
 )
 
 @Serializable
@@ -132,6 +157,7 @@ data class SmenaRequest(
     val zapravka: Double? = null,
     val kommentariy: String? = null,
     @SerialName("uchastok_proyden") val uchastokProyden: Boolean = false,
+    @SerialName("uhody_proba_id") val uhodyProbaId: Int? = null,
     val naparniki: List<Int> = emptyList(),
     @SerialName("client_id") val clientId: String? = null,
 )
