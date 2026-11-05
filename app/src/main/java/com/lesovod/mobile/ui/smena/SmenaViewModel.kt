@@ -65,7 +65,23 @@ enum class SmenaVid(val code: String, val title: String, val emoji: String) {
 }
 
 /** Набор работ и полей экрана по профессии (Влад, 04.11.2026). */
-fun SmenaProfessiya.vidy(): List<SmenaVid> = when (this) {
+fun SmenaProfessiya.vidy(): List<SmenaVid> {
+    // Лесопункт (издание сервера): набор работ присылает сервер — у вальщика валка,
+    // у тракториста на вывозке трелёвка, у харвестерщика харвестер (+ ремонт).
+    val izd = com.lesovod.mobile.data.izdanie.Izdanie.state.value
+    if (izd.lesopunkt) {
+        val kod = when (this) {
+            SmenaProfessiya.TRAKTORIST -> "traktorist"
+            SmenaProfessiya.HARVESTER -> "harvester"
+            SmenaProfessiya.BRIGADA -> "valshik"
+        }
+        val svoi = izd.professii[kod].orEmpty().mapNotNull { SmenaVid.of(it) }
+        if (svoi.isNotEmpty()) return svoi
+    }
+    return vidyLesnichestva()
+}
+
+private fun SmenaProfessiya.vidyLesnichestva(): List<SmenaVid> = when (this) {
     SmenaProfessiya.TRAKTORIST -> listOf(SmenaVid.TRELEVKA, SmenaVid.NASELENIYU, SmenaVid.UHOD, SmenaVid.POCHVA, SmenaVid.REMONT)
     SmenaProfessiya.HARVESTER -> listOf(SmenaVid.HARVESTER, SmenaVid.REMONT)
     SmenaProfessiya.BRIGADA -> listOf(

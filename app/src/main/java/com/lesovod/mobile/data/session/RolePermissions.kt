@@ -11,21 +11,24 @@ val WorkerRole.isMasterGroup: Boolean
 val WorkerRole.canReportBreakdown: Boolean
     get() = this == WorkerRole.TRAKTORIST || this == WorkerRole.HARVESTERSHIK
 
-/** Остатки по делянкам — только мастер / пом. лесничего / лесничий. */
-val WorkerRole.canSeeStock: Boolean
-    get() = isMasterGroup
+/** У лесопункта (издание сервера, data/izdanie/Izdanie.kt) свой набор экранов. */
+private val lesopunkt: Boolean get() = com.lesovod.mobile.data.izdanie.Izdanie.lesopunkt
 
-/** Кубатурник — только мастер / пом. лесничего / лесничий. */
+/** Остатки по делянкам — мастер / пом. лесничего / лесничий; у лесопункта — все. */
+val WorkerRole.canSeeStock: Boolean
+    get() = isMasterGroup || lesopunkt
+
+/** Кубатурник — мастер / пом. лесничего / лесничий; у лесопункта — все (Влад, 04.11.2026). */
 val WorkerRole.canUseKubaturnik: Boolean
-    get() = isMasterGroup
+    get() = isMasterGroup || lesopunkt
 
 /** Пробы рубок ухода — ввод: лесоруб, вальщик. */
 val WorkerRole.canInputProba: Boolean
-    get() = this == WorkerRole.LESORUB || this == WorkerRole.VALSHIK || this == WorkerRole.LESOVOD
+    get() = !lesopunkt && (this == WorkerRole.LESORUB || this == WorkerRole.VALSHIK || this == WorkerRole.LESOVOD)
 
 /** Пробы рубок ухода — просмотр: те же, кто вводит, плюс мастер/пом./лесничий (только просмотр). */
 val WorkerRole.canViewProba: Boolean
-    get() = canInputProba || isMasterGroup
+    get() = !lesopunkt && (canInputProba || isMasterGroup)
 
 /** Трелёвка — только тракторист. */
 val WorkerRole.canTrelevka: Boolean
@@ -37,7 +40,7 @@ val WorkerRole.canViewNotesInbox: Boolean
 
 /** Инвентаризация / перевод лесных культур — только мастер / пом. лесничего / лесничий. */
 val WorkerRole.canManageLesokultury: Boolean
-    get() = isMasterGroup
+    get() = isMasterGroup && !lesopunkt
 
 /** Табель — ручной ввод — только мастер / пом. лесничего / лесничий (см. require_office_or_master в app/routers/tabel.py). */
 val WorkerRole.canManageTabel: Boolean

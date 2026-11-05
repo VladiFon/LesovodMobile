@@ -237,7 +237,9 @@ private fun MainScaffold(
     val pending by queueManager.pending.collectAsState()
     val session by SessionManager.getInstance(context).session.collectAsState()
     val role = session?.role
-    val navItems = remember(role) { bottomNavItems(role) }
+    // издание сервера (лесничество / лесопункт) меняет набор экранов — пересобрать меню
+    val izdanie by com.lesovod.mobile.data.izdanie.Izdanie.state.collectAsState()
+    val navItems = remember(role, izdanie) { bottomNavItems(role) }
     val badgeManager = remember { NotificationsBadgeManager.getInstance(context) }
     val unreadCount by badgeManager.unreadCount.collectAsState()
     LaunchedEffect(Unit) { badgeManager.refresh() }

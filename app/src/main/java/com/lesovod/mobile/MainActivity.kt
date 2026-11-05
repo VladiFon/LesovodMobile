@@ -13,6 +13,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.lesovod.mobile.data.local.ThemeMode
 import com.lesovod.mobile.data.local.ThemePrefs
 import com.lesovod.mobile.ui.navigation.LesovodNavGraph
@@ -22,6 +24,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.lesovod.mobile.data.network.ServerConfig.init(applicationContext)
+        com.lesovod.mobile.data.izdanie.Izdanie.init(applicationContext)
+        // Кто этот сервер — лесничество или лесопункт (от этого зависят экраны).
+        lifecycleScope.launch {
+            com.lesovod.mobile.data.izdanie.Izdanie.obnovit()?.let {
+                com.lesovod.mobile.data.izdanie.Organizacii.nazvatTekushchuyu(applicationContext, it.podpis)
+            }
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),

@@ -77,8 +77,9 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("ЛЕСОВОД", style = MaterialTheme.typography.displayLarge, color = MaterialTheme.colorScheme.primary)
+        val izdanie by com.lesovod.mobile.data.izdanie.Izdanie.state.collectAsState()
         Text(
-            "Вход в систему",
+            "Вход: ${izdanie.podpis}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.xxl),
@@ -163,10 +164,12 @@ fun LoginScreen(
         // Домен недоступен — без этого не войти: адрес сервера меняется прямо здесь.
         var pokazatAdres by remember { mutableStateOf(false) }
         TextButton(onClick = { pokazatAdres = !pokazatAdres }) {
-            Text(if (pokazatAdres) "Скрыть адрес сервера" else "Не подключается? Адрес сервера")
+            Text(if (pokazatAdres) "Скрыть" else "Другая организация (лесопункт) или не подключается?")
         }
         if (pokazatAdres) {
-            com.lesovod.mobile.ui.components.ServerAddressCard()
+            // Лесопункт и лесничество — разные серверы (Влад, 05.11.2026): добавить адрес и «Перейти».
+            com.lesovod.mobile.ui.components.OrganizaciiCard()
+            com.lesovod.mobile.ui.components.ServerAddressCard(modifier = Modifier.padding(top = Spacing.m))
         }
     }
     }
