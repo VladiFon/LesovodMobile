@@ -23,6 +23,7 @@ class SessionManager private constructor(context: Context) {
         // адрес сервера нужен раньше первого запроса; SessionManager создаётся везде,
         // где есть сеть (экраны, фоновая очередь, напоминания)
         com.lesovod.mobile.data.network.ServerConfig.init(context)
+        com.lesovod.mobile.data.izdanie.Izdanie.init(context)
     }
 
     private val _session = MutableStateFlow(readFromPrefs())
@@ -77,6 +78,47 @@ class SessionManager private constructor(context: Context) {
         _session.value = null
     }
 
+    /**
+     * Переключение организаций (data/izdanie/Organizacii.kt): вход текущей организации
+     * откладывается под её адресом, чтобы при возврате не вводить пароль заново.
+     */
+    fun otlozhit(adres: String) {
+        val token = prefs.getString(KEY_TOKEN, null)
+        prefs.edit {
+            if (token == null) {
+                remove(KEY_OTLOZH + adres)
+            } else {
+                val o = org.json.JSONObject()
+                    .put(KEY_TOKEN, token)
+                    .put(KEY_LOGIN, prefs.getString(KEY_LOGIN, "").orEmpty())
+                    .put(KEY_FIO, prefs.getString(KEY_FIO, "").orEmpty())
+                    .put(KEY_DOLZHNOST, prefs.getString(KEY_DOLZHNOST, "").orEmpty())
+                    .put(KEY_APP_IDENTITY, prefs.getString(KEY_APP_IDENTITY, null) ?: "")
+                putString(KEY_OTLOZH + adres, o.toString())
+            }
+        }
+        clear()
+    }
+
+    /** Достать отложенный вход организации (если она уже была на этом телефоне). */
+    fun dostat(adres: String) {
+        val raw = prefs.getString(KEY_OTLOZH + adres, null) ?: return
+        val o = runCatching { org.json.JSONObject(raw) }.getOrNull() ?: return
+        prefs.edit {
+            putString(KEY_TOKEN, o.optString(KEY_TOKEN))
+            putString(KEY_LOGIN, o.optString(KEY_LOGIN))
+            putString(KEY_FIO, o.optString(KEY_FIO))
+            putString(KEY_DOLZHNOST, o.optString(KEY_DOLZHNOST))
+            putString(KEY_APP_IDENTITY, o.optString(KEY_APP_IDENTITY).ifBlank { null })
+            remove(KEY_OTLOZH + adres)
+        }
+        _session.value = readFromPrefs()
+    }
+
+    fun zabytOtlozhennuyu(adres: String) {
+        prefs.edit { remove(KEY_OTLOZH + adres) }
+    }
+
     private fun readFromPrefs(): WorkerSession? {
         val token = prefs.getString(KEY_TOKEN, null) ?: return null
         val dolzhnost = prefs.getString(KEY_DOLZHNOST, "").orEmpty()
@@ -97,6 +139,7 @@ class SessionManager private constructor(context: Context) {
         private const val KEY_DOLZHNOST = "dolzhnost"
         private const val KEY_APP_IDENTITY = "app_identity"
         private const val KEY_REMEMBERED_LOGIN = "remembered_login"
+        private const val KEY_OTLOZH = "otlozh_"
 
         @Volatile
         private var instance: SessionManager? = null

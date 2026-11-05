@@ -12,8 +12,8 @@ android {
         applicationId = "com.lesovod.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 28
-        versionName = "0.11.2"
+        versionCode = 29
+        versionName = "0.12.0"
 
         // Vosk (голосовой ввод) тянет нативную библиотеку ~10 МБ на каждую архитектуру —
         // оставляем только ARM-телефоны, x86 нужен лишь эмуляторам.
