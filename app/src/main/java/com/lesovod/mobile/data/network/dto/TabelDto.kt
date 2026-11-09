@@ -27,6 +27,10 @@ data class TabelDayEntryDto(
     @SerialName("lku_kvartal") val lkuKvartal: String? = null,
     @SerialName("lku_vydel") val lkuVydel: String? = null,
     @SerialName("lku_glavnaya_poroda") val lkuGlavnayaPoroda: String? = null,
+    /** Проба рубок ухода как место работы (сервер 09.11.2026+). */
+    @SerialName("uhody_proba_id") val uhodyProbaId: Int? = null,
+    @SerialName("up_kvartal") val upKvartal: String? = null,
+    @SerialName("up_vydel") val upVydel: String? = null,
     @SerialName("vid_raboty_id") val vidRabotyId: Int? = null,
     @SerialName("vid_raboty_nazvanie") val vidRabotyNazvanie: String? = null,
     @SerialName("brigada_id") val brigadaId: Int? = null,
@@ -83,6 +87,7 @@ data class TabelEntrySaveDto(
     val status: String,
     @SerialName("delyanka_item_id") val delyankaItemId: Int? = null,
     @SerialName("lesokultury_uchastok_id") val lesokulturyUchastokId: Int? = null,
+    @SerialName("uhody_proba_id") val uhodyProbaId: Int? = null,
     @SerialName("vid_raboty_id") val vidRabotyId: Int? = null,
     val kommentariy: String = "",
 )
@@ -120,4 +125,28 @@ data class TabelLesokulturyUchastokDto(
     val lesnichestvo: String? = null,
     @SerialName("glavnaya_poroda") val glavnayaPoroda: String? = null,
     @SerialName("delyanka_nazvanie") val nazvanie: String? = null,
+    /** «активен» / «переведён» / «списан» — видно при включённом «показывать списанные». */
+    val status: String? = null,
 )
+
+/** Проба рубок ухода для места работы (GET /api/tabel/uhody-proby). */
+@Serializable
+data class TabelUhodyProbaDto(
+    val id: Int,
+    val kvartal: String? = null,
+    val vydel: String? = null,
+    val lesnichestvo: String? = null,
+    @SerialName("ploshad_proby") val ploshadProby: Double? = null,
+    @SerialName("data_zamera") val dataZamera: String? = null,
+    val zakryta: Boolean = false,
+    @SerialName("sdelano_ga") val sdelanoGa: Double? = null,
+    val ploshad: Double? = null,
+) {
+    val label: String get() = "рубки ухода · кв. ${kvartal.orEmpty()} · выд. ${vydel.orEmpty()}"
+    val sostoyanie: String
+        get() = when {
+            zakryta -> "выполнена"
+            sdelanoGa != null && sdelanoGa > 0 -> "в работе: $sdelanoGa" + (ploshad?.let { " из $it" } ?: "") + " га"
+            else -> "заложена"
+        }
+}

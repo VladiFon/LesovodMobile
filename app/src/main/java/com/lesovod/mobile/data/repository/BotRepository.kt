@@ -363,8 +363,13 @@ class BotRepository(
         api.listTabelBrigady(requireToken(), data)
     }
 
-    suspend fun listTabelLesokulturyUchastki(search: String? = null): Result<List<TabelLesokulturyUchastokDto>> = safeCall {
-        api.listTabelLesokulturyUchastki(requireToken(), search?.takeIf { it.isNotBlank() })
+    suspend fun listTabelLesokulturyUchastki(search: String? = null, vse: Boolean = false): Result<List<TabelLesokulturyUchastokDto>> = safeCall {
+        api.listTabelLesokulturyUchastki(requireToken(), search?.takeIf { it.isNotBlank() }, if (vse) true else null)
+    }
+
+    /** Пробы рубок ухода — место работы в табеле; vse — и выполненные. */
+    suspend fun listTabelUhodyProby(search: String? = null, vse: Boolean = false): Result<List<com.lesovod.mobile.data.network.dto.TabelUhodyProbaDto>> = safeCall {
+        api.listTabelUhodyProby(requireToken(), search?.takeIf { it.isNotBlank() }, if (vse) true else null)
     }
 
     private fun requireToken(): String =
