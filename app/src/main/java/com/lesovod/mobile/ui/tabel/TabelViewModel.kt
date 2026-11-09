@@ -26,7 +26,12 @@ enum class TabelStatus(val wireValue: String, val displayName: String) {
     NOT_WORKED("не работал", "Не работал"),
     SICK("больничный", "Больничный"),
     VACATION("отпуск", "Отпуск"),
-    DAY_OFF("выходной", "Выходной");
+    DAY_OFF("выходной", "Выходной"),
+    REMONT("ремонт", "Ремонт"),
+    KOMANDIROVKA("командировка", "Командировка");
+
+    /** На работе — можно указать место и вид работы. */
+    val naRabote: Boolean get() = this == WORKED || this == REMONT || this == KOMANDIROVKA
 
     companion object {
         fun fromWireValue(value: String?): TabelStatus? = entries.firstOrNull { it.wireValue == value }
@@ -39,6 +44,7 @@ sealed class TabelPlace {
 
     data class Delyanka(val delyankaItemId: Int, override val label: String) : TabelPlace()
     data class Lesokultury(val uchastokId: Int, override val label: String) : TabelPlace()
+    data class Proba(val probaId: Int, override val label: String) : TabelPlace()
 }
 
 /** Строка табеля в редактируемом состоянии экрана — обёртка над ответом сервера плюс локальные правки. */
@@ -66,6 +72,10 @@ data class TabelRowState(
                     dto.lesokulturyUchastokId,
                     "кв. ${dto.lkuKvartal.orEmpty()} · выд. ${dto.lkuVydel.orEmpty()} · культуры",
                 )
+                dto.uhodyProbaId != null -> TabelPlace.Proba(
+                    dto.uhodyProbaId,
+                    "рубки ухода · кв. ${dto.upKvartal.orEmpty()} · выд. ${dto.upVydel.orEmpty()}",
+                )
                 else -> null
             }
             return TabelRowState(
@@ -92,6 +102,8 @@ enum class BrigadaChoice(val displayName: String) {
     DAY_OFF("Выходной"),
     SICK("Больничный"),
     VACATION("Отпуск"),
+    REMONT("Ремонт"),
+    KOMANDIROVKA("Командировка"),
     NOT_WORKED("Не работал"),
 }
 
@@ -108,6 +120,13 @@ sealed class LesokulturySearchState {
     data object Loading : LesokulturySearchState()
     data object Empty : LesokulturySearchState()
     data class Results(val items: List<TabelLesokulturyUchastokDto>) : LesokulturySearchState()
+}
+
+sealed class ProbaSearchState {
+    data object Loading : ProbaSearchState()
+    data object Empty : ProbaSearchState()
+    data class Error(val message: String) : ProbaSearchState()
+    data class Results(val items: List<com.lesovod.mobile.data.network.dto.TabelUhodyProbaDto>) : ProbaSearchState()
 }
 
 data class TabelUiState(
@@ -256,6 +275,7 @@ class TabelViewModel(application: Application) : AndroidViewModel(application) {
                 status = status.wireValue,
                 delyankaItemId = (row.place as? TabelPlace.Delyanka)?.delyankaItemId,
                 lesokulturyUchastokId = (row.place as? TabelPlace.Lesokultury)?.uchastokId,
+                uhodyProbaId = (row.place as? TabelPlace.Proba)?.probaId,
                 vidRabotyId = row.vidRabotyId,
                 kommentariy = row.kommentariy,
             )
@@ -350,6 +370,8 @@ class TabelViewModel(application: Application) : AndroidViewModel(application) {
                 BrigadaChoice.DAY_OFF -> setAbsent(member.sotrudnikId, TabelStatus.DAY_OFF)
                 BrigadaChoice.SICK -> setAbsent(member.sotrudnikId, TabelStatus.SICK)
                 BrigadaChoice.VACATION -> setAbsent(member.sotrudnikId, TabelStatus.VACATION)
+                BrigadaChoice.REMONT -> setAbsent(member.sotrudnikId, TabelStatus.REMONT)
+                BrigadaChoice.KOMANDIROVKA -> setAbsent(member.sotrudnikId, TabelStatus.KOMANDIROVKA)
                 BrigadaChoice.NOT_WORKED -> setAbsent(member.sotrudnikId, TabelStatus.NOT_WORKED)
             }
         }
@@ -366,16 +388,27 @@ class TabelViewModel(application: Application) : AndroidViewModel(application) {
     val lesokulturySearch = _lesokulturySearch.asStateFlow()
     private var searchJob: Job? = null
 
+    /** Показывать списанные и переведённые участки культур. */
+    private val _lkVse = MutableStateFlow(false)
+    val lkVse = _lkVse.asStateFlow()
+    private var lastLkQuery = ""
+
+    fun setLkVse(vse: Boolean) {
+        _lkVse.value = vse
+        searchLesokultury(lastLkQuery)
+    }
+
     fun searchLesokultury(query: String) {
+        lastLkQuery = query
         searchJob?.cancel()
-        if (query.trim().length < 2) {
+        if (query.trim().isEmpty()) {
             _lesokulturySearch.value = LesokulturySearchState.Idle
             return
         }
         _lesokulturySearch.value = LesokulturySearchState.Loading
         searchJob = viewModelScope.launch {
             delay(300) // дебаунс, как в прототипе
-            repository.listTabelLesokulturyUchastki(query).fold(
+            repository.listTabelLesokulturyUchastki(query, _lkVse.value).fold(
                 onSuccess = { list ->
                     _lesokulturySearch.value = if (list.isEmpty()) {
                         LesokulturySearchState.Empty
@@ -393,5 +426,35 @@ class TabelViewModel(application: Application) : AndroidViewModel(application) {
     fun resetLesokulturySearch() {
         searchJob?.cancel()
         _lesokulturySearch.value = LesokulturySearchState.Idle
+    }
+
+    // ---------- пробы рубок ухода (GET /api/tabel/uhody-proby) ----------
+
+    private val _probaSearch = MutableStateFlow<ProbaSearchState>(ProbaSearchState.Loading)
+    val probaSearch = _probaSearch.asStateFlow()
+    private val _probaVse = MutableStateFlow(false)
+    val probaVse = _probaVse.asStateFlow()
+    private var probaJob: Job? = null
+    private var lastProbaQuery = ""
+
+    fun setProbaVse(vse: Boolean) {
+        _probaVse.value = vse
+        searchProby(lastProbaQuery)
+    }
+
+    /** Пустой запрос — все незакрытые пробы; «71/2», «кв 71», лесничество. */
+    fun searchProby(query: String) {
+        lastProbaQuery = query
+        probaJob?.cancel()
+        _probaSearch.value = ProbaSearchState.Loading
+        probaJob = viewModelScope.launch {
+            delay(300)
+            repository.listTabelUhodyProby(query.trim(), _probaVse.value).fold(
+                onSuccess = { list ->
+                    _probaSearch.value = if (list.isEmpty()) ProbaSearchState.Empty else ProbaSearchState.Results(list)
+                },
+                onFailure = { _probaSearch.value = ProbaSearchState.Error(it.message ?: "Не удалось загрузить пробы") },
+            )
+        }
     }
 }

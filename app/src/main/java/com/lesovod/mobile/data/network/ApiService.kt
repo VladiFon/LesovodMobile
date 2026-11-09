@@ -448,7 +448,15 @@ interface ApiService {
     suspend fun listTabelLesokulturyUchastki(
         @Header("Authorization") bearerToken: String,
         @Query("search") search: String? = null,
+        @Query("vse") vse: Boolean? = null,
     ): List<TabelLesokulturyUchastokDto>
+
+    @GET("api/tabel/uhody-proby")
+    suspend fun listTabelUhodyProby(
+        @Header("Authorization") bearerToken: String,
+        @Query("search") search: String? = null,
+        @Query("vse") vse: Boolean? = null,
+    ): List<com.lesovod.mobile.data.network.dto.TabelUhodyProbaDto>
 
     // --- «Отчёт за смену» (сервер 03.11.2026+, routers/smena.py) ---
     @GET("api/bot/smena/spravochnik")

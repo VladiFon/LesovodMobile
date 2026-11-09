@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -260,6 +261,7 @@ private fun TabelFooter(state: TabelUiState, onSave: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EmployeeCard(
     row: TabelRowState,
@@ -268,7 +270,7 @@ private fun EmployeeCard(
     onWorkClick: () -> Unit,
     onCommentChange: (String) -> Unit,
 ) {
-    val isWorking = row.status == TabelStatus.WORKED
+    val isWorking = row.status?.naRabote == true
     Column(
         modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.m),
         verticalArrangement = Arrangement.spacedBy(Spacing.s),
@@ -283,13 +285,13 @@ private fun EmployeeCard(
             )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+        // 7 статусов (добавлены «Ремонт» и «Командировка») в одну строку не влезают — переносим.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
             TabelStatus.entries.forEach { status ->
                 FilterChip(
                     selected = row.status == status,
                     onClick = { onStatusClick(status) },
                     label = { Text(status.displayName, style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -360,7 +362,13 @@ private fun PickerField(
 
 // ---------- «Место работы» ----------
 
-private enum class PlaceTab { DELYANKA, LESOKULTURY }
+private enum class PlaceTab { DELYANKA, PROBA, LESOKULTURY }
+
+private fun tabFor(place: TabelPlace?): PlaceTab = when (place) {
+    is TabelPlace.Lesokultury -> PlaceTab.LESOKULTURY
+    is TabelPlace.Proba -> PlaceTab.PROBA
+    else -> PlaceTab.DELYANKA
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -387,7 +395,7 @@ private fun PlaceOfWorkSheet(
             Spacer(Modifier.height(Spacing.m))
             PlacePicker(
                 viewModel = viewModel,
-                initialTab = if (row.place is TabelPlace.Lesokultury) PlaceTab.LESOKULTURY else PlaceTab.DELYANKA,
+                initialTab = tabFor(row.place),
                 selected = row.place,
                 onPick = onSelect,
             )
@@ -412,10 +420,15 @@ private fun PlacePicker(
     val delyankaState by viewModel.delyankaSearch.collectAsState()
     var lesokulturyQuery by remember { mutableStateOf("") }
     val lesokulturyState by viewModel.lesokulturySearch.collectAsState()
+    val lkVse by viewModel.lkVse.collectAsState()
+    var probaQuery by remember { mutableStateOf("") }
+    val probaState by viewModel.probaSearch.collectAsState()
+    val probaVse by viewModel.probaVse.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.resetLesokulturySearch()
         viewModel.searchDelyanki("")
+        viewModel.searchProby("")
     }
 
     Column {
@@ -427,9 +440,15 @@ private fun PlacePicker(
                 modifier = Modifier.weight(1f),
             )
             FilterChip(
+                selected = tab == PlaceTab.PROBA,
+                onClick = { tab = PlaceTab.PROBA },
+                label = { Text("Рубки ухода") },
+                modifier = Modifier.weight(1f),
+            )
+            FilterChip(
                 selected = tab == PlaceTab.LESOKULTURY,
                 onClick = { tab = PlaceTab.LESOKULTURY },
-                label = { Text("Лесные культуры") },
+                label = { Text("Культуры") },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -451,15 +470,18 @@ private fun PlacePicker(
                         viewModel.searchLesokultury(it)
                     },
                     singleLine = true,
-                    placeholder = { Text("Квартал, выдел, лесничество или порода") },
+                    placeholder = { Text("71/2, кв 71, лесничество, порода") },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(Modifier.height(Spacing.s))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { viewModel.setLkVse(!lkVse) }) {
+                    Checkbox(checked = lkVse, onCheckedChange = { viewModel.setLkVse(it) })
+                    Text("Показывать списанные и переведённые", style = MaterialTheme.typography.labelMedium)
+                }
                 when (val s = lesokulturyState) {
                     is LesokulturySearchState.Idle -> Text(
-                        "Поиск по кварталу, выделу, лесничеству и породе · от 2 символов",
+                        "Наберите квартал/выдел: «71/2», «кв 71» — или лесничество, породу",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -500,8 +522,79 @@ private fun PlacePicker(
                                         fontWeight = FontWeight.Bold,
                                     )
                                     Text(
-                                        listOfNotNull(item.lesnichestvo?.let { "$it лесничество" }, item.glavnayaPoroda)
-                                            .joinToString(" · "),
+                                        listOfNotNull(
+                                            item.lesnichestvo?.let { "$it лесничество" },
+                                            item.glavnayaPoroda,
+                                            item.status?.takeIf { it != "активен" },
+                                        ).joinToString(" · "),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (isSelected) StatusChip(text = "Выбрано", tone = ChipTone.OK)
+                            }
+                        }
+                    }
+                }
+            }
+            PlaceTab.PROBA -> {
+                OutlinedTextField(
+                    value = probaQuery,
+                    onValueChange = {
+                        probaQuery = it
+                        viewModel.searchProby(it)
+                    },
+                    singleLine = true,
+                    placeholder = { Text("71/2, кв 71, лесничество") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { viewModel.setProbaVse(!probaVse) }) {
+                    Checkbox(checked = probaVse, onCheckedChange = { viewModel.setProbaVse(it) })
+                    Text("Показывать и выполненные пробы", style = MaterialTheme.typography.labelMedium)
+                }
+                when (val p = probaState) {
+                    is ProbaSearchState.Loading -> Column(
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    ) { repeat(3) { SkeletonBlock() } }
+                    is ProbaSearchState.Empty -> Text(
+                        "Проб не найдено. Пробу закладывают на экране «Рубки ухода».",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    is ProbaSearchState.Error -> Text(
+                        p.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    is ProbaSearchState.Results -> Column(
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+                    ) {
+                        p.items.forEach { item ->
+                            val isSelected = (selected as? TabelPlace.Proba)?.probaId == item.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .softCard()
+                                    .clickable { onPick(TabelPlace.Proba(item.id, item.label)) }
+                                    .padding(Spacing.s),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Кв. ${item.kvartal.orEmpty()} · выд. ${item.vydel.orEmpty()}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        listOfNotNull(
+                                            item.sostoyanie,
+                                            item.lesnichestvo?.takeIf { it.isNotBlank() },
+                                            item.dataZamera?.let { "замер $it" },
+                                        ).joinToString(" · "),
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -520,7 +613,7 @@ private fun PlacePicker(
                         viewModel.searchDelyanki(it)
                     },
                     singleLine = true,
-                    placeholder = { Text("12/5, лесосека, название, лесничество") },
+                    placeholder = { Text("71/2, кв 71, лесосека, название") },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth(),
@@ -769,7 +862,7 @@ private fun BrigadaSheet(
                     Column(modifier = Modifier.fillMaxWidth().softCard().padding(Spacing.s)) {
                         PlacePicker(
                             viewModel = viewModel,
-                            initialTab = if (mesto is TabelPlace.Lesokultury) PlaceTab.LESOKULTURY else PlaceTab.DELYANKA,
+                            initialTab = tabFor(mesto),
                             selected = mesto,
                             onPick = { mesto = it; otherPlaceOpen = false },
                         )
