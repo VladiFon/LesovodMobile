@@ -336,7 +336,7 @@ private fun GuideCard() {
 /**
  * «О приложении»: обновления вне Google Play — приложение сверяется с последним GitHub
  * Release репозитория и, если он новее, скачивает и ставит APK через системный
- * `DownloadManager` (см. [com.lesovod.mobile.data.update.AppUpdateManager]).
+ * `PackageInstaller` (см. [com.lesovod.mobile.data.update.AppUpdateManager]).
  */
 @Composable
 private fun UpdateCard() {
@@ -374,7 +374,7 @@ private fun UpdateCard() {
             }
             is UpdateState.Available -> {
                 Text(
-                    "Доступно обновление до версии ${s.info.versionName}",
+                    s.problem ?: "Доступно обновление до версии ${s.info.versionName}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = Spacing.m),
@@ -396,7 +396,18 @@ private fun UpdateCard() {
                 Row(modifier = Modifier.padding(top = Spacing.m)) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     Text(
-                        "Загрузка версии ${s.info.versionName}… появится уведомление по завершении",
+                        if (s.percent >= 0) "Загрузка версии ${s.info.versionName}: ${s.percent}%. Установка начнётся сама"
+                        else "Загрузка версии ${s.info.versionName}… установка начнётся сама",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(start = Spacing.s),
+                    )
+                }
+            }
+            is UpdateState.Installing -> {
+                Row(modifier = Modifier.padding(top = Spacing.m)) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text(
+                        "Устанавливается версия ${s.info.versionName}. Если телефон спросит, нажмите «Обновить»",
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(start = Spacing.s),
                     )

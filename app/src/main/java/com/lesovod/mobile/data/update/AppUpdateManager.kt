@@ -1,11 +1,12 @@
 package com.lesovod.mobile.data.update
 
 import android.Manifest
-import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -25,6 +26,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import java.io.File
 import android.provider.Settings
 import androidx.core.content.getSystemService
 import com.lesovod.mobile.BuildConfig
@@ -44,7 +46,10 @@ import okhttp3.Request
 
 /**
  * Обновления вне Google Play: приложение проверяет последний GitHub Release репозитория
- * и предлагает скачать и установить APK, если он новее текущей версии. Отдельный
+ * и предлагает скачать и установить APK, если он новее текущей версии. С 0.14.0 (11.11.2026,
+ * просьба Влада: «не все старики понимают, как это работает») APK качаем сами и сразу
+ * отдаём системному установщику через [PackageInstaller]: установка начинается сама, а на
+ * Android 12+ со второго обновления проходит вообще без вопросов. Отдельный
  * лёгкий OkHttpClient — не переиспользует [com.lesovod.mobile.data.network.NetworkModule],
  * у которого другой базовый адрес и перехватчик авторизации сервера ботов.
  */
@@ -52,7 +57,7 @@ class AppUpdateManager private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
-    private val client = OkHttpClient.Builder().build()
+    private val client = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build()
     private val prefs = appContext.getSharedPreferences("app_update", Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
@@ -60,7 +65,7 @@ class AppUpdateManager private constructor(context: Context) {
 
     /** Проверка без мигания «Проверка…», если уже знаем ответ — для главного экрана. */
     fun checkQuietly() {
-        if (_state.value is UpdateState.Available || _state.value is UpdateState.Downloading || _state.value is UpdateState.Checking) return
+        if (_state.value is UpdateState.Available || zanyat() || _state.value is UpdateState.Checking) return
         checkForUpdate()
     }
 
@@ -70,9 +75,34 @@ class AppUpdateManager private constructor(context: Context) {
         if (!isNewerVersion(release.tagName, BuildConfig.VERSION_NAME)) return
         val apkUrl = release.assets.firstOrNull { it.name.endsWith(".apk") }?.browserDownloadUrl ?: return
         val info = UpdateInfo(release.tagName.removePrefix("v"), apkUrl, release.body.orEmpty())
+        if (zanyat()) return
+        // Телефон лежит, Wi-Fi есть, и система разрешает ставить без вопросов — обновляемся сами.
+        if (!foreground && mozhnoTiho() && !setPlatnaya()) {
+            _state.value = UpdateState.Downloading(info, 0)
+            val ok = runCatching { install(downloadApk(info) { }, info) }.isSuccess
+            if (ok) {
+                _state.value = UpdateState.Installing(info)
+                return
+            }
+        }
         notifyOnce(info)
-        if (_state.value !is UpdateState.Downloading) _state.value = UpdateState.Available(info)
+        _state.value = UpdateState.Available(info)
     }
+
+    private fun zanyat() = _state.value is UpdateState.Downloading || _state.value is UpdateState.Installing
+
+    /**
+     * Android 12+ ставит обновление без подтверждения, если прошлую версию ставили мы же
+     * (то есть со второго обновления новым способом) и разрешена установка из приложения.
+     */
+    private fun mozhnoTiho(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !canInstallPackages()) return false
+        val kto = runCatching { appContext.packageManager.getInstallSourceInfo(appContext.packageName).installingPackageName }.getOrNull()
+        return kto == appContext.packageName
+    }
+
+    private fun setPlatnaya(): Boolean =
+        appContext.getSystemService<ConnectivityManager>()?.isActiveNetworkMetered ?: true
 
     /**
      * Уведомление Android «Вышла новая версия» — один раз на версию (часть людей не замечала
@@ -109,6 +139,7 @@ class AppUpdateManager private constructor(context: Context) {
     }
 
     fun checkForUpdate() {
+        if (zanyat()) return
         _state.value = UpdateState.Checking
         scope.launch {
             val result = runCatching { fetchLatestRelease() }
@@ -149,23 +180,158 @@ class AppUpdateManager private constructor(context: Context) {
     fun requestInstallPermissionIntent(): Intent =
         Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${appContext.packageName}"))
 
-    /** Ставит APK в очередь системного [DownloadManager] — прогресс и повторы при обрыве связи он ведёт сам. */
+    /**
+     * Качает APK и сразу запускает установку. Дальше человеку остаётся (и то не всегда) нажать
+     * «Обновить» в системном окне — искать файл в загрузках не нужно.
+     */
     fun startDownload(info: UpdateInfo) {
-        val manager = appContext.getSystemService<DownloadManager>() ?: return
-        val request = DownloadManager.Request(Uri.parse(info.downloadUrl))
-            .setTitle("Лесовод ${info.versionName}")
-            .setDescription("Загрузка обновления")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalFilesDir(appContext, Environment.DIRECTORY_DOWNLOADS, "lesovod-${info.versionName}.apk")
-        val id = manager.enqueue(request)
-        prefs.edit().putLong(KEY_DOWNLOAD_ID, id).apply()
-        _state.value = UpdateState.Downloading(info)
+        if (zanyat()) return
+        _state.value = UpdateState.Downloading(info, 0)
+        scope.launch {
+            val file = runCatching { downloadApk(info) { p -> _state.value = UpdateState.Downloading(info, p) } }.getOrNull()
+            if (file == null) {
+                _state.value = UpdateState.Available(info, "Не удалось скачать: проверьте связь и нажмите «Обновить» ещё раз")
+                return@launch
+            }
+            _state.value = UpdateState.Installing(info)
+            runCatching { install(file, info) }.onFailure {
+                file.delete()
+                _state.value = UpdateState.Available(info, "Не получилось начать установку. Нажмите «Обновить» ещё раз")
+            }
+        }
+    }
+
+    private fun apkDir(): File =
+        appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: File(appContext.cacheDir, "update").apply { mkdirs() }
+
+    /** Скачивает APK в свою папку; готовый файл той же версии не качает повторно. */
+    private fun downloadApk(info: UpdateInfo, onProgress: (Int) -> Unit): File {
+        val dir = apkDir()
+        val gotov = File(dir, "lesovod-${info.versionName}.apk")
+        dir.listFiles()?.forEach { if (it.name.startsWith("lesovod-") && it != gotov) it.delete() }
+        if (gotov.exists() && gotov.length() > 0) return gotov
+        val chast = File(dir, "lesovod-${info.versionName}.apk.part")
+        val request = Request.Builder().url(info.downloadUrl).header("User-Agent", "LesovodMobile").build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("GitHub вернул ${response.code}")
+            val body = response.body ?: error("Пустой ответ")
+            val vsego = body.contentLength()
+            var skachano = 0L
+            var proshlyy = -1
+            body.byteStream().use { input ->
+                chast.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        out.write(buf, 0, n)
+                        skachano += n
+                        if (vsego > 0) {
+                            val p = (skachano * 100 / vsego).toInt()
+                            if (p != proshlyy) {
+                                proshlyy = p
+                                onProgress(p)
+                            }
+                        }
+                    }
+                }
+            }
+            if (vsego > 0 && skachano != vsego) error("Файл скачан не полностью")
+        }
+        if (!chast.renameTo(gotov)) error("Не удалось сохранить файл")
+        return gotov
+    }
+
+    /** Отдаёт APK системному установщику. Чем кончилось — приходит в [UpdateInstallReceiver]. */
+    private fun install(file: File, info: UpdateInfo) {
+        val installer = appContext.packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        params.setAppPackageName(appContext.packageName)
+        params.setSize(file.length())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        }
+        val id = installer.createSession(params)
+        installer.openSession(id).use { session ->
+            session.openWrite("lesovod.apk", 0, file.length()).use { out ->
+                file.inputStream().use { it.copyTo(out) }
+                session.fsync(out)
+            }
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
+            val status = PendingIntent.getBroadcast(
+                appContext,
+                id,
+                Intent(appContext, UpdateInstallReceiver::class.java)
+                    .setAction(ACTION_INSTALL_STATUS)
+                    .putExtra(EXTRA_VERSION, info.versionName),
+                flags,
+            )
+            session.commit(status.intentSender)
+        }
+        prefs.edit().putString(KEY_INSTALLING, info.versionName).apply()
+    }
+
+    /** Системе нужно подтверждение человека: открываем её окно сами, а если нельзя — уведомлением. */
+    internal fun nuzhnoPodtverdit(confirm: Intent, version: String) {
+        confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val otkryto = foreground && runCatching { appContext.startActivity(confirm) }.isSuccess
+        if (!otkryto) {
+            val tap = PendingIntent.getActivity(appContext, 8, confirm, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            pokazat("Обновление Лесовода $version скачано", "Нажмите сюда и потом «Обновить» — больше ничего делать не нужно.", tap)
+        }
+    }
+
+    internal fun ustanovkaNeUdalas(prichina: String?) {
+        prefs.edit().remove(KEY_INSTALLING).apply()
+        val info = (_state.value as? UpdateState.Installing)?.info ?: return
+        _state.value = UpdateState.Available(info, "Установка не прошла${prichina?.let { ": $it" } ?: ""}. Нажмите «Обновить» ещё раз")
+    }
+
+    /** После замены приложения: говорим, что всё получилось, и убираем скачанный файл. */
+    internal fun posleObnovleniya() {
+        runCatching { apkDir().listFiles()?.forEach { if (it.name.startsWith("lesovod-")) it.delete() } }
+        if (prefs.getString(KEY_INSTALLING, null) == null) return
+        prefs.edit().remove(KEY_INSTALLING).apply()
+        val open = PendingIntent.getActivity(
+            appContext,
+            9,
+            Intent(appContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        pokazat("Лесовод обновлён до ${BuildConfig.VERSION_NAME}", "Всё установилось само. Нажмите, чтобы открыть.", open)
+    }
+
+    private fun pokazat(title: String, text: String, tap: PendingIntent) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ActivityCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Обновления приложения", NotificationManager.IMPORTANCE_HIGH))
+        }
+        val n = NotificationCompat.Builder(appContext, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build()
+        runCatching { NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID, n) }
     }
 
     companion object {
         private const val GITHUB_OWNER = "VladiFon"
         private const val GITHUB_REPO = "LesovodMobile"
-        private const val KEY_DOWNLOAD_ID = "download_id"
+        private const val KEY_INSTALLING = "installing_version"
+        internal const val ACTION_INSTALL_STATUS = "com.lesovod.mobile.UPDATE_INSTALL_STATUS"
+        internal const val EXTRA_VERSION = "version"
+
+        /** Приложение на экране: отсюда можно открыть системное окно установки. Ставит MainActivity. */
+        @Volatile
+        var foreground: Boolean = false
         private const val KEY_NOTIFIED = "notified_version"
         private const val CHANNEL_ID = "app_update"
         private const val NOTIFICATION_ID = 770_001
@@ -193,8 +359,9 @@ sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
     data object UpToDate : UpdateState
-    data class Available(val info: UpdateInfo) : UpdateState
-    data class Downloading(val info: UpdateInfo) : UpdateState
+    data class Available(val info: UpdateInfo, val problem: String? = null) : UpdateState
+    data class Downloading(val info: UpdateInfo, val percent: Int = -1) : UpdateState
+    data class Installing(val info: UpdateInfo) : UpdateState
     data class Error(val message: String) : UpdateState
 }
 
@@ -227,26 +394,30 @@ private data class GithubAsset(
     @SerialName("browser_download_url") val browserDownloadUrl: String,
 )
 
-/**
- * Ловит завершение загрузки APK из [AppUpdateManager.startDownload] и открывает системную
- * установку — `DownloadManager.getUriForDownloadedFile` уже отдаёт `content://`-URI,
- * отдельный FileProvider не нужен.
- */
-class UpdateDownloadReceiver : BroadcastReceiver() {
+/** Ответ системного установщика на сессию из [AppUpdateManager]. */
+class UpdateInstallReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
-        val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-        val prefs = context.getSharedPreferences("app_update", Context.MODE_PRIVATE)
-        val expectedId = prefs.getLong("download_id", -1L)
-        if (completedId == -1L || completedId != expectedId) return
-
-        val manager = context.getSystemService<DownloadManager>() ?: return
-        val uri = runCatching { manager.getUriForDownloadedFile(completedId) }.getOrNull() ?: return
-        val installIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (intent.action != AppUpdateManager.ACTION_INSTALL_STATUS) return
+        val manager = AppUpdateManager.getInstance(context)
+        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                @Suppress("DEPRECATION")
+                val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                manager.nuzhnoPodtverdit(confirm, intent.getStringExtra(AppUpdateManager.EXTRA_VERSION).orEmpty())
+            }
+            PackageInstaller.STATUS_SUCCESS -> Unit
+            PackageInstaller.STATUS_FAILURE_ABORTED -> manager.ustanovkaNeUdalas("установку отменили")
+            PackageInstaller.STATUS_FAILURE_STORAGE -> manager.ustanovkaNeUdalas("на телефоне мало места")
+            else -> manager.ustanovkaNeUdalas(null)
         }
-        runCatching { context.startActivity(installIntent) }
+    }
+}
+
+/** Приложение только что заменили новой версией. */
+class AppUpdatedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        AppUpdateManager.getInstance(context).posleObnovleniya()
     }
 }
 
