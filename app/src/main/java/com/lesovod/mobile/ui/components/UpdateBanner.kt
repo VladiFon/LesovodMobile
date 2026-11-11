@@ -74,6 +74,7 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
     val info = when (s) {
         is UpdateState.Available -> s.info
         is UpdateState.Downloading -> s.info
+        is UpdateState.Installing -> s.info
         else -> return
     }
     Column(
@@ -93,8 +94,13 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
                 Text(
-                    if (s is UpdateState.Downloading) "Скачивается… когда загрузится, откроется установка"
-                    else "У вас ${BuildConfig.VERSION_NAME}. Обновите — там исправления и новые функции.",
+                    when {
+                        s is UpdateState.Downloading && s.percent >= 0 -> "Скачивается: ${s.percent}%. Установка начнётся сама"
+                        s is UpdateState.Downloading -> "Скачивается… установка начнётся сама"
+                        s is UpdateState.Installing -> "Устанавливается. Если телефон спросит, нажмите «Обновить»"
+                        s is UpdateState.Available && s.problem != null -> s.problem
+                        else -> "У вас ${BuildConfig.VERSION_NAME}. Нажмите «Обновить», дальше всё поставится само."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
                 )

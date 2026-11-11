@@ -21,6 +21,16 @@ import com.lesovod.mobile.ui.navigation.LesovodNavGraph
 import com.lesovod.mobile.ui.theme.LesovodTheme
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        com.lesovod.mobile.data.update.AppUpdateManager.foreground = true
+    }
+
+    override fun onStop() {
+        com.lesovod.mobile.data.update.AppUpdateManager.foreground = false
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.lesovod.mobile.data.network.ServerConfig.init(applicationContext)
