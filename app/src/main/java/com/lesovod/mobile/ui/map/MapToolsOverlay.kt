@@ -28,6 +28,8 @@ class MapToolsOverlay(private val density: Float) : Overlay() {
     var walkPoints: List<LatLon> = emptyList()
     var myLocation: LatLon? = null
     var navTarget: LatLon? = null
+    /** Маршрут по лесным дорогам — рисуется вместо прямой линии. */
+    var navRoute: RoadRoute? = null
     var sklady: List<SkladDto> = emptyList()
     var showSklady: Boolean = true
 
@@ -58,6 +60,20 @@ class MapToolsOverlay(private val density: Float) : Overlay() {
         color = NAV_COLOR
         strokeWidth = 4f * density
         pathEffect = DashPathEffect(floatArrayOf(14f * density, 8f * density), 0f)
+    }
+    private val routePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = NAV_COLOR
+        strokeWidth = 6f * density
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val routeCasingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = AndroidColor.WHITE
+        strokeWidth = 10f * density
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
     }
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val dotStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -97,7 +113,16 @@ class MapToolsOverlay(private val density: Float) : Overlay() {
         val me = myLocation
         val target = navTarget
         if (target != null) {
-            if (me != null) {
+            val route = navRoute?.takeIf { it.byRoad }
+            if (route != null) {
+                buildPath(route.roadPath, projection, close = false)
+                canvas.drawPath(path, routeCasingPaint)
+                canvas.drawPath(path, routePaint)
+                buildPath(listOf(me ?: route.start, route.roadPath.first()), projection, close = false)
+                canvas.drawPath(path, navPaint)
+                buildPath(listOf(route.roadPath.last(), target), projection, close = false)
+                canvas.drawPath(path, navPaint)
+            } else if (me != null) {
                 buildPath(listOf(me, target), projection, close = false)
                 canvas.drawPath(path, navPaint)
             }

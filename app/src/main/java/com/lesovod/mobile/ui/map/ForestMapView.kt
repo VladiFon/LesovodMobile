@@ -120,6 +120,11 @@ fun ForestMapView(
     rulerPoints: List<LatLon>,
     walkPoints: List<LatLon>,
     navTarget: LatLon?,
+    navRoute: RoadRoute?,
+    roads: List<Road>,
+    selectedRoadId: Int?,
+    roadDraft: List<LatLon>,
+    onRoadTap: (Road) -> Unit,
     myLocation: LatLon?,
     focus: MapFocus?,
     offlineBasePath: String?,
@@ -149,6 +154,7 @@ fun ForestMapView(
     val geoNotesOverlay = remember { GeoNotesOverlay(density) }
     val probyOverlay = remember { ProbyOverlay(density) }
     val toolsOverlay = remember { MapToolsOverlay(density) }
+    val roadsOverlay = remember { RoadsOverlay(density) }
     val offlineBaseOverlayState = remember { mutableStateOf<Pair<String, TilesOverlay>?>(null) }
     val lastFocusToken = remember { mutableStateOf(focus?.token ?: 0) }
     val onLocationFixState = remember { mutableStateOf(onLocationFix) }
@@ -258,6 +264,8 @@ fun ForestMapView(
                     overlays.add(RotationGestureOverlay(this).apply { isEnabled = true })
 
                     overlays.add(featuresOverlay)
+                    // дороги — поверх выделов, под пробами и метками
+                    overlays.add(roadsOverlay)
                     // пробы — над участками культур (тап по пробе важнее тапа по участку), под метками
                     overlays.add(probyOverlay)
                     overlays.add(geoNotesOverlay)
@@ -353,7 +361,13 @@ fun ForestMapView(
                 if (featuresOverlay.taskKeys != taskKeys) { featuresOverlay.taskKeys = taskKeys; dirty = true }
 
                 // проба: тап по карте ставит центр вручную — перехватываем, как линейка
-                val rulerActive = tool == MapTool.RULER || tool == MapTool.PROBA
+                val rulerActive = tool == MapTool.RULER || tool == MapTool.PROBA || tool == MapTool.ROAD
+                if (roadsOverlay.roads !== roads) { roadsOverlay.roads = roads; dirty = true }
+                if (roadsOverlay.selectedId != selectedRoadId) { roadsOverlay.selectedId = selectedRoadId; dirty = true }
+                if (roadsOverlay.draft !== roadDraft) { roadsOverlay.draft = roadDraft; dirty = true }
+                roadsOverlay.tapEnabled = tool == MapTool.NONE
+                roadsOverlay.onRoadTap = onRoadTap
+                if (toolsOverlay.navRoute !== navRoute) { toolsOverlay.navRoute = navRoute; dirty = true }
                 if (toolsOverlay.rulerActive != rulerActive) { toolsOverlay.rulerActive = rulerActive; dirty = true }
                 if (toolsOverlay.rulerPoints !== rulerPoints) { toolsOverlay.rulerPoints = rulerPoints; dirty = true }
                 if (toolsOverlay.walkPoints !== walkPoints) { toolsOverlay.walkPoints = walkPoints; dirty = true }

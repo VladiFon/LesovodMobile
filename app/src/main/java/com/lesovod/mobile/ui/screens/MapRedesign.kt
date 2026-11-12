@@ -76,7 +76,9 @@ import com.lesovod.mobile.ui.theme.Unbounded
 internal const val MAP_HELP = "Карта леса. Сверху «Где я»: в каком вы квартале и выделе, нажмите, и откроется таксация. " +
     "Чипы под ней включают и выключают слои. Нажмите на выдел один раз, чтобы выделить, второй раз, чтобы открыть карточку. " +
     "Зажмите палец на карте, чтобы поставить метку. Кнопка «+» внизу: метка, фото, отчёт отсюда и «Что рядом». " +
-    "В карточке делянки есть «Сторож границы», у «Вести сюда» есть «Азимут». Красная SOS слева: держите 3 секунды, если нужна помощь."
+    "В карточке делянки есть «Сторож границы», у «Вести сюда» есть «Азимут». Красная SOS слева: держите 3 секунды, если нужна помощь. " +
+    "«Вести сюда» строит путь по лесным дорогам: выберите УАЗ, лесовоз или трактор, нажмите «Поехали». Дороги рисуют мастер, помощник и лесничий: «Инструменты» → «Нарисовать дорогу». " +
+    "Цвет дороги: жёлтая грунтовка, коричневая лежнёвка, голубой зимник, красный волок."
 
 /** Плашка «Где я»: квартал и выдел по GPS крупно, лесничество мелко. */
 @Composable
@@ -180,6 +182,7 @@ internal fun LayerChipsRow(layers: MapLayers, onChange: (MapLayers) -> Unit, mod
         LayerChipSpec("Культуры", layers.lesokultury) { on -> layers.copy(lesokultury = on) },
         LayerChipSpec("Метки", layers.geoNotes) { on -> layers.copy(geoNotes = on) },
         LayerChipSpec("Пробы", layers.proby) { on -> layers.copy(proby = on) },
+        LayerChipSpec("Дороги", layers.dorogi) { on -> layers.copy(dorogi = on) },
         LayerChipSpec("Задачи", layers.tasks) { on -> layers.copy(tasks = on) },
         LayerChipSpec("Спутник", layers.satellite) { on -> layers.copy(satellite = on) },
     )

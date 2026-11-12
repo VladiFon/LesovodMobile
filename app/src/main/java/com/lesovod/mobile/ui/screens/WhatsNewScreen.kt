@@ -18,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Directions
+import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Chat
@@ -67,6 +69,18 @@ enum class WhatsNewTarget { MORE, PROFILE, MAP }
 private data class NewsCard(val icon: ImageVector, val title: String, val text: String, val target: WhatsNewTarget?)
 
 private val NEWS = listOf(
+    NewsCard(
+        Icons.Rounded.Directions,
+        "Навигатор по лесным дорогам",
+        "«Вести сюда» теперь строит путь по дорогам, а не по прямой. Выберите, на чём едете: УАЗ, лесовоз или трактор. «Поехали» подскажет крупно: через 200 м направо. «Отправить» скинет маршрут коллеге.",
+        WhatsNewTarget.MAP,
+    ),
+    NewsCard(
+        Icons.Rounded.Timeline,
+        "Мастера рисуют дороги",
+        "Мастер, помощник и лесничий: «Инструменты» на карте → «Нарисовать дорогу». Тыкайте по карте или включите «Записать проездом» и просто проезжайте. Дорогу сразу видят все.",
+        WhatsNewTarget.MAP,
+    ),
     NewsCard(
         Icons.Rounded.Chat,
         "Заметки как переписка",

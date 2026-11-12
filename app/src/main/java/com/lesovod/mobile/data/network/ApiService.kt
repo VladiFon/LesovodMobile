@@ -7,6 +7,9 @@ import com.lesovod.mobile.data.network.dto.CompleteWorkPlanResponseDto
 import com.lesovod.mobile.data.network.dto.DelyankaDto
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
 import com.lesovod.mobile.data.network.dto.GeoJsonFeatureCollection
+import com.lesovod.mobile.data.network.dto.DorogaCreateRequest
+import com.lesovod.mobile.data.network.dto.DorogaDto
+import com.lesovod.mobile.data.network.dto.DorogiListDto
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
 import com.lesovod.mobile.data.network.dto.KartaProbaCreateRequest
 import com.lesovod.mobile.data.network.dto.KartaProbaDto
@@ -376,6 +379,19 @@ interface ApiService {
 
     @GET("api/map/sklady")
     suspend fun listSklady(): List<SkladDto>
+
+    // --- лесные дороги (сервер vse81+): видят все, рисуют руководители ---
+    @GET("api/dorogi")
+    suspend fun listDorogi(@Header("Authorization") bearerToken: String): DorogiListDto
+
+    @POST("api/dorogi")
+    suspend fun createDoroga(
+        @Header("Authorization") bearerToken: String,
+        @Body body: DorogaCreateRequest,
+    ): DorogaDto
+
+    @DELETE("api/dorogi/{id}")
+    suspend fun deleteDoroga(@Header("Authorization") bearerToken: String, @Path("id") id: Int): ResponseBody
 
     // --- пробные площади на карте (сервер 26.10.2026+) — видны всем ---
     @GET("api/proby")
