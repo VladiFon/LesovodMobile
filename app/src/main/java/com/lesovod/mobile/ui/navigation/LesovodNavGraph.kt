@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -49,7 +50,6 @@ import com.lesovod.mobile.data.repository.OfflineQueueManager
 import com.lesovod.mobile.data.session.SessionExpiryBus
 import com.lesovod.mobile.data.session.SessionManager
 import com.lesovod.mobile.data.session.canReportBreakdown
-import com.lesovod.mobile.data.session.canSeeStock
 import com.lesovod.mobile.data.session.canSmena
 import com.lesovod.mobile.ui.components.QuickAction
 import com.lesovod.mobile.ui.components.QuickActionIcons
@@ -70,6 +70,9 @@ import com.lesovod.mobile.ui.screens.RegistrationScreen
 import com.lesovod.mobile.ui.screens.StockScreen
 import com.lesovod.mobile.ui.screens.TasksScreen
 import com.lesovod.mobile.ui.screens.WorkReportScreen
+import com.lesovod.mobile.ui.screens.WhatsNew
+import com.lesovod.mobile.ui.screens.WhatsNewScreen
+import com.lesovod.mobile.ui.screens.WhatsNewTarget
 import com.lesovod.mobile.ui.tabel.TabelScreen
 import com.lesovod.mobile.ui.igra.IgraScreen
 import com.lesovod.mobile.ui.smena.SmenaScreen
@@ -107,6 +110,11 @@ fun LesovodNavGraph() {
             RegistrationScreen(onBackToLogin = { navController.popBackStack() })
         }
         composable(Screen.Tasks.route) {
+            val ctxTasks = LocalContext.current
+            // После обновления один раз показываем «Что нового».
+            LaunchedEffect(Unit) {
+                if (WhatsNew.shouldShow(ctxTasks)) navController.navigate(Screen.WhatsNew.route) { launchSingleTop = true }
+            }
             MainScaffold(navController) {
                 TasksScreen(
                     onOpenAttendance = { navController.navigate(Screen.Attendance.route) },
@@ -185,8 +193,26 @@ fun LesovodNavGraph() {
                     onOpenTabel = { navController.navigate(Screen.Tabel.route) },
                     onOpenSmena = { navController.navigate(Screen.Trelevka.route) },
                     onOpenIgra = { navController.navigate(Screen.Igra.route) },
+                    onOpenBreakdown = { navController.navigate(Screen.Breakdown.route) },
+                    onOpenStock = { navController.openStock() },
+                    onOpenWhatsNew = { navController.navigate(Screen.WhatsNew.route) },
                 )
             }
+        }
+        composable(Screen.WhatsNew.route) {
+            WhatsNewScreen(
+                onBack = { navController.popBackStack() },
+                onShow = { target ->
+                    val route = when (target) {
+                        WhatsNewTarget.MORE -> Screen.More.route
+                        WhatsNewTarget.PROFILE -> Screen.Profile.route
+                    }
+                    navController.navigate(route) {
+                        popUpTo(Screen.WhatsNew.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
         }
         composable(Screen.Tabel.route) {
             TabelScreen(onBack = { navController.popBackStack() })
@@ -264,9 +290,6 @@ private fun MainScaffold(
             if (role?.canSmena == true) {
                 add(QuickAction("Отчёт за смену", QuickActionIcons.Trelevka) { navController.navigate(Screen.Trelevka.route) })
             }
-            if (role?.canSeeStock == true) {
-                add(QuickAction("Остатки", QuickActionIcons.Stock) { navController.navigate(Screen.Stock.route) })
-            }
             add(QuickAction("Заметка", QuickActionIcons.Note) { navController.navigate(Screen.Notes.route) })
         }
         QuickActionsSheet(actions = actions, onDismiss = { showQuickActions = false })
@@ -277,7 +300,8 @@ private fun MainScaffold(
             val backStackEntry by navController.currentBackStackEntryAsState()
             val currentDestination = backStackEntry?.destination
 
-            NavigationBar {
+            val lv = com.lesovod.mobile.ui.theme.LocalLv.current
+            NavigationBar(containerColor = lv.nav, tonalElevation = 0.dp) {
                 navItems.forEach { item ->
                     val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
                     NavigationBarItem(
@@ -302,7 +326,24 @@ private fun MainScaffold(
                                 Icon(item.icon, contentDescription = item.label)
                             }
                         },
-                        label = { Text(item.label) },
+                        label = {
+                            Text(
+                                item.label,
+                                maxLines = 1,
+                                style = androidx.compose.ui.text.TextStyle(
+                                    fontFamily = com.lesovod.mobile.ui.theme.Manrope,
+                                    fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.ExtraBold else androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                ),
+                            )
+                        },
+                        colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                            selectedIconColor = lv.gT,
+                            selectedTextColor = lv.tx,
+                            indicatorColor = lv.ind,
+                            unselectedIconColor = lv.tx2,
+                            unselectedTextColor = lv.tx2,
+                        ),
                     )
                 }
             }

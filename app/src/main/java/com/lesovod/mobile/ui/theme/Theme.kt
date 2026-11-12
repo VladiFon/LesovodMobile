@@ -21,10 +21,12 @@ fun LesovodTheme(
 ) {
     val colorScheme = if (darkTheme) PolyanaDarkColors else PolyanaLightColors
     val semanticColors = if (darkTheme) DarkSemanticColors else LightSemanticColors
+    val lv = if (darkTheme) LvDark else LvLight
 
     CompositionLocalProvider(
         LocalSemanticColors provides semanticColors,
         LocalIsDarkTheme provides darkTheme,
+        LocalLv provides lv,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

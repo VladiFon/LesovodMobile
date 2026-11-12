@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         val themePrefs = ThemePrefs.getInstance(this)
         setContent {
             val mode by themePrefs.mode.collectAsState()
+            val large by themePrefs.large.collectAsState()
             val systemDark = isSystemInDarkTheme()
             // По умолчанию тёмная тема независимо от системы; «Как в системе» — по выбору в Профиле.
             val darkTheme = when (mode) {
@@ -66,8 +67,13 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
             LesovodTheme(darkTheme = darkTheme) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    LesovodNavGraph()
+                // Режим «крупно»: увеличиваем и dp, и sp — весь экран как в прототипе (zoom 1.2).
+                val base = androidx.compose.ui.platform.LocalDensity.current
+                val density = if (large) androidx.compose.ui.unit.Density(base.density * 1.2f, base.fontScale) else base
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides density) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        LesovodNavGraph()
+                    }
                 }
             }
         }

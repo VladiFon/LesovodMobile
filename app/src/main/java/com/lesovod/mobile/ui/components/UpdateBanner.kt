@@ -7,7 +7,20 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
+import com.lesovod.mobile.ui.theme.LocalLv
+import com.lesovod.mobile.ui.theme.Manrope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,13 +29,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.SystemUpdate
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,10 +46,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.lesovod.mobile.BuildConfig
 import com.lesovod.mobile.data.update.AppUpdateManager
 import com.lesovod.mobile.data.update.UpdateState
-import com.lesovod.mobile.ui.theme.Spacing
 
 /**
  * Плашка «Вышла новая версия» на главном экране (03.11.2026): раньше обновление было видно
@@ -77,52 +84,91 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
         is UpdateState.Installing -> s.info
         else -> return
     }
+    val lv = LocalLv.current
+    val ink = Color(0xFF1E1D19)
+    val (bg, fg) = when (s) {
+        is UpdateState.Downloading -> lv.sf2 to lv.tx
+        is UpdateState.Installing -> lv.gS to lv.gT
+        else -> lv.a to ink
+    }
+    val title = when (s) {
+        is UpdateState.Downloading -> if (s.percent >= 0) "Скачивается ${s.percent} %" else "Скачивается…"
+        is UpdateState.Installing -> "Устанавливается само, работать можно"
+        else -> "Вышла новая версия ${info.versionName}"
+    }
+    val sub = when {
+        s is UpdateState.Available && s.problem != null -> s.problem
+        s is UpdateState.Downloading -> "Версия ${info.versionName}. Поставится сама, как скачается"
+        s is UpdateState.Installing -> "Если телефон спросит, нажмите «Обновить»"
+        else -> null
+    }
     Column(
-        verticalArrangement = Arrangement.spacedBy(Spacing.s),
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(20.dp))
-            .padding(Spacing.l),
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .then(
+                if (s is UpdateState.Available) Modifier.clickable {
+                    if (manager.canInstallPackages()) manager.startDownload(info)
+                    else context.startActivity(manager.requestInstallPermissionIntent())
+                } else Modifier,
+            )
+            .padding(horizontal = 14.dp, vertical = 14.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.m)) {
-            Icon(Icons.Rounded.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(32.dp))
-            Column(Modifier.weight(1f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(if (s is UpdateState.Available) ink else fg.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (s is UpdateState.Installing) {
+                    CircularProgressIndicator(color = fg, strokeWidth = 2.5.dp, modifier = Modifier.size(22.dp))
+                } else {
+                    Icon(Icons.Rounded.SystemUpdate, contentDescription = null, tint = if (s is UpdateState.Available) lv.a else fg, modifier = Modifier.size(24.dp))
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                title,
+                color = fg,
+                style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, lineHeight = 22.sp),
+                modifier = Modifier.weight(1f),
+            )
+            if (s is UpdateState.Available) {
                 Text(
-                    "Вышла новая версия ${info.versionName}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    "Обновить",
+                    color = fg,
+                    style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp),
+                    modifier = Modifier.padding(start = 8.dp),
                 )
-                Text(
-                    when {
-                        s is UpdateState.Downloading && s.percent >= 0 -> "Скачивается: ${s.percent}%. Установка начнётся сама"
-                        s is UpdateState.Downloading -> "Скачивается… установка начнётся сама"
-                        s is UpdateState.Installing -> "Устанавливается. Если телефон спросит, нажмите «Обновить»"
-                        s is UpdateState.Available && s.problem != null -> s.problem
-                        else -> "У вас ${BuildConfig.VERSION_NAME}. Нажмите «Обновить», дальше всё поставится само."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
-                )
+                IconButton(onClick = { hidden = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Позже", tint = fg.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                }
             }
         }
-        if (s is UpdateState.Available) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s)) {
-                Button(
-                    onClick = {
-                        if (manager.canInstallPackages()) manager.startDownload(info)
-                        else context.startActivity(manager.requestInstallPermissionIntent())
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.onPrimary,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier.weight(1f),
-                ) { Text("Обновить", fontWeight = FontWeight.Bold) }
-                TextButton(onClick = { hidden = true }) { Text("Позже", color = MaterialTheme.colorScheme.onPrimary) }
+        if (sub != null) {
+            Text(
+                sub,
+                color = fg.copy(alpha = 0.85f),
+                style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp),
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        if (s is UpdateState.Downloading) {
+            val p = s.percent
+            if (p >= 0) {
+                LinearProgressIndicator(
+                    progress = { p / 100f },
+                    color = lv.gT,
+                    trackColor = lv.sf3,
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(8.dp).clip(RoundedCornerShape(4.dp)),
+                )
+            } else {
+                LinearProgressIndicator(
+                    color = lv.gT,
+                    trackColor = lv.sf3,
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(8.dp).clip(RoundedCornerShape(4.dp)),
+                )
             }
-        } else {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
         }
     }
 }

@@ -22,6 +22,15 @@ class ThemePrefs private constructor(context: Context) {
     )
     val mode: StateFlow<ThemeMode> = _mode.asStateFlow()
 
+    /** Режим «крупно» (12.11.2026): всё в приложении ×1.2 — для тех, кто плохо видит. */
+    private val _large = MutableStateFlow(prefs.getBoolean(KEY_LARGE, false))
+    val large: StateFlow<Boolean> = _large.asStateFlow()
+
+    fun setLarge(on: Boolean) {
+        prefs.edit { putBoolean(KEY_LARGE, on) }
+        _large.value = on
+    }
+
     fun setMode(mode: ThemeMode) {
         prefs.edit { putString(KEY_MODE, mode.name) }
         _mode.value = mode
@@ -29,6 +38,7 @@ class ThemePrefs private constructor(context: Context) {
 
     companion object {
         private const val KEY_MODE = "mode"
+        private const val KEY_LARGE = "large"
 
         @Volatile
         private var instance: ThemePrefs? = null

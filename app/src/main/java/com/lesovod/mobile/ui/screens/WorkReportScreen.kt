@@ -92,7 +92,7 @@ fun WorkReportScreen(
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState()),
     ) {
-        ScreenTitle("Отчёт о работе")
+        ScreenTitle("Отчёт о работе", help = "Что сделали за день: делянка, работа, объём. Нажали «Отправить», и мастер увидит. Без связи отчёт уйдёт сам, когда появится сеть.")
 
         Column(
             verticalArrangement = Arrangement.spacedBy(Spacing.m),

@@ -1,18 +1,12 @@
 package com.lesovod.mobile.ui.components
 
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 
+/**
+ * Заголовок экрана без кнопки «назад». С 12.11.2026 — та же шапка, что и в редизайне
+ * ([LvTopBar]): 64 dp, Unbounded 20 и кнопка «?», если передан текст подсказки.
+ */
 @Composable
-fun ScreenTitle(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.headlineSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-    )
+fun ScreenTitle(title: String, help: String? = null, onBack: (() -> Unit)? = null) {
+    LvTopBar(title = title, help = help, onBack = onBack)
 }

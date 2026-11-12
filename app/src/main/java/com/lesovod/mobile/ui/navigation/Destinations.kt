@@ -1,15 +1,13 @@
 package com.lesovod.mobile.ui.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Assignment
-import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.Straighten
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.lesovod.mobile.data.session.WorkerRole
-import com.lesovod.mobile.data.session.canSeeStock
 import com.lesovod.mobile.data.session.canUseKubaturnik
 
 sealed class Screen(val route: String) {
@@ -33,6 +31,7 @@ sealed class Screen(val route: String) {
     data object Perevod : Screen("lesokultury_perevod")
     data object Tabel : Screen("tabel")
     data object More : Screen("more")
+    data object WhatsNew : Screen("whats_new")
 }
 
 data class BottomNavItem(
@@ -42,22 +41,16 @@ data class BottomNavItem(
 )
 
 /**
- * Нижняя навигация редизайна «Поляна» (docs/SCREENS.md, раздел «Навигация»): постоянные
- * вкладки «Смена», «Карта», «Заметки», «Ещё» плюс «Остатки»/«Кубатурник» для ролей, у
- * которых есть доступ к этим разделам (по просьбе пользователя они вернулись в нижнюю панель,
- * а не спрятаны в «Ещё»). Остальные экраны, доступные не всем ролям (Проба рубок ухода,
- * Лесные культуры), остаются внутри «Ещё» и плавающего «+»
- * (см. [com.lesovod.mobile.ui.components.QuickActionsSheet]).
+ * Нижняя навигация редизайна 12.11.2026 (прототип «Лесовод»): Смена, Кубатурник (мастерам),
+ * Карта, Заметки, Ещё. Остатки переехали в «Ещё» (полочка «Лес»): Влад смотрит их на сайте,
+ * в телефоне они нужны редко. Остальные разделы по ролям тоже в «Ещё».
  */
 fun bottomNavItems(role: WorkerRole?): List<BottomNavItem> = buildList {
-    add(BottomNavItem(Screen.Tasks, "Смена", Icons.Filled.Assignment))
+    add(BottomNavItem(Screen.Tasks, "Смена", Icons.Rounded.Badge))
     if (role?.canUseKubaturnik == true) {
-        add(BottomNavItem(Screen.Kubaturnik, "Кубатурник", Icons.Filled.Calculate))
+        add(BottomNavItem(Screen.Kubaturnik, "Кубатурник", Icons.Rounded.Straighten))
     }
-    if (role?.canSeeStock == true) {
-        add(BottomNavItem(Screen.Stock, "Остатки", Icons.Filled.Inventory2))
-    }
-    add(BottomNavItem(Screen.Map, "Карта", Icons.Filled.Map))
-    add(BottomNavItem(Screen.Notes, "Заметки", Icons.Filled.EditNote))
-    add(BottomNavItem(Screen.More, "Ещё", Icons.Filled.MoreHoriz))
+    add(BottomNavItem(Screen.Map, "Карта", Icons.Rounded.Map))
+    add(BottomNavItem(Screen.Notes, "Заметки", Icons.Rounded.Chat))
+    add(BottomNavItem(Screen.More, "Ещё", Icons.Rounded.Apps))
 }

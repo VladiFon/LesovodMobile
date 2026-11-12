@@ -80,7 +80,7 @@ fun NotesScreen(viewModel: NotesViewModel = viewModel()) {
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState()),
     ) {
-        ScreenTitle("Заметки")
+        ScreenTitle("Заметки", help = "Пишите заметки себе или мастеру: текст, фото, место на карте. Без связи заметка подождёт и уйдёт сама.")
 
         Column(
             verticalArrangement = Arrangement.spacedBy(Spacing.m),

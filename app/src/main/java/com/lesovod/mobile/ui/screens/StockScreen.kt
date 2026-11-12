@@ -118,7 +118,7 @@ private fun MyDelyankiList(
         contentPadding = PaddingValues(bottom = Spacing.xl),
         verticalArrangement = Arrangement.spacedBy(Spacing.s),
     ) {
-        item { ScreenTitle("Мои делянки") }
+        item { ScreenTitle("Мои делянки", help = "Ваши делянки и что на них осталось. Нажмите на делянку, чтобы увидеть подробности.") }
 
         item {
             Column(
