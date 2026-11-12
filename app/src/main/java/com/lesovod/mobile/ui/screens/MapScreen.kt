@@ -952,7 +952,7 @@ private fun LayersPanel(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             TextButton(onClick = onRefresh, modifier = Modifier.padding(horizontal = 6.dp)) {
                 Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("Обновить цвета и метки", modifier = Modifier.padding(start = 8.dp))
+                Text("Обновить лесосеки, цвета и метки", modifier = Modifier.padding(start = 8.dp))
             }
             TextButton(onClick = onDownload, enabled = !downloadRunning, modifier = Modifier.padding(horizontal = 6.dp)) {
                 Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))

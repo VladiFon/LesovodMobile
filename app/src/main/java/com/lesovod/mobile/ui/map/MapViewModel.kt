@@ -981,7 +981,9 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                     onFailure = { _uiState.value.copy(isLoadingCard = false, cardError = it.message) },
                 )
                 selection.kind == ShapeKind.LESOSEKA ->
-                    _uiState.value.copy(isLoadingCard = false, cardNotice = "Контур делянки есть на карте, но в системе она не заведена — данных нет")
+                    _uiState.value.copy(isLoadingCard = false, cardNotice = "Этот контур пришёл из ГИСлесхоза или загруженного файла, делянки в Лесоводе на нём нет. " +
+                        "Удалили в QGIS? Нажмите там «Опубликовать в Лесовод», потом здесь «Слои» → «Обновить». " +
+                        "Старый файл, загруженный руками, удаляется на сайте: Настройки → «Карты: что не показывать».")
                 else -> repository.getVydelCard(selection.kvartal, vydel, lesnichestvo).fold(
                     onSuccess = { _uiState.value.copy(isLoadingCard = false, selectedCard = it.toVydelCard()) },
                     onFailure = { _uiState.value.copy(isLoadingCard = false, cardError = it.message) },
