@@ -124,6 +124,7 @@ fun ForestMapView(
     roads: List<Road>,
     selectedRoadId: Int?,
     roadDraft: List<LatLon>,
+    trail: List<LatLon>,
     onRoadTap: (Road) -> Unit,
     myLocation: LatLon?,
     focus: MapFocus?,
@@ -365,6 +366,7 @@ fun ForestMapView(
                 if (roadsOverlay.roads !== roads) { roadsOverlay.roads = roads; dirty = true }
                 if (roadsOverlay.selectedId != selectedRoadId) { roadsOverlay.selectedId = selectedRoadId; dirty = true }
                 if (roadsOverlay.draft !== roadDraft) { roadsOverlay.draft = roadDraft; dirty = true }
+                if (roadsOverlay.trail !== trail) { roadsOverlay.trail = trail; dirty = true }
                 roadsOverlay.tapEnabled = tool == MapTool.NONE
                 roadsOverlay.onRoadTap = onRoadTap
                 if (toolsOverlay.navRoute !== navRoute) { toolsOverlay.navRoute = navRoute; dirty = true }

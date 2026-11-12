@@ -210,6 +210,8 @@ data class MapUiState(
     /** «Поехали»: крупные подсказки поворотов, экран не гаснет. */
     val driving: Boolean = false,
     val routeSending: Boolean = false,
+    /** След смены (только по кнопке). */
+    val trail: TrailState = TrailState(),
 )
 
 class GuardState(val shape: MapShape, val title: String)
@@ -406,6 +408,8 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         loadTasks()
         loadSklady()
         loadRoads()
+        TrailStore.init(application)
+        viewModelScope.launch { TrailStore.state.collect { _uiState.value = _uiState.value.copy(trail = it) } }
     }
 
     /** force — сразу после создания своей метки: кэш на 5 минут её бы ещё не знал. */
@@ -1041,6 +1045,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
         _uiState.value = state
 
+        TrailStore.onFix(here, accuracy)
         // «Поехали»: карта едет за мной (не на каждую точку, а раз в 30 м — чтобы не дёргалась)
         if (state.driving) {
             val lf = lastDriveFocus
@@ -1876,6 +1881,10 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         val state = _uiState.value
         val target = state.navTarget ?: return
         val me = state.myLocation ?: return
+        if (state.route?.byTrail == true) {
+            trailRoute(state.trail.points, me)?.let { _uiState.value = state.copy(route = it, routeLoading = false) }
+            return
+        }
         val roads = state.roads
         val vehicle = state.routeVehicle
         routeJob?.cancel()
@@ -1886,6 +1895,58 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value = _uiState.value.copy(route = route, routeLoading = false)
             }
         }
+    }
+
+    // ------------------------------------------------------------ след ---
+
+    fun startTrail() {
+        TrailStore.start()
+        _uiState.value = _uiState.value.copy(message = "След пишется, пока открыта карта. Экран не погаснет")
+    }
+
+    fun pauseTrail() = TrailStore.pause()
+
+    fun clearTrail() {
+        TrailStore.clear()
+        if (_uiState.value.route?.byTrail == true) stopNavigation()
+    }
+
+    /** «Назад по следу» — к началу следа (обычно там машина). */
+    fun backByTrail() {
+        val state = _uiState.value
+        val me = state.myLocation
+        val pts = state.trail.points
+        if (me == null) { _uiState.value = state.copy(message = "Нет GPS — подождите, пока найдутся спутники"); return }
+        val route = trailRoute(pts, me)
+        if (route == null) { _uiState.value = state.copy(message = "След ещё короткий"); return }
+        routeJob?.cancel()
+        _uiState.value = state.copy(
+            navTarget = NavTarget(pts.first(), "начало следа"), route = route, routeLoading = false, driving = false, cardOpen = false,
+        )
+    }
+
+    /** На сервер — только по кнопке: виден в QGIS как линия. */
+    fun saveTrail() {
+        val trail = _uiState.value.trail
+        if (trail.points.size < 2) return
+        val day = java.text.SimpleDateFormat("dd.MM", java.util.Locale("ru")).format(java.util.Date(trail.startedAt.takeIf { it > 0 } ?: System.currentTimeMillis()))
+        viewModelScope.launch {
+            val request = TrackCreateRequest(
+                nazvanie = "След $day",
+                points = trail.points.map { listOf(it.lon, it.lat) },
+                closed = false,
+                lesnichestvo = _uiState.value.selectedLesnichestvo,
+            )
+            botRepository.createTrack(request).fold(
+                onSuccess = { _uiState.value = _uiState.value.copy(message = "След сохранён: ${formatDistance(trail.lengthM)}, его видно в QGIS") },
+                onFailure = { _uiState.value = _uiState.value.copy(message = "След не сохранился: ${it.message}") },
+            )
+        }
+    }
+
+    override fun onCleared() {
+        TrailStore.flush()
+        super.onCleared()
     }
 
     fun setRouteVehicle(vehicle: Vehicle) {

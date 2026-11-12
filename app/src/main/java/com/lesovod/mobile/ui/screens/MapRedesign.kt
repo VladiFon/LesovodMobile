@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Park
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Radar
+import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -78,7 +79,9 @@ internal const val MAP_HELP = "Карта леса. Сверху «Где я»: 
     "Зажмите палец на карте, чтобы поставить метку. Кнопка «+» внизу: метка, фото, отчёт отсюда и «Что рядом». " +
     "В карточке делянки есть «Сторож границы», у «Вести сюда» есть «Азимут». Красная SOS слева: держите 3 секунды, если нужна помощь. " +
     "«Вести сюда» строит путь по лесным дорогам: выберите УАЗ, лесовоз или трактор, нажмите «Поехали». Дороги рисуют мастер, помощник и лесничий: «Инструменты» → «Нарисовать дорогу». " +
-    "Цвет дороги: жёлтая грунтовка, коричневая лежнёвка, голубой зимник, красный волок."
+    "Цвет дороги: жёлтая грунтовка, коричневая лежнёвка, голубой зимник, красный волок. " +
+    "«+» → «Записать след»: голубой пунктир, где вы прошли (пишется, пока открыта карта, никуда не уходит). «Назад по следу» выведет к началу, к машине. " +
+    "Солнышко сверху включает режим «Солнце»: белый фон и чёрные буквы, видно даже на ярком свету."
 
 /** Плашка «Где я»: квартал и выдел по GPS крупно, лесничество мелко. */
 @Composable
@@ -282,6 +285,7 @@ internal object PlusIcons {
     val Photo = Icons.Rounded.PhotoCamera
     val Report = Icons.Rounded.Description
     val Nearby = Icons.Rounded.Radar
+    val Trail = Icons.Rounded.Route
 }
 
 /** Нижняя шторка «Что рядом»: значок, название, пояснение, стрелка «куда идти» и расстояние. */

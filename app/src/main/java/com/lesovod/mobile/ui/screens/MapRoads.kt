@@ -120,6 +120,10 @@ internal fun RoutePanel(
         append("к «${target.label}»")
         when {
             loading && route == null -> append(" · строю маршрут…")
+            route != null && route.byTrail -> {
+                append(" · по своему следу ${formatDistance(g?.remainingMeters ?: route.totalMeters)}")
+                append(" · ${formatMinutes(g?.remainingMinutes ?: route.minutes)} пешком")
+            }
             route != null && route.byRoad -> {
                 append(" · ${formatDistance(g?.remainingMeters ?: route.totalMeters)}")
                 append(" · ${formatMinutes(g?.remainingMinutes ?: route.minutes)}")
@@ -158,7 +162,7 @@ internal fun RoutePanel(
             }
             IconButton(onClick = onStop) { Icon(Icons.Rounded.Close, contentDescription = "Остановить", tint = lv.tx2) }
         }
-        if (!driving) {
+        if (!driving && route?.byTrail != true) {
             Row(
                 Modifier.padding(top = 8.dp, end = 8.dp).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -357,6 +361,65 @@ internal fun RoadCard(
             title = { Text("Убрать дорогу с карты?") },
             text = { Text("Она пропадёт у всех, маршруты по ней строиться перестанут. В базе останется — контора сможет вернуть.") },
             confirmButton = { TextButton(onClick = { confirm = false; onDelete() }) { Text("Убрать") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Оставить") } },
+        )
+    }
+}
+
+// ------------------------------------------------------------- след ---
+
+/** Плашка следа сверху: сколько прошли, пауза/продолжить, «Назад по следу», сохранить, стереть. */
+@Composable
+internal fun TrailBar(
+    trail: com.lesovod.mobile.ui.map.TrailState,
+    onToggle: () -> Unit,
+    onBack: () -> Unit,
+    onSave: () -> Unit,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val lv = LocalLv.current
+    var confirm by remember { mutableStateOf(false) }
+    val cyan = Color(0xFF00B8D4)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .shadow(4.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(lv.ov)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(if (trail.recording) lv.r else cyan))
+            Spacer(Modifier.width(8.dp))
+            val mins = if (trail.startedAt > 0) ((System.currentTimeMillis() - trail.startedAt) / 60000).toInt() else 0
+            Text(
+                (if (trail.recording) "След пишется" else "След на паузе") + " · ${formatDistance(trail.lengthM)}" +
+                    (if (mins > 0) " · " + (if (mins < 60) "$mins мин" else "${mins / 60} ч ${mins % 60} мин") else ""),
+                color = lv.tx, style = TextStyle(fontFamily = Manrope, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+            )
+        }
+        Row(
+            Modifier.padding(top = 6.dp).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            PillChip(
+                if (trail.recording) "Пауза" else "Продолжить", selected = false,
+                icon = if (trail.recording) Icons.Rounded.Stop else Icons.Rounded.PlayArrow, onClick = onToggle,
+            )
+            if (trail.points.size >= 2) {
+                PillChip("Назад по следу", selected = true, icon = Icons.Rounded.Navigation, color = cyan, onClick = onBack)
+                PillChip("Сохранить", selected = false, onClick = onSave)
+            }
+            PillChip("Стереть", selected = false, icon = Icons.Rounded.Delete, onClick = { confirm = true })
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("Стереть след?") },
+            text = { Text("Он пропадёт с телефона. Если нажимали «Сохранить», копия на сервере останется.") },
+            confirmButton = { TextButton(onClick = { confirm = false; onClear() }) { Text("Стереть") } },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Оставить") } },
         )
     }

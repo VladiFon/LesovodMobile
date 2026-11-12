@@ -55,7 +55,9 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
                 ThemeMode.LIGHT -> false
                 ThemeMode.SYSTEM -> systemDark
+                ThemeMode.SUN -> false
             }
+            val sun = mode == ThemeMode.SUN
             // Значки строки состояния и навигации — светлые на тёмной теме и тёмные на светлой.
             DisposableEffect(darkTheme) {
                 val style = if (darkTheme) {
@@ -66,7 +68,7 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 onDispose {}
             }
-            LesovodTheme(darkTheme = darkTheme) {
+            LesovodTheme(darkTheme = darkTheme, sun = sun) {
                 // Режим «крупно»: увеличиваем и dp, и sp — весь экран как в прототипе (zoom 1.2).
                 val base = androidx.compose.ui.platform.LocalDensity.current
                 val density = if (large) androidx.compose.ui.unit.Density(base.density * 1.2f, base.fontScale) else base

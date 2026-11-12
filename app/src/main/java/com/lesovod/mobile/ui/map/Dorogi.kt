@@ -79,12 +79,20 @@ class RoadRoute(
     val minutes: Double,
     /** Сколько было бы напрямик — чтобы честно сказать, если по прямой короче. */
     val straightMeters: Double,
+    /** Ведём обратно по своему следу (а не по дорогам). */
+    val byTrail: Boolean = false,
 ) {
     val byRoad: Boolean get() = roadPath.size >= 2
     val totalMeters: Double get() = roadMeters + walkMeters
 
     /** Вся линия маршрута целиком, для подсказок «через 200 м направо». */
-    val fullPath: List<LatLon> by lazy { if (byRoad) listOf(start) + roadPath + target else listOf(start, target) }
+    val fullPath: List<LatLon> by lazy {
+        val raw = if (byRoad) listOf(start) + roadPath + target else listOf(start, target)
+        // одинаковые соседние точки дали бы ложный «поворот»
+        val out = ArrayList<LatLon>(raw.size)
+        raw.forEach { p -> if (out.isEmpty() || distanceMeters(out.last(), p) >= 1.0) out.add(p) }
+        if (out.size < 2) listOf(start, target) else out
+    }
 }
 
 /** Подсказка на ходу: сколько до поворота, куда, сколько осталось. */

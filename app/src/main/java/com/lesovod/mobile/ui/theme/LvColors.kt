@@ -84,6 +84,30 @@ val LvDark = LvColors(
     dark = true,
 )
 
+/** Режим «Солнце» (12.11.2026): белый фон, чёрный текст, тёмный зелёный, плотные линии. */
+val LvSun = LvColors(
+    bg = Color(0xFFFFFFFF),
+    sf = Color(0xFFFFFFFF),
+    sf2 = Color(0xFFEBEBEB),
+    sf3 = Color(0xFFD6D6D6),
+    ln = Color(0x73000000),
+    tx = Color(0xFF000000),
+    tx2 = Color(0xFF1F1F1F),
+    g = Color(0xFF145A2E),
+    gT = Color(0xFF145A2E),
+    gS = Color(0x33145A2E),
+    a = Color(0xFFE08A00),
+    aT = Color(0xFF5C3700),
+    aS = Color(0x40E08A00),
+    r = Color(0xFFB0170B),
+    rT = Color(0xFFB0170B),
+    rS = Color(0x26B0170B),
+    ov = Color(0xFFFFFFFF),
+    nav = Color(0xFFFFFFFF),
+    ind = Color(0x40145A2E),
+    dark = false,
+)
+
 val LocalLv = staticCompositionLocalOf { LvDark }
 
 /** MaterialTheme.lv.gT и т.п. — токены прототипа. */
