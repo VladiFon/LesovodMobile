@@ -33,6 +33,10 @@ data class InventarizatsiyaUiState(
     val result: JsonElement? = null,
     /** Нет сети — карточка сохранена на телефоне и уйдёт на сервер сама, когда появится связь. */
     val queuedOffline: Boolean = false,
+    /** Кликер (редизайн 12.11.2026): сколько погибших насчитали по породе — «высажено» = живые + погибшие. */
+    val pogiblo: Map<String, Int> = emptyMap(),
+    /** Последние нажатия кликера для «Отменить»: порода и живое (true) / погибло (false). */
+    val clicks: List<Pair<String, Boolean>> = emptyList(),
 ) {
     /** Результаты с «высажено», посчитанным по составу и размеру проб, — их видит человек и их же отправляем. */
     val rezultatyItog: List<RezultatEntry> get() = rezultaty.withAutoVysazheno(selectedUchastok, proby)
@@ -123,7 +127,49 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
         } else {
             rezultaty + RezultatEntry(poroda = poroda, prizhilos = 1)
         }
-        _uiState.value = _uiState.value.copy(rezultaty = updated, error = null)
+        val state = _uiState.value
+        _uiState.value = state.copy(
+            rezultaty = updated.syncPogiblo(poroda, state.pogiblo),
+            error = null,
+            clicks = (state.clicks + (poroda to true)).takeLast(200),
+        )
+    }
+
+    /** Кликер: +1 погибший. «Высажено» по этой породе становится «живые + погибшие». */
+    fun tapPogiblo(poroda: String) {
+        val state = _uiState.value
+        val rez = if (state.rezultaty.any { it.poroda == poroda }) state.rezultaty else state.rezultaty + RezultatEntry(poroda = poroda)
+        val pog = state.pogiblo + (poroda to ((state.pogiblo[poroda] ?: 0) + 1))
+        _uiState.value = state.copy(
+            rezultaty = rez.syncPogiblo(poroda, pog),
+            pogiblo = pog,
+            error = null,
+            clicks = (state.clicks + (poroda to false)).takeLast(200),
+        )
+    }
+
+    /** «Отменить» в кликере — снимает последнее нажатие, какое бы оно ни было. */
+    fun undoLastClick() {
+        val state = _uiState.value
+        val last = state.clicks.lastOrNull() ?: return
+        val (poroda, alive) = last
+        if (alive) {
+            val rez = state.rezultaty.map { if (it.poroda == poroda && it.prizhilos > 0) it.copy(prizhilos = it.prizhilos - 1) else it }
+            _uiState.value = state.copy(rezultaty = rez.syncPogiblo(poroda, state.pogiblo), clicks = state.clicks.dropLast(1))
+        } else {
+            val n = ((state.pogiblo[poroda] ?: 0) - 1).coerceAtLeast(0)
+            val pog = if (n == 0) state.pogiblo - poroda else state.pogiblo + (poroda to n)
+            val rez = if (n == 0) {
+                state.rezultaty.map { if (it.poroda == poroda) it.copy(vysazheno = "", vysazhenoVruchnuyu = false) else it }
+            } else state.rezultaty.syncPogiblo(poroda, pog)
+            _uiState.value = state.copy(rezultaty = rez, pogiblo = pog, clicks = state.clicks.dropLast(1))
+        }
+    }
+
+    /** Если по породе считали погибших — «высажено» = живые + погибшие (вручную, авторасчёт не трогает). */
+    private fun List<RezultatEntry>.syncPogiblo(poroda: String, pogiblo: Map<String, Int>): List<RezultatEntry> {
+        val dead = pogiblo[poroda] ?: return this
+        return map { if (it.poroda == poroda) it.copy(vysazheno = (it.prizhilos + dead).toString(), vysazhenoVruchnuyu = true) else it }
     }
 
     /** Долгое нажатие — отменить последний тап по породе (симметрично кубатурнику). */
@@ -138,6 +184,7 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
     /** «Высажено» поправили руками — дальше авторасчёт эту породу не трогает. */
     fun onVysazhenoChange(poroda: String, value: String) {
         _uiState.value = _uiState.value.copy(
+            pogiblo = _uiState.value.pogiblo - poroda,
             rezultaty = _uiState.value.rezultaty.map {
                 if (it.poroda == poroda) it.copy(vysazheno = value.filter(Char::isDigit), vysazhenoVruchnuyu = true) else it
             },
@@ -148,6 +195,7 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
     /** Вернуть «высажено» к расчёту по составу и размеру проб. */
     fun onVysazhenoAuto(poroda: String) {
         _uiState.value = _uiState.value.copy(
+            pogiblo = _uiState.value.pogiblo - poroda,
             rezultaty = _uiState.value.rezultaty.map { if (it.poroda == poroda) it.copy(vysazheno = "", vysazhenoVruchnuyu = false) else it },
         )
     }
@@ -156,7 +204,8 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
     fun onPrizhilosChange(poroda: String, value: String) {
         val count = value.filter(Char::isDigit).take(6).toIntOrNull() ?: 0
         _uiState.value = _uiState.value.copy(
-            rezultaty = _uiState.value.rezultaty.map { if (it.poroda == poroda) it.copy(prizhilos = count) else it },
+            rezultaty = _uiState.value.rezultaty.map { if (it.poroda == poroda) it.copy(prizhilos = count) else it }
+                .syncPogiblo(poroda, _uiState.value.pogiblo),
             error = null,
         )
     }
@@ -179,7 +228,11 @@ class InventarizatsiyaViewModel(application: Application) : AndroidViewModel(app
     }
 
     fun removeRezultat(poroda: String) {
-        _uiState.value = _uiState.value.copy(rezultaty = _uiState.value.rezultaty.filterNot { it.poroda == poroda })
+        _uiState.value = _uiState.value.copy(
+            rezultaty = _uiState.value.rezultaty.filterNot { it.poroda == poroda },
+            pogiblo = _uiState.value.pogiblo - poroda,
+            clicks = _uiState.value.clicks.filterNot { it.first == poroda },
+        )
     }
 
     fun submit() {

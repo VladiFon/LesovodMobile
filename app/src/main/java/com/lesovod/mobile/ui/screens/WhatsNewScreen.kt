@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.rounded.Park
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Layers
@@ -65,6 +67,18 @@ enum class WhatsNewTarget { MORE, PROFILE, MAP }
 private data class NewsCard(val icon: ImageVector, val title: String, val text: String, val target: WhatsNewTarget?)
 
 private val NEWS = listOf(
+    NewsCard(
+        Icons.Rounded.Chat,
+        "Заметки как переписка",
+        "Сообщения конторе теперь лентой, как в мессенджере: ответ виден сразу под вопросом. Внизу готовые фразы и кнопка «где я».",
+        null,
+    ),
+    NewsCard(
+        Icons.Rounded.Park,
+        "Инвентаризация по шагам",
+        "Участок, пробы, потом кликер: зелёная кнопка — живое, красная — погибло, приживаемость считается на ходу. В конце проверка и «Отправить».",
+        WhatsNewTarget.MORE,
+    ),
     NewsCard(
         Icons.Rounded.Shield,
         "Сторож границы",
