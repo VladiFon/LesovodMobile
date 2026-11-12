@@ -81,6 +81,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Timeline
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -146,7 +147,8 @@ fun MapScreen(
 
     // пока идёт обмер обходом, экран не гаснет — иначе GPS-точки перестают приходить
     val view = LocalView.current
-    val keepOn = state.walk.recording || state.probaDraft?.averaging == true || state.guard != null || state.azimuth != null
+    val keepOn = state.walk.recording || state.probaDraft?.averaging == true || state.guard != null || state.azimuth != null ||
+        state.driving || state.roadDraft?.recording == true
     DisposableEffect(keepOn) {
         view.keepScreenOn = keepOn
         onDispose { view.keepScreenOn = false }
@@ -161,7 +163,7 @@ fun MapScreen(
     val cardVisible = state.cardOpen
     val bottomPanelVisible = cardVisible || toolPanelVisible || state.tasksOpen ||
         state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null ||
-        state.probaDraft != null || state.selectedProba != null || state.nearbyOpen
+        state.probaDraft != null || state.selectedProba != null || state.nearbyOpen || state.selectedRoad != null
     // первый тап только выделяет участок — внизу подсказка, что второй тап откроет таксацию
     val hintVisible = state.selection != null && !bottomPanelVisible
     var lastSelection by remember { mutableStateOf(state.selection) }
@@ -193,7 +195,8 @@ fun MapScreen(
         enabled = state.search.open || cardVisible || layersOpen || toolsMenuOpen || plusOpen || state.nearbyOpen || state.selection != null ||
             state.sos != null || state.azimuth != null ||
             state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null ||
-            state.selectedProba != null || state.tasksOpen || (toolPanelVisible && !state.walk.recording),
+            state.selectedProba != null || state.tasksOpen || (toolPanelVisible && !state.walk.recording) ||
+            state.selectedRoad != null || state.driving,
     ) {
         when {
             state.sos != null -> viewModel.openSos(false)
@@ -202,6 +205,9 @@ fun MapScreen(
             plusOpen -> plusOpen = false
             state.nearbyOpen -> viewModel.openNearby(false)
             state.probaDraft != null -> viewModel.dismissProbaDraft()
+            state.roadDraft?.detailsOpen == true -> viewModel.openRoadDetails(false)
+            state.selectedRoad != null -> viewModel.dismissRoad()
+            state.driving -> viewModel.setDriving(false)
             state.selectedProba != null -> viewModel.dismissProba()
             state.noteDraft != null -> viewModel.dismissNoteDraft()
             state.selectedGeoNote != null -> viewModel.dismissGeoNotePopup()
@@ -246,16 +252,21 @@ fun MapScreen(
             rulerPoints = state.rulerPoints,
             walkPoints = state.walk.points,
             navTarget = state.navTarget?.point,
+            navRoute = state.route,
+            roads = if (state.layers.dorogi || state.tool == MapTool.ROAD || state.navTarget != null) state.roads else emptyList(),
+            selectedRoadId = state.selectedRoad?.id,
+            roadDraft = state.roadDraft?.points ?: emptyList(),
+            onRoadTap = { closeOverlays(); viewModel.onRoadTap(it) },
             myLocation = state.myLocation,
             focus = state.focus,
             offlineBasePath = state.offlineBasePath.takeIf { state.layers.offlineBase },
-            onSkladTap = { closeOverlays(); viewModel.onSkladTap(it) },
+            onSkladTap = { closeOverlays(); viewModel.dismissRoad(); viewModel.onSkladTap(it) },
             onRulerTap = viewModel::onToolTap,
             onLocationFix = viewModel::onLocationFix,
-            onShapeTap = { closeOverlays(); viewModel.onShapeTap(it) },
+            onShapeTap = { closeOverlays(); viewModel.dismissRoad(); viewModel.onShapeTap(it) },
             onEmptyTap = { closeOverlays(); viewModel.clearSelection() },
-            onGeoNoteTap = { closeOverlays(); viewModel.onGeoNoteTap(it) },
-            onProbaTap = { closeOverlays(); viewModel.onProbaTap(it) },
+            onGeoNoteTap = { closeOverlays(); viewModel.dismissRoad(); viewModel.onGeoNoteTap(it) },
+            onProbaTap = { closeOverlays(); viewModel.dismissRoad(); viewModel.onProbaTap(it) },
             onMapLongPress = { lat, lon -> closeOverlays(); if (state.tool == MapTool.NONE) viewModel.startNoteDraft(lat, lon) },
             onViewportChanged = viewModel::onViewportChanged,
             initialCamera = remember { viewModel.camera },
@@ -285,6 +296,13 @@ fun MapScreen(
                             leadingIcon = { Icon(Icons.Filled.CropFree, contentDescription = null) },
                             onClick = { toolsMenuOpen = false; viewModel.startProbaDraft() },
                         )
+                        if (state.mozhnoRisovat) {
+                            DropdownMenuItem(
+                                text = { Text("Нарисовать дорогу") },
+                                leadingIcon = { Icon(Icons.Filled.Timeline, contentDescription = null) },
+                                onClick = { toolsMenuOpen = false; viewModel.startRoadDraft() },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("Мои задачи") },
                             leadingIcon = { Icon(Icons.Filled.Assignment, contentDescription = null) },
@@ -369,14 +387,22 @@ fun MapScreen(
                 }
 
                 state.navTarget?.let { target ->
-                    Box(modifier = Modifier.padding(end = 56.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.weight(1f, fill = false)) {
-                                NavigationChip(target = target, me = state.myLocation, mapBearing = 0f, onStop = viewModel::stopNavigation)
-                            }
-                            AzimuthChip(onClick = viewModel::startAzimuth)
-                        }
-                    }
+                    RoutePanel(
+                        target = target,
+                        me = state.myLocation,
+                        route = state.route,
+                        loading = state.routeLoading,
+                        vehicle = state.routeVehicle,
+                        driving = state.driving,
+                        sending = state.routeSending,
+                        hasRoads = state.roads.isNotEmpty(),
+                        onVehicle = viewModel::setRouteVehicle,
+                        onDrive = viewModel::setDriving,
+                        onSend = viewModel::sendRoute,
+                        onAzimuth = viewModel::startAzimuth,
+                        onStop = viewModel::stopNavigation,
+                        modifier = Modifier.padding(end = 56.dp),
+                    )
                 }
 
                 Row(
@@ -433,6 +459,47 @@ fun MapScreen(
                 onClose = { viewModel.setTool(MapTool.NONE) },
                 modifier = measureBottom,
             )
+        }
+
+        BottomPanel(visible = state.tool == MapTool.ROAD) {
+            state.roadDraft?.let { draft ->
+                RoadDraftPanel(
+                    draft = draft,
+                    hasGps = state.myLocation != null,
+                    onMyPoint = viewModel::addMyPointToRoad,
+                    onUndo = viewModel::undoRoadPoint,
+                    onRecord = viewModel::toggleRoadRecording,
+                    onNext = { viewModel.openRoadDetails(true) },
+                    onClose = viewModel::dismissRoadDraft,
+                    modifier = measureBottom,
+                )
+            }
+        }
+        state.roadDraft?.takeIf { it.detailsOpen }?.let { draft ->
+            RoadDetailsDialog(
+                draft = draft,
+                onName = { t -> viewModel.updateRoadDraft { it.copy(name = t) } },
+                onComment = { t -> viewModel.updateRoadDraft { it.copy(comment = t) } },
+                onTip = viewModel::setRoadTip,
+                onVehicle = viewModel::toggleRoadVehicle,
+                onSave = viewModel::saveRoad,
+                onBack = { viewModel.openRoadDetails(false) },
+            )
+        }
+
+        var lastRoad by remember { mutableStateOf(state.selectedRoad) }
+        if (state.selectedRoad != null) lastRoad = state.selectedRoad
+        BottomPanel(visible = state.selectedRoad != null) {
+            (state.selectedRoad ?: lastRoad)?.let { road ->
+                RoadCard(
+                    road = road,
+                    canDelete = state.mozhnoRisovat,
+                    onNavigate = { viewModel.navigateToRoad(road) },
+                    onDelete = { viewModel.deleteRoad(road) },
+                    onDismiss = viewModel::dismissRoad,
+                    modifier = measureBottom,
+                )
+            }
         }
 
         BottomPanel(visible = state.tool == MapTool.WALK) {

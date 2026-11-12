@@ -6,6 +6,8 @@ import com.lesovod.mobile.data.network.ApiService
 import com.lesovod.mobile.data.network.ConnectivityException
 import com.lesovod.mobile.data.network.buildPhotoPart
 import com.lesovod.mobile.data.network.dto.CoworkerDto
+import com.lesovod.mobile.data.network.dto.DorogaCreateRequest
+import com.lesovod.mobile.data.network.dto.DorogaDto
 import com.lesovod.mobile.data.network.dto.IgraDto
 import com.lesovod.mobile.data.network.dto.SmenaCreatedDto
 import com.lesovod.mobile.data.network.dto.SmenaMoiDto
@@ -237,6 +239,17 @@ class BotRepository(
     /** accept=false — отклонить или убрать уже принятую метку коллеги со своей карты. */
     suspend fun answerGeoNoteShare(shareId: Int, accept: Boolean): Result<Unit> = safeCall {
         if (accept) api.acceptGeoNoteShare(requireToken(), shareId) else api.declineGeoNoteShare(requireToken(), shareId)
+        Unit
+    }
+
+    // --- лесные дороги (сервер vse81+) ---
+
+    suspend fun createDoroga(request: DorogaCreateRequest): Result<DorogaDto> = safeCall {
+        api.createDoroga(requireToken(), request)
+    }
+
+    suspend fun deleteDoroga(id: Int): Result<Unit> = safeCall {
+        api.deleteDoroga(requireToken(), id)
         Unit
     }
 

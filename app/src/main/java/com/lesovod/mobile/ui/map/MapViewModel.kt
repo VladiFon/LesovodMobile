@@ -59,6 +59,8 @@ data class MapLayers(
     val proby: Boolean = true,
     /** Своя подложка из файла .mbtiles (например, ортофото, выгруженное из QGIS) — работает без интернета. */
     val offlineBase: Boolean = true,
+    /** Лесные дороги (рисуют мастера, по ним строится маршрут). */
+    val dorogi: Boolean = true,
 )
 
 /** Где была карта — чтобы при возврате на вкладку не прыгать заново на всё лесничество. */
@@ -195,9 +197,40 @@ data class MapUiState(
     val azimuth: AzimuthState? = null,
     /** Экран тревоги SOS. */
     val sos: SosState? = null,
+
+    // --- лесные дороги и маршрут по ним (этап 5) ---
+    val roads: List<Road> = emptyList(),
+    /** Можно ли этому человеку рисовать дороги (мастер, помощник, лесничий). */
+    val mozhnoRisovat: Boolean = false,
+    val selectedRoad: Road? = null,
+    val roadDraft: RoadDraft? = null,
+    val routeVehicle: Vehicle = Vehicle.UAZ,
+    val route: RoadRoute? = null,
+    val routeLoading: Boolean = false,
+    /** «Поехали»: крупные подсказки поворотов, экран не гаснет. */
+    val driving: Boolean = false,
+    val routeSending: Boolean = false,
 )
 
 class GuardState(val shape: MapShape, val title: String)
+
+/** Новая дорога, которую рисует мастер: точки тапом, «моя точка» или запись проездом. */
+data class RoadDraft(
+    val points: List<LatLon> = emptyList(),
+    val recording: Boolean = false,
+    val detailsOpen: Boolean = false,
+    val name: String = "",
+    val tip: RoadTip = RoadTip.GRUNTOVKA,
+    val proezd: Set<Vehicle> = defaultProezd(RoadTip.GRUNTOVKA),
+    val comment: String = "",
+    val saving: Boolean = false,
+    val error: String? = null,
+) {
+    val lengthM: Double get() = pathLengthMeters(points)
+}
+
+fun defaultProezd(tip: RoadTip): Set<Vehicle> =
+    if (tip == RoadTip.VOLOK) setOf(Vehicle.TRAKTOR) else setOf(Vehicle.UAZ, Vehicle.LESOVOZ, Vehicle.TRAKTOR)
 
 data class AzimuthState(val start: LatLon?, val target: LatLon, val label: String)
 
@@ -234,7 +267,7 @@ data class NavTarget(val point: LatLon, val label: String)
 
 data class MapFocus(val point: LatLon, val zoom: Double, val token: Int)
 
-enum class MapTool { NONE, RULER, WALK, PROBA }
+enum class MapTool { NONE, RULER, WALK, PROBA, ROAD }
 
 data class WalkState(
     val recording: Boolean = false,
@@ -275,6 +308,8 @@ private const val WALK_MAX_ACCURACY_M = 30f
 private const val PLACE_MIN_MOVE_M = 15.0
 private const val SEARCH_DEBOUNCE_MS = 350L
 private const val GEO_NOTE_QUEUED_MESSAGE = "Нет сети — метка сохранена на устройстве и отправится сама"
+private const val ROAD_REC_STEP_M = 15.0
+private const val ROUTE_RECALC_M = 40.0
 private const val PROBA_QUEUED_MESSAGE = "Нет сети — проба сохранена на телефоне и уйдёт на сервер сама"
 
 class MapViewModel(application: Application) : AndroidViewModel(application) {
@@ -310,6 +345,9 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val probaGps = GpsAverager()
     private var focusCounter = 0
     private var lastPlaceAt: LatLon? = null
+    private val roadGraphs = HashMap<Vehicle, RoadGraph>()
+    private var routeJob: Job? = null
+    private var lastDriveFocus: LatLon? = null
 
     init {
         viewModelScope.launch { hub.download.collect { _uiState.value = _uiState.value.copy(download = it) } }
@@ -367,6 +405,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
         loadTasks()
         loadSklady()
+        loadRoads()
     }
 
     /** force — сразу после создания своей метки: кэш на 5 минут её бы ещё не знал. */
@@ -433,7 +472,8 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         loadColors(num, force = true)
         loadGeoNotes(force = true)
         loadTasks()
-        _uiState.value = _uiState.value.copy(message = "Цвета, метки, пробы и задачи обновлены")
+        loadRoads(force = true)
+        _uiState.value = _uiState.value.copy(message = "Цвета, метки, пробы, дороги и задачи обновлены")
     }
 
     fun setColorMode(mode: ColorMode) {
@@ -953,6 +993,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     fun clearSelection() {
         _uiState.value = _uiState.value.copy(
             selection = null,
+            selectedRoad = null,
             cardOpen = false,
             isLoadingCard = false,
             selectedCard = null, selectedDelyanka = null, selectedLesokultury = null, cardNotice = null,
@@ -990,7 +1031,30 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 ),
             )
         }
+        // новая дорога «записью проездом»: точка каждые 15 м
+        val road = state.roadDraft
+        if (road != null && road.recording && (accuracy == null || accuracy <= WALK_MAX_ACCURACY_M)) {
+            val last = road.points.lastOrNull()
+            if (last == null || distanceMeters(last, here) >= ROAD_REC_STEP_M) {
+                state = state.copy(roadDraft = road.copy(points = road.points + here))
+            }
+        }
         _uiState.value = state
+
+        // «Поехали»: карта едет за мной (не на каждую точку, а раз в 30 м — чтобы не дёргалась)
+        if (state.driving) {
+            val lf = lastDriveFocus
+            if (lf == null || distanceMeters(lf, here) >= 30.0) {
+                lastDriveFocus = here
+                setFocus(here, 16.5)
+            }
+        }
+        // ушли с маршрута — перестраиваем
+        if (state.navTarget != null && !state.routeLoading) {
+            val route = state.route
+            val off = route == null || (distanceMeters(route.start, here) > ROUTE_RECALC_M && route.guidance(here).offRouteMeters > ROUTE_RECALC_M)
+            if (off) recomputeRoute()
+        }
 
         // квартал/выдел под ногами — не на каждый сдвиг, а когда отошли на 15 м
         val prev = lastPlaceAt
@@ -1034,7 +1098,8 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun navigateTo(point: LatLon, label: String) {
-        _uiState.value = _uiState.value.copy(navTarget = NavTarget(point, label), cardOpen = false)
+        _uiState.value = _uiState.value.copy(navTarget = NavTarget(point, label), cardOpen = false, route = null, driving = false)
+        recomputeRoute()
     }
 
     fun navigateToSelected(label: String) {
@@ -1042,7 +1107,8 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopNavigation() {
-        _uiState.value = _uiState.value.copy(navTarget = null)
+        routeJob?.cancel()
+        _uiState.value = _uiState.value.copy(navTarget = null, route = null, routeLoading = false, driving = false)
     }
 
     // ---------------------------------------------------------------- поиск ---
@@ -1364,6 +1430,8 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             rulerPoints = if (tool == MapTool.RULER) current.rulerPoints else emptyList(),
             walk = if (tool == MapTool.WALK) current.walk else WalkState(),
             probaDraft = if (tool == MapTool.PROBA) current.probaDraft else null,
+            roadDraft = if (tool == MapTool.ROAD) current.roadDraft ?: RoadDraft() else null,
+            selectedRoad = null,
             selection = if (tool != MapTool.NONE) null else current.selection,
             cardOpen = false,
         )
@@ -1373,6 +1441,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     fun onToolTap(point: LatLon) {
         when (_uiState.value.tool) {
             MapTool.RULER -> onRulerTap(point)
+            MapTool.ROAD -> updateRoadDraft { it.copy(points = it.points + point, error = null) }
             MapTool.PROBA -> {
                 val draft = _uiState.value.probaDraft ?: return
                 if (draft.forma == ProbaForma.KONTUR) return
@@ -1780,6 +1849,194 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     // ------------------------------------------------------ офлайн-подложка ---
 
     /** Своя подложка: файл .mbtiles копируется в память приложения и дальше работает без сети. */
+    // ------------------------------------------------------- лесные дороги ---
+
+    fun loadRoads(force: Boolean = false) {
+        viewModelScope.launch {
+            repository.getDorogi(force).onSuccess { list ->
+                val roads = list.dorogi.map { it.toRoad() }.filter { it.points.size >= 2 }
+                synchronized(roadGraphs) { roadGraphs.clear() }
+                val sel = _uiState.value.selectedRoad
+                _uiState.value = _uiState.value.copy(
+                    roads = roads,
+                    mozhnoRisovat = list.mozhnoRisovat,
+                    selectedRoad = sel?.let { s -> roads.firstOrNull { it.id == s.id } },
+                )
+                if (_uiState.value.navTarget != null) recomputeRoute()
+            }
+            // старый сервер без /api/dorogi — просто нет слоя
+        }
+    }
+
+    private fun graphFor(vehicle: Vehicle, roads: List<Road>): RoadGraph =
+        synchronized(roadGraphs) { roadGraphs.getOrPut(vehicle) { RoadGraph.build(roads, vehicle) } }
+
+    /** Маршрут от меня до цели по дорогам выбранного транспорта; нет дорог — по прямой. */
+    fun recomputeRoute() {
+        val state = _uiState.value
+        val target = state.navTarget ?: return
+        val me = state.myLocation ?: return
+        val roads = state.roads
+        val vehicle = state.routeVehicle
+        routeJob?.cancel()
+        _uiState.value = state.copy(routeLoading = true)
+        routeJob = viewModelScope.launch {
+            val route = withContext(Dispatchers.Default) { graphFor(vehicle, roads).route(me, target.point, vehicle) }
+            if (_uiState.value.navTarget == target) {
+                _uiState.value = _uiState.value.copy(route = route, routeLoading = false)
+            }
+        }
+    }
+
+    fun setRouteVehicle(vehicle: Vehicle) {
+        if (vehicle == _uiState.value.routeVehicle) return
+        _uiState.value = _uiState.value.copy(routeVehicle = vehicle, route = null)
+        recomputeRoute()
+    }
+
+    fun setDriving(on: Boolean) {
+        _uiState.value = _uiState.value.copy(driving = on)
+        lastDriveFocus = null
+        if (on) _uiState.value.myLocation?.let { lastDriveFocus = it; setFocus(it, 16.5) }
+    }
+
+    /**
+     * «Отправить маршрут»: на месте цели ставим метку «🚩 Маршрут сюда …» и открываем
+     * обычное окно «Отправить коллеге». Коллега примет метку и нажмёт «Вести сюда» —
+     * телефон сам построит путь по тем же дорогам.
+     */
+    fun sendRoute() {
+        val state = _uiState.value
+        val target = state.navTarget ?: return
+        val route = state.route
+        val how = when {
+            route == null -> ""
+            route.byRoad -> " · ${route.vehicle.label}, ${formatDistance(route.totalMeters)} по дорогам"
+            else -> " · ${formatDistance(route.straightMeters)} напрямую"
+        }
+        val text = "🚩 Маршрут сюда: ${target.label}$how"
+        _uiState.value = state.copy(routeSending = true)
+        viewModelScope.launch {
+            val res = botRepository.submitGeoNote(target.point.lat, target.point.lon, text, null, GeoNoteCategory.ZAMETKA.code)
+            if (res.isFailure) {
+                _uiState.value = _uiState.value.copy(
+                    routeSending = false,
+                    message = if (res.exceptionOrNull() is ConnectivityException) "Нет связи — маршрут отправить не выйдет, попробуйте позже"
+                    else "Не отправилось: ${res.exceptionOrNull()?.message}",
+                )
+                return@launch
+            }
+            val notes = repository.getGeoNotes(true).getOrNull()
+            if (notes != null) _uiState.value = _uiState.value.copy(geoNotes = notes)
+            val note = notes?.filter { it.noteText == text }?.maxByOrNull { it.id }
+            _uiState.value = _uiState.value.copy(routeSending = false)
+            if (note != null) openShare(note)
+            else _uiState.value = _uiState.value.copy(message = "Метка маршрута стоит на карте — отправьте её коллеге из карточки метки")
+        }
+    }
+
+    fun onRoadTap(road: Road) {
+        _uiState.value = _uiState.value.copy(
+            selectedRoad = road, selectedGeoNote = null, selectedSklad = null, selectedProba = null,
+            noteDraft = null, selection = null, cardOpen = false,
+        )
+    }
+
+    fun dismissRoad() {
+        if (_uiState.value.selectedRoad != null) _uiState.value = _uiState.value.copy(selectedRoad = null)
+    }
+
+    /** «Вести к дороге» — к ближайшей ко мне точке дороги (нет GPS — к её началу). */
+    fun navigateToRoad(road: Road) {
+        val me = _uiState.value.myLocation
+        val point = if (me == null) road.points.first() else road.points.minBy { distanceMeters(it, me) }
+        _uiState.value = _uiState.value.copy(selectedRoad = null)
+        navigateTo(point, road.title)
+    }
+
+    fun deleteRoad(road: Road) {
+        viewModelScope.launch {
+            botRepository.deleteDoroga(road.id).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(selectedRoad = null, message = "Дорога «${road.title}» убрана с карты")
+                    loadRoads(force = true)
+                },
+                onFailure = { _uiState.value = _uiState.value.copy(message = "Не удалось удалить: ${it.message}") },
+            )
+        }
+    }
+
+    fun startRoadDraft() {
+        setTool(MapTool.ROAD)
+    }
+
+    fun updateRoadDraft(change: (RoadDraft) -> RoadDraft) {
+        val d = _uiState.value.roadDraft ?: return
+        _uiState.value = _uiState.value.copy(roadDraft = change(d))
+    }
+
+    fun addMyPointToRoad() {
+        val me = _uiState.value.myLocation
+        if (me == null) {
+            updateRoadDraft { it.copy(error = "Нет GPS — ставьте точки нажатием на карту") }
+            return
+        }
+        updateRoadDraft { it.copy(points = it.points + me, error = null) }
+    }
+
+    fun toggleRoadRecording() = updateRoadDraft { it.copy(recording = !it.recording, error = null) }
+
+    fun undoRoadPoint() = updateRoadDraft { it.copy(points = it.points.dropLast(1)) }
+
+    fun setRoadTip(tip: RoadTip) = updateRoadDraft { it.copy(tip = tip, proezd = defaultProezd(tip)) }
+
+    fun toggleRoadVehicle(v: Vehicle) = updateRoadDraft { it.copy(proezd = if (v in it.proezd) it.proezd - v else it.proezd + v) }
+
+    fun openRoadDetails(open: Boolean) = updateRoadDraft { it.copy(detailsOpen = open, recording = false, error = null) }
+
+    fun dismissRoadDraft() {
+        _uiState.value = _uiState.value.copy(roadDraft = null, tool = MapTool.NONE)
+    }
+
+    fun saveRoad() {
+        val d = _uiState.value.roadDraft ?: return
+        if (d.points.size < 2) { updateRoadDraft { it.copy(error = "Нужно хотя бы две точки") }; return }
+        if (d.proezd.isEmpty()) { updateRoadDraft { it.copy(error = "Отметьте, кто проедет") }; return }
+        updateRoadDraft { it.copy(saving = true, error = null) }
+        val request = com.lesovod.mobile.data.network.dto.DorogaCreateRequest(
+            nazvanie = d.name.trim().ifBlank { null },
+            tip = d.tip.code,
+            proezd = d.proezd.map { it.code },
+            tochki = d.points.map { listOf(it.lon, it.lat) },
+            lesnichestvo = _uiState.value.selectedLesnichestvo,
+            kommentariy = d.comment.trim().ifBlank { null },
+        )
+        viewModelScope.launch {
+            botRepository.createDoroga(request).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(
+                        roadDraft = null, tool = MapTool.NONE,
+                        message = "Дорога сохранена: ${formatDistance(d.lengthM)}. Теперь её видят все и по ней строится маршрут",
+                    )
+                    loadRoads(force = true)
+                },
+                onFailure = { err ->
+                    val text = err.message.orEmpty()
+                    updateRoadDraft {
+                        it.copy(
+                            saving = false,
+                            error = when {
+                                err is ConnectivityException -> "Нет связи. Дорога не потеряется: нажмите «Сохранить», когда появится сеть"
+                                text.contains("404") -> "Сервер ещё старый — нужно обновление сервера (пакет vse81)"
+                                else -> "Не сохранилось: $text"
+                            },
+                        )
+                    }
+                },
+            )
+        }
+    }
+
     fun importOfflineBase(uri: Uri) {
         val app = getApplication<Application>()
         viewModelScope.launch {

@@ -3,6 +3,7 @@ package com.lesovod.mobile.data.repository
 import com.lesovod.mobile.data.local.MapCache
 import com.lesovod.mobile.data.network.ApiService
 import com.lesovod.mobile.data.network.dto.DelyankaMapRefDto
+import com.lesovod.mobile.data.network.dto.DorogiListDto
 import com.lesovod.mobile.data.network.dto.KartaProbaDto
 import com.lesovod.mobile.data.network.extractErrorMessage
 import com.lesovod.mobile.ui.map.GeoJsonStreamParser
@@ -185,6 +186,16 @@ class MapRepository(
         encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
     )
 
+    /** Лесные дороги — хранятся на телефоне, чтобы навигатор вёл по ним и без связи. */
+    suspend fun getDorogi(force: Boolean = false): Result<DorogiListDto> = cached(
+        key = "dorogi",
+        ttlMs = DOROGI_TTL_MS,
+        force = force,
+        fetch = { api.listDorogi(requireToken()) },
+        decode = { json.decodeFromString<DorogiListDto>(it.readBytes().decodeToString()) },
+        encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },
+    )
+
     /** Склады — точки на карте; меняются редко. */
     suspend fun getSklady(force: Boolean = false): Result<List<SkladDto>> = cached(
         key = "sklady",
@@ -297,6 +308,7 @@ class MapRepository(
 
         private const val HOUR_MS = 60 * 60 * 1000L
         const val DAY_MS = 24 * HOUR_MS
+        const val DOROGI_TTL_MS = 30 * 60 * 1000L
         const val LAYER_TTL_MS = 12 * HOUR_MS
         const val LESOSEKI_TTL_MS = 3 * HOUR_MS
         const val DELYANKI_TTL_MS = HOUR_MS / 2
