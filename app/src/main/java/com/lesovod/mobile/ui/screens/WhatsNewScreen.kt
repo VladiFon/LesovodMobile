@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.SystemUpdate
@@ -63,6 +65,18 @@ enum class WhatsNewTarget { MORE, PROFILE, MAP }
 private data class NewsCard(val icon: ImageVector, val title: String, val text: String, val target: WhatsNewTarget?)
 
 private val NEWS = listOf(
+    NewsCard(
+        Icons.Rounded.Shield,
+        "Сторож границы",
+        "Откройте делянку на карте и нажмите «Сторож границы». Подойдёте к краю ближе 20 м, и телефон завибрирует и покажет крупно, сколько метров осталось.",
+        WhatsNewTarget.MAP,
+    ),
+    NewsCard(
+        Icons.Rounded.Explore,
+        "Азимут и SOS",
+        "«Вести сюда» теперь с кнопкой «Азимут»: стрелка по компасу и подсказка, если ушли в сторону. Красная SOS слева внизу карты: держите 3 секунды, и мастер получит ваше место.",
+        WhatsNewTarget.MAP,
+    ),
     NewsCard(
         Icons.Rounded.Map,
         "Карта: «Где я» и «Что рядом»",

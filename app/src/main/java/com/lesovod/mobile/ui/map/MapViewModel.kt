@@ -188,6 +188,25 @@ data class MapUiState(
 
     /** Открыт список «Что рядом» (редизайн 12.11.2026). */
     val nearbyOpen: Boolean = false,
+
+    /** Сторож границы: какой контур стережём (работает, пока открыта карта). */
+    val guard: GuardState? = null,
+    /** Полноэкранный азимут к цели «Вести сюда». */
+    val azimuth: AzimuthState? = null,
+    /** Экран тревоги SOS. */
+    val sos: SosState? = null,
+)
+
+class GuardState(val shape: MapShape, val title: String)
+
+data class AzimuthState(val start: LatLon?, val target: LatLon, val label: String)
+
+enum class SosPhase { HOLD, SENDING, SENT, FAILED }
+
+data class SosState(
+    val phase: SosPhase = SosPhase.HOLD,
+    val sentTo: List<String> = emptyList(),
+    val error: String? = null,
 )
 
 /** Что лежит рядом со мной: делянки, метки, пробы, культуры — для списка «Что рядом». */
@@ -1107,6 +1126,102 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private fun setFocus(point: LatLon, zoom: Double) {
         focusCounter += 1
         _uiState.value = _uiState.value.copy(focus = MapFocus(point, zoom, focusCounter))
+    }
+
+    // ------------------------------------------------ сторож, азимут, SOS ---
+
+    /** Контур выбранного объекта (выдел, делянка, культуры) — для сторожа границы. */
+    private fun selectedShape(): MapShape? {
+        val sel = _uiState.value.selection ?: return null
+        val state = _uiState.value
+        val shapes = when (sel.kind) {
+            ShapeKind.KVARTAL -> state.kvartaly
+            ShapeKind.VYDEL -> state.vydela
+            ShapeKind.LESOSEKA -> state.lesoseki
+            ShapeKind.LESOKULTURY -> if (sel.ownKontur) state.lesokulturyKontury.filter { it.refId == sel.refId } else state.vydela
+        }
+        return shapes.lastOrNull { it.kvartal == sel.kvartal && it.vydel == sel.vydel }
+    }
+
+    fun canGuardSelected(): Boolean = selectedShape() != null
+
+    fun startGuardOnSelected() {
+        val sel = _uiState.value.selection ?: return
+        val shape = selectedShape() ?: return
+        val what = when (sel.kind) {
+            ShapeKind.LESOSEKA -> "Делянка"
+            ShapeKind.LESOKULTURY -> "Культуры"
+            ShapeKind.KVARTAL -> "Квартал"
+            ShapeKind.VYDEL -> "Выдел"
+        }
+        val title = "$what, кв. ${sel.kvartal}" + (sel.vydel?.let { ", выд. $it" } ?: "")
+        _uiState.value = _uiState.value.copy(guard = GuardState(shape, title), cardOpen = false, message = "Сторож включён: скажу, когда граница рядом")
+    }
+
+    fun stopGuard() {
+        _uiState.value = _uiState.value.copy(guard = null)
+    }
+
+    /** Полноэкранный азимут к текущей цели «Вести сюда». */
+    fun startAzimuth() {
+        val t = _uiState.value.navTarget ?: return
+        _uiState.value = _uiState.value.copy(azimuth = AzimuthState(_uiState.value.myLocation, t.point, t.label))
+    }
+
+    fun stopAzimuth() {
+        _uiState.value = _uiState.value.copy(azimuth = null)
+    }
+
+    fun openSos(open: Boolean) {
+        val cur = _uiState.value.sos
+        if (!open && cur?.phase == SosPhase.SENDING) return
+        _uiState.value = _uiState.value.copy(sos = if (open) SosState() else null)
+    }
+
+    /**
+     * Тревога: ставим метку «SOS» в моей точке и сразу отправляем её мастерам/лесничему
+     * (тот же путь, что «Отправить метку коллеге»: у них придёт уведомление с местом).
+     */
+    fun sendSos() {
+        val state = _uiState.value
+        val me = state.myLocation
+        if (me == null) {
+            _uiState.value = state.copy(sos = SosState(SosPhase.FAILED, error = "Нет GPS, место не определить. Звоните 112 или мастеру."))
+            return
+        }
+        _uiState.value = state.copy(sos = SosState(SosPhase.SENDING))
+        viewModelScope.launch {
+            val stamp = java.text.SimpleDateFormat("HH:mm", java.util.Locale("ru")).format(java.util.Date())
+            val text = "🆘 SOS! Нужна помощь. " + (state.here?.label?.let { "$it. " } ?: "") + "($stamp)"
+            val res = botRepository.submitGeoNote(me.lat, me.lon, text, null, GeoNoteCategory.ZAMETKA.code)
+            if (res.isFailure) {
+                val offline = res.exceptionOrNull() is ConnectivityException
+                if (offline) queueManager.enqueueGeoNote(me.lat, me.lon, text, GeoNoteCategory.ZAMETKA.code, null, null)
+                _uiState.value = _uiState.value.copy(
+                    sos = SosState(
+                        SosPhase.FAILED,
+                        error = if (offline) "Нет связи. Метка SOS уйдёт сама, когда появится сеть. Сейчас звоните 112 или отправьте СМС."
+                        else "Не отправилось: ${res.exceptionOrNull()?.message}. Звоните 112 или отправьте СМС.",
+                    ),
+                )
+                return@launch
+            }
+            val notes = repository.getGeoNotes(true).getOrNull()
+            if (notes != null) _uiState.value = _uiState.value.copy(geoNotes = notes)
+            val id = notes?.filter { it.noteText == text }?.maxByOrNull { it.id }?.id
+            val coworkers = botRepository.listCoworkers().getOrNull().orEmpty()
+            val bossWords = listOf("мастер", "лесничий", "помощник", "инженер", "начальник", "директор")
+            val bosses = coworkers.filter { c -> val d = c.dolzhnost.orEmpty().lowercase(); bossWords.any { it in d } }
+            val to = bosses.ifEmpty { coworkers }
+            var sent = false
+            if (id != null && to.isNotEmpty()) {
+                sent = botRepository.shareGeoNote(id, to.map { it.id }, "SOS! Нужна помощь").isSuccess
+            }
+            _uiState.value = _uiState.value.copy(
+                sos = if (sent) SosState(SosPhase.SENT, sentTo = to.map { c -> c.fio + (c.dolzhnost?.let { " ($it)" } ?: "") })
+                else SosState(SosPhase.FAILED, error = "Метка SOS на карте стоит, но разослать не вышло. Звоните 112 или отправьте СМС."),
+            )
+        }
     }
 
     // ---------------------------------------------------------- что рядом ---
