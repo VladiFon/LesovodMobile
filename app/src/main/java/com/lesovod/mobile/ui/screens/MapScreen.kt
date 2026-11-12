@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -110,6 +112,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun MapScreen(
     onOpenStock: (Int) -> Unit = {},
+    onOpenReport: () -> Unit = {},
     viewModel: MapViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -150,13 +153,14 @@ fun MapScreen(
 
     var layersOpen by remember { mutableStateOf(false) }
     var toolsMenuOpen by remember { mutableStateOf(false) }
+    var plusOpen by remember { mutableStateOf(false) }
     var bottomPanelPx by remember { mutableStateOf(0) }
 
     val toolPanelVisible = state.tool != MapTool.NONE
     val cardVisible = state.cardOpen
     val bottomPanelVisible = cardVisible || toolPanelVisible || state.tasksOpen ||
         state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null ||
-        state.probaDraft != null || state.selectedProba != null
+        state.probaDraft != null || state.selectedProba != null || state.nearbyOpen
     // первый тап только выделяет участок — внизу подсказка, что второй тап откроет таксацию
     val hintVisible = state.selection != null && !bottomPanelVisible
     var lastSelection by remember { mutableStateOf(state.selection) }
@@ -182,15 +186,17 @@ fun MapScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val closeOverlays = { layersOpen = false; toolsMenuOpen = false }
+    val closeOverlays = { layersOpen = false; toolsMenuOpen = false; plusOpen = false }
 
     BackHandler(
-        enabled = state.search.open || cardVisible || layersOpen || toolsMenuOpen || state.selection != null ||
+        enabled = state.search.open || cardVisible || layersOpen || toolsMenuOpen || plusOpen || state.nearbyOpen || state.selection != null ||
             state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null ||
             state.selectedProba != null || state.tasksOpen || (toolPanelVisible && !state.walk.recording),
     ) {
         when {
             state.search.open -> viewModel.openSearch(false)
+            plusOpen -> plusOpen = false
+            state.nearbyOpen -> viewModel.openNearby(false)
             state.probaDraft != null -> viewModel.dismissProbaDraft()
             state.selectedProba != null -> viewModel.dismissProba()
             state.noteDraft != null -> viewModel.dismissNoteDraft()
@@ -249,33 +255,14 @@ fun MapScreen(
             onMapLongPress = { lat, lon -> closeOverlays(); if (state.tool == MapTool.NONE) viewModel.startNoteDraft(lat, lon) },
             onViewportChanged = viewModel::onViewportChanged,
             initialCamera = remember { viewModel.camera },
-            controlsTopPadding = topInset + 68.dp,
+            controlsTopPadding = topInset + 136.dp,
             bottomInset = bottomInset,
             modifier = Modifier.fillMaxSize(),
-        )
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth()
-                .padding(top = topInset + 12.dp, start = 12.dp, end = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LesnichestvoPill(
-                    options = state.lesnichestva.keys.toList(),
-                    selected = state.selectedLesnichestvo,
-                    loading = state.isLoadingLayers,
-                    onSelected = viewModel::selectLesnichestvo,
-                    modifier = Modifier.weight(1f),
-                )
-                RoundButton(Icons.Filled.Search, "Поиск", active = state.search.open) {
-                    closeOverlays()
-                    viewModel.openSearch(!state.search.open)
-                }
+            extraControls = {
                 Box {
                     RoundButton(Icons.Filled.Straighten, "Инструменты", active = toolsMenuOpen || toolPanelVisible) {
                         layersOpen = false
+                        plusOpen = false
                         toolsMenuOpen = !toolsMenuOpen
                     }
                     DropdownMenu(expanded = toolsMenuOpen, onDismissRequest = { toolsMenuOpen = false }) {
@@ -303,8 +290,36 @@ fun MapScreen(
                 }
                 RoundButton(Icons.Filled.Layers, "Слои карты", active = layersOpen) {
                     toolsMenuOpen = false
+                    plusOpen = false
                     layersOpen = !layersOpen
                 }
+            },
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth()
+                .padding(top = topInset + 12.dp, start = 12.dp, end = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                WhereAmIPill(
+                    place = state.here,
+                    hasGps = state.myLocation != null,
+                    lesnichestvo = state.selectedLesnichestvo,
+                    loading = state.isLoadingLayers,
+                    onClick = { closeOverlays(); viewModel.openHere() },
+                    modifier = Modifier.weight(1f),
+                )
+                MapGlassButton(Icons.Filled.Search, "Поиск", active = state.search.open, onClick = {
+                    closeOverlays()
+                    viewModel.openSearch(!state.search.open)
+                })
+                MapHelpButton()
+            }
+            if (!state.search.open) {
+                LayerChipsRow(layers = state.layers, onChange = viewModel::setLayers)
             }
 
             AnimatedVisibility(
@@ -327,6 +342,10 @@ fun MapScreen(
                 modifier = Modifier.align(Alignment.End),
             ) {
                 LayersPanel(
+                    lesnichestva = state.lesnichestva.keys.toList(),
+                    selectedLesnichestvo = state.selectedLesnichestvo,
+                    lesnichestvoLoading = state.isLoadingLayers,
+                    onLesnichestvo = viewModel::selectLesnichestvo,
                     layers = state.layers,
                     colorMode = state.colorMode,
                     offlineBaseName = state.offlineBaseName,
@@ -355,7 +374,6 @@ fun MapScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(end = 56.dp).horizontalScroll(rememberScrollState()),
                 ) {
-                    state.here?.let { place -> MapChip("Вы здесь: ${place.label}", color = Color(0xFF00E676), onClick = viewModel::openHere) }
                     val taskCount = state.tasks.size
                     if (taskCount > 0 && !state.tasksOpen) {
                         MapChip("Задачи: $taskCount", color = Color(TASK_COLOR), onClick = { viewModel.openTasks(true) })
@@ -381,6 +399,7 @@ fun MapScreen(
                 onNavigate = { label -> viewModel.navigateToSelected(label) },
                 onDismiss = viewModel::closeCard,
                 onOpenStock = if (canSeeStock) onOpenStock else null,
+                onReportHere = { viewModel.prepareReportHere(); onOpenReport() },
                 onShowAs = viewModel::showSelectedAs,
                 hasDelyanka = viewModel.selectedHasDelyanka(),
                 modifier = measureBottom,
@@ -520,6 +539,35 @@ fun MapScreen(
                     modifier = measureBottom,
                 )
             }
+        }
+
+        val nearbyItems = remember(state.nearbyOpen, state.myLocation, state.lesoseki, state.geoNotes, state.pendingGeoNotes, state.proby, state.lesokulturyKontury) {
+            if (state.nearbyOpen) viewModel.nearby() else emptyList()
+        }
+        BottomPanel(visible = state.nearbyOpen) {
+            NearbyPanel(
+                items = nearbyItems,
+                hasGps = state.myLocation != null,
+                onPick = viewModel::openNearbyItem,
+                onClose = { viewModel.openNearby(false) },
+                modifier = measureBottom,
+            )
+        }
+
+        // «+» справа внизу: метка, фото, отчёт отсюда, что рядом — когда снизу ничего не открыто.
+        val plusVisible = !bottomPanelVisible && !hintVisible && state.tool == MapTool.NONE && !state.search.open
+        if (plusVisible) {
+            MapPlusButton(
+                open = plusOpen,
+                onToggle = { layersOpen = false; toolsMenuOpen = false; plusOpen = !plusOpen },
+                actions = listOf(
+                    PlusAction("Метка здесь", PlusIcons.Metka) { viewModel.startNoteHere() },
+                    PlusAction("Фото-метка", PlusIcons.Photo) { viewModel.startNoteHere() },
+                    PlusAction("Отчёт отсюда", PlusIcons.Report) { viewModel.prepareReportHere(); onOpenReport() },
+                    PlusAction("Что рядом", PlusIcons.Nearby) { viewModel.openNearby(true) },
+                ),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp),
+            )
         }
 
         state.share?.let { share ->
@@ -710,6 +758,10 @@ private fun LesnichestvoPill(
 /** Галочки слоёв, способ раскраски, скачивание и своя офлайн-подложка. */
 @Composable
 private fun LayersPanel(
+    lesnichestva: List<String>,
+    selectedLesnichestvo: String?,
+    lesnichestvoLoading: Boolean,
+    onLesnichestvo: (String) -> Unit,
     layers: MapLayers,
     colorMode: ColorMode,
     offlineBaseName: String?,
@@ -734,6 +786,13 @@ private fun LayersPanel(
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 6.dp),
         ) {
+            LesnichestvoPill(
+                options = lesnichestva,
+                selected = selectedLesnichestvo,
+                loading = lesnichestvoLoading,
+                onSelected = onLesnichestvo,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            )
             LayerRow("Кварталы", layers.kvartaly) { onChange(layers.copy(kvartaly = it)) }
             LayerRow("Выделы", layers.vydela) { onChange(layers.copy(vydela = it)) }
             LayerRow("Делянки", layers.lesoseki) { onChange(layers.copy(lesoseki = it)) }
@@ -843,6 +902,7 @@ private fun ObjectCard(
     onNavigate: (String) -> Unit,
     onDismiss: () -> Unit,
     onOpenStock: ((Int) -> Unit)? = null,
+    onReportHere: () -> Unit = {},
     onShowAs: (ShapeKind) -> Unit = {},
     hasDelyanka: Boolean = false,
     modifier: Modifier = Modifier,
@@ -914,7 +974,21 @@ private fun ObjectCard(
                 if (!state.isLoadingCard && selection != null) {
                     val label = selection.title()
                     if (point != null) {
-                        PointActions(point = point, label = label, onNavigate = { onNavigate(label) }, modifier = Modifier.padding(top = 8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                            com.lesovod.mobile.ui.components.LvBigButton(
+                                text = "Вести сюда",
+                                onClick = { onNavigate(label) },
+                                icon = Icons.Filled.Navigation,
+                                modifier = Modifier.weight(1f),
+                            )
+                            com.lesovod.mobile.ui.components.LvSoftButton(
+                                text = "Отчёт отсюда",
+                                onClick = onReportHere,
+                                icon = Icons.Filled.Description,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        PointActions(point = point, label = label, onNavigate = null, modifier = Modifier.padding(top = 8.dp))
                     }
                     if (selection.vydel != null) VydelHistorySection(state.history, state.historyLoading)
                 }

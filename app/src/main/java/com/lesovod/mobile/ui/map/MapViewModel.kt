@@ -185,6 +185,29 @@ data class MapUiState(
 
     /** Короткое сообщение внизу ("Метка удалена", "Контур сохранён: 2,35 га"). */
     val message: String? = null,
+
+    /** Открыт список «Что рядом» (редизайн 12.11.2026). */
+    val nearbyOpen: Boolean = false,
+)
+
+/** Что лежит рядом со мной: делянки, метки, пробы, культуры — для списка «Что рядом». */
+enum class NearbyKind { DELYANKA, METKA, PROBA, KULTURY }
+
+class NearbyItem(
+    val kind: NearbyKind,
+    val title: String,
+    val subtitle: String?,
+    val point: LatLon,
+    /** Метров до ближайшей точки границы (0 — я внутри). */
+    val distance: Double,
+    /** Куда идти, градусы от севера. */
+    val bearing: Double,
+    val inside: Boolean,
+    /** Цвет значка (для меток — цвет типа). */
+    val color: Int?,
+    internal val shape: MapShape? = null,
+    internal val note: GeoNoteMarker? = null,
+    internal val proba: ProbaShape? = null,
 )
 
 /** Куда ведём: выбранный выдел/делянка/метка. */
@@ -1084,6 +1107,101 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private fun setFocus(point: LatLon, zoom: Double) {
         focusCounter += 1
         _uiState.value = _uiState.value.copy(focus = MapFocus(point, zoom, focusCounter))
+    }
+
+    // ---------------------------------------------------------- что рядом ---
+
+    fun openNearby(open: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            nearbyOpen = open,
+            cardOpen = if (open) false else _uiState.value.cardOpen,
+            selectedGeoNote = if (open) null else _uiState.value.selectedGeoNote,
+            selectedProba = if (open) null else _uiState.value.selectedProba,
+            tasksOpen = if (open) false else _uiState.value.tasksOpen,
+        )
+    }
+
+    /** Ближайшие ко мне объекты, самые близкие сверху. Без GPS — пусто. */
+    fun nearby(limit: Int = 15): List<NearbyItem> {
+        val state = _uiState.value
+        val me = state.myLocation ?: return emptyList()
+        val out = ArrayList<NearbyItem>()
+
+        fun shapeItem(shape: MapShape, kind: NearbyKind, title: String, subtitle: String?) {
+            val inside = shape.contains(me.lat, me.lon)
+            var best = Double.MAX_VALUE
+            var bestPoint = LatLon(shape.labelLat, shape.labelLon)
+            for (ring in shape.rings) {
+                var i = 0
+                while (i + 1 < ring.size) {
+                    val p = LatLon(ring[i], ring[i + 1])
+                    val d = distanceMeters(me, p)
+                    if (d < best) { best = d; bestPoint = p }
+                    i += 2
+                }
+            }
+            val target = if (inside) LatLon(shape.labelLat, shape.labelLon) else bestPoint
+            val sub = if (inside) "вы внутри · до границы ${formatDistance(best)}" else subtitle
+            out += NearbyItem(kind, title, sub, LatLon(shape.labelLat, shape.labelLon), if (inside) 0.0 else best, bearingDegrees(me, target), inside, shape.statusColor, shape = shape)
+        }
+
+        state.lesoseki.distinctBy { "${it.kvartal}|${it.vydel}" }.forEach { sh ->
+            shapeItem(sh, NearbyKind.DELYANKA, "Делянка, кв. ${sh.kvartal}" + (sh.vydel?.let { ", выд. $it" } ?: ""), "лесосека")
+        }
+        if (state.layers.lesokultury) {
+            state.lesokulturyKontury.distinctBy { it.refId ?: it.key.hashCode() }.forEach { sh ->
+                shapeItem(sh, NearbyKind.KULTURY, "Лесные культуры, кв. ${sh.kvartal}" + (sh.vydel?.let { ", выд. $it" } ?: ""), "участок культур")
+            }
+        }
+        (state.geoNotes + state.pendingGeoNotes).forEach { n ->
+            val p = LatLon(n.lat, n.lon)
+            val who = n.sharedFromFio ?: n.authorFio
+            out += NearbyItem(
+                NearbyKind.METKA,
+                n.noteText?.takeIf { it.isNotBlank() }?.lineSequence()?.first()?.take(40) ?: n.category.label,
+                listOfNotNull(n.category.label.takeIf { !n.noteText.isNullOrBlank() }, who, if (n.photoUrl != null) "с фото" else null).joinToString(" · ").ifBlank { null },
+                p, distanceMeters(me, p), bearingDegrees(me, p), false, n.category.color, note = n,
+            )
+        }
+        (state.proby + state.pendingProby).forEach { pr ->
+            val d = distanceMeters(me, pr.center)
+            out += NearbyItem(NearbyKind.PROBA, "Проба П${pr.nomer}", pr.dto?.razmerText(), pr.center, d, bearingDegrees(me, pr.center), false, null, proba = pr)
+        }
+        return out.sortedBy { it.distance }.take(limit)
+    }
+
+    /** Тап по строке «Что рядом» — летим туда и открываем карточку. */
+    fun openNearbyItem(item: NearbyItem) {
+        _uiState.value = _uiState.value.copy(nearbyOpen = false)
+        setFocus(item.point, 17.0)
+        when {
+            item.note != null -> onGeoNoteTap(item.note)
+            item.proba != null -> onProbaTap(item.proba)
+            item.shape != null -> {
+                _uiState.value = _uiState.value.copy(selection = null, cardOpen = false)
+                onShapeTap(item.shape)
+                openSelected()
+            }
+        }
+    }
+
+    /** «Отчёт отсюда»: подставить в формы отчёта выбранный (или мой) квартал и выдел. */
+    fun prepareReportHere() {
+        val state = _uiState.value
+        val sel = state.selection
+        val place = if (sel != null) Place(state.selectedLesnichestvo, sel.kvartal, sel.vydel) else state.here
+        if (place != null) CurrentPlace.update(place)
+    }
+
+    /** «Метка здесь» из меню «+»: ставим в моей точке, без GPS — подсказываем долгое нажатие. */
+    fun startNoteHere(): Boolean {
+        val me = _uiState.value.myLocation
+        if (me == null) {
+            _uiState.value = _uiState.value.copy(message = "Пока нет GPS. Зажмите палец на карте там, где нужна метка")
+            return false
+        }
+        startNoteDraft(me.lat, me.lon)
+        return true
     }
 
     fun focusOnMe() {

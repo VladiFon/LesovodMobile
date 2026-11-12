@@ -136,6 +136,8 @@ fun ForestMapView(
     controlsTopPadding: Dp,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
+    /** Свои кнопки сверху правой колонки (инструменты, слои). */
+    extraControls: @Composable () -> Unit = {},
 ) {
     val context = LocalContext.current
     val density = context.resources.displayMetrics.density
@@ -407,6 +409,7 @@ fun ForestMapView(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            extraControls()
             GlassButton(
                 onClick = { mapViewState.value?.let { it.mapOrientation = 0f } },
                 description = "Север сверху",
