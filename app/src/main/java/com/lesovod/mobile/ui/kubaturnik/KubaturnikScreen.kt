@@ -81,7 +81,7 @@ fun KubaturnikScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        ScreenTitle("Кубатурник")
+        ScreenTitle("Кубатурник", help = "Считает кубы по диаметру и длине. Набейте брёвна, получите сумму и отправьте её в отчёт.")
 
         Box(modifier = Modifier.weight(1f)) {
             when {

@@ -89,7 +89,7 @@ fun ProfileScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        ScreenTitle("Профиль")
+        ScreenTitle("Профиль", help = "Кто вы, какая версия приложения и что ещё не отправилось. Тут же тема, режим «Крупно» и игровой режим.")
 
         Column(
             modifier = Modifier
@@ -264,6 +264,24 @@ private fun ThemeCard() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = Spacing.xs),
         )
+        val large by themePrefs.large.collectAsState()
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Spacing.m)
+                .clickable { themePrefs.setLarge(!large) },
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Крупно", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Все буквы и кнопки больше в 1,2 раза. Удобно без очков и в перчатках",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            androidx.compose.material3.Switch(checked = large, onCheckedChange = { themePrefs.setLarge(it) })
+        }
     }
 }
 
