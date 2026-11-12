@@ -107,3 +107,49 @@ private fun ringContains(ring: DoubleArray, lat: Double, lon: Double): Boolean {
     }
     return inside
 }
+
+/**
+ * Расстояние от точки до ближайшего места границы контура, метры (сторож границы).
+ * Считаем в местной плоской проекции вокруг точки — на размерах делянки ошибка доли метра.
+ */
+fun MapShape.distanceToBorderMeters(p: LatLon): Double {
+    val mLat = 111_320.0
+    val mLon = 111_320.0 * cos(p.lat * PI / 180.0)
+    var best = Double.MAX_VALUE
+    for (ring in rings) {
+        val n = ring.size / 2
+        if (n < 2) continue
+        for (i in 0 until n) {
+            val j = (i + 1) % n
+            val ax = (ring[i * 2 + 1] - p.lon) * mLon
+            val ay = (ring[i * 2] - p.lat) * mLat
+            val bx = (ring[j * 2 + 1] - p.lon) * mLon
+            val by = (ring[j * 2] - p.lat) * mLat
+            val dx = bx - ax
+            val dy = by - ay
+            val len2 = dx * dx + dy * dy
+            val t = if (len2 == 0.0) 0.0 else (-(ax * dx + ay * dy) / len2).coerceIn(0.0, 1.0)
+            val cx = ax + t * dx
+            val cy = ay + t * dy
+            val d = sqrt(cx * cx + cy * cy)
+            if (d < best) best = d
+        }
+    }
+    return best
+}
+
+/**
+ * Насколько я ушёл в сторону от прямой «старт → цель», метры: плюс — левее линии, минус — правее.
+ * Нужен азимуту: «Ушли влево на 4 м, возьмите правее».
+ */
+fun crossTrackMeters(start: LatLon, target: LatLon, p: LatLon): Double {
+    val mLat = 111_320.0
+    val mLon = 111_320.0 * cos(start.lat * PI / 180.0)
+    val dx = (target.lon - start.lon) * mLon
+    val dy = (target.lat - start.lat) * mLat
+    val vx = (p.lon - start.lon) * mLon
+    val vy = (p.lat - start.lat) * mLat
+    val len = sqrt(dx * dx + dy * dy)
+    if (len < 1.0) return 0.0
+    return (dx * vy - dy * vx) / len
+}

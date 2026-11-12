@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -145,7 +146,7 @@ fun MapScreen(
 
     // пока идёт обмер обходом, экран не гаснет — иначе GPS-точки перестают приходить
     val view = LocalView.current
-    val keepOn = state.walk.recording || state.probaDraft?.averaging == true
+    val keepOn = state.walk.recording || state.probaDraft?.averaging == true || state.guard != null || state.azimuth != null
     DisposableEffect(keepOn) {
         view.keepScreenOn = keepOn
         onDispose { view.keepScreenOn = false }
@@ -190,10 +191,13 @@ fun MapScreen(
 
     BackHandler(
         enabled = state.search.open || cardVisible || layersOpen || toolsMenuOpen || plusOpen || state.nearbyOpen || state.selection != null ||
+            state.sos != null || state.azimuth != null ||
             state.noteDraft != null || state.selectedGeoNote != null || state.selectedSklad != null ||
             state.selectedProba != null || state.tasksOpen || (toolPanelVisible && !state.walk.recording),
     ) {
         when {
+            state.sos != null -> viewModel.openSos(false)
+            state.azimuth != null -> viewModel.stopAzimuth()
             state.search.open -> viewModel.openSearch(false)
             plusOpen -> plusOpen = false
             state.nearbyOpen -> viewModel.openNearby(false)
@@ -366,7 +370,12 @@ fun MapScreen(
 
                 state.navTarget?.let { target ->
                     Box(modifier = Modifier.padding(end = 56.dp)) {
-                        NavigationChip(target = target, me = state.myLocation, mapBearing = 0f, onStop = viewModel::stopNavigation)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f, fill = false)) {
+                                NavigationChip(target = target, me = state.myLocation, mapBearing = 0f, onStop = viewModel::stopNavigation)
+                            }
+                            AzimuthChip(onClick = viewModel::startAzimuth)
+                        }
                     }
                 }
 
@@ -400,6 +409,7 @@ fun MapScreen(
                 onDismiss = viewModel::closeCard,
                 onOpenStock = if (canSeeStock) onOpenStock else null,
                 onReportHere = { viewModel.prepareReportHere(); onOpenReport() },
+                onGuard = if (viewModel.canGuardSelected()) viewModel::startGuardOnSelected else null,
                 onShowAs = viewModel::showSelectedAs,
                 hasDelyanka = viewModel.selectedHasDelyanka(),
                 modifier = measureBottom,
@@ -567,6 +577,34 @@ fun MapScreen(
                     PlusAction("Что рядом", PlusIcons.Nearby) { viewModel.openNearby(true) },
                 ),
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp),
+            )
+        }
+
+        if (plusVisible) {
+            SosFab(
+                onClick = { closeOverlays(); viewModel.openSos(true) },
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 48.dp),
+            )
+        }
+
+        state.guard?.let { guard ->
+            GuardLayer(
+                guard = guard,
+                me = state.myLocation,
+                onStop = viewModel::stopGuard,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomInset + 128.dp),
+            )
+        }
+        state.azimuth?.let { az ->
+            AzimuthOverlay(az = az, me = state.myLocation, onStop = viewModel::stopAzimuth)
+        }
+        state.sos?.let { sos ->
+            SosOverlay(
+                sos = sos,
+                me = state.myLocation,
+                here = state.here,
+                onSend = viewModel::sendSos,
+                onClose = { viewModel.openSos(false) },
             )
         }
 
@@ -903,6 +941,7 @@ private fun ObjectCard(
     onDismiss: () -> Unit,
     onOpenStock: ((Int) -> Unit)? = null,
     onReportHere: () -> Unit = {},
+    onGuard: (() -> Unit)? = null,
     onShowAs: (ShapeKind) -> Unit = {},
     hasDelyanka: Boolean = false,
     modifier: Modifier = Modifier,
@@ -986,6 +1025,15 @@ private fun ObjectCard(
                                 onClick = onReportHere,
                                 icon = Icons.Filled.Description,
                                 modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (onGuard != null) {
+                            com.lesovod.mobile.ui.components.LvSoftButton(
+                                text = "Сторож границы",
+                                onClick = onGuard,
+                                icon = Icons.Filled.Shield,
+                                height = 56,
+                                modifier = Modifier.padding(top = 10.dp),
                             )
                         }
                         PointActions(point = point, label = label, onNavigate = null, modifier = Modifier.padding(top = 8.dp))
