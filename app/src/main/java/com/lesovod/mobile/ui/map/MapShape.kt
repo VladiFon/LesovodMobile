@@ -21,6 +21,10 @@ class MapShape(
     val maxLon: Double,
     /** id участка лесных культур (для LESOKULTURY) — по нему открывается карточка. */
     val refId: Int? = null,
+    /** Лесосека лежит на лесных культурах (сервер 12.11.2026+): рисуем только тонкий контур — культуры поверх. */
+    val lk: Boolean = false,
+    /** Ключ пометки на сервере («gisleshoz:uid», «delyanka:id») — для «Скрыть с карт». */
+    val pometka: String? = null,
 ) {
     val labelLat: Double get() = (minLat + maxLat) / 2
     val labelLon: Double get() = (minLon + maxLon) / 2
@@ -30,7 +34,16 @@ class MapShape(
     val key: String = "$kind|$kvartal|$vydel|${rings.size}|${rings.firstOrNull()?.size}"
 }
 
-fun buildShape(kind: ShapeKind, kvartal: String, vydel: String?, statusColor: Int?, rings: List<DoubleArray>, refId: Int? = null): MapShape? {
+fun buildShape(
+    kind: ShapeKind,
+    kvartal: String,
+    vydel: String?,
+    statusColor: Int?,
+    rings: List<DoubleArray>,
+    refId: Int? = null,
+    lk: Boolean = false,
+    pometka: String? = null,
+): MapShape? {
     var minLat = Double.MAX_VALUE
     var maxLat = -Double.MAX_VALUE
     var minLon = Double.MAX_VALUE
@@ -49,7 +62,7 @@ fun buildShape(kind: ShapeKind, kvartal: String, vydel: String?, statusColor: In
             i += 2
         }
     }
-    return if (any) MapShape(kind, kvartal, vydel, statusColor, rings, minLat, maxLat, minLon, maxLon, refId) else null
+    return if (any) MapShape(kind, kvartal, vydel, statusColor, rings, minLat, maxLat, minLon, maxLon, refId, lk, pometka) else null
 }
 
 /** Общая для потокового парсера логика: какие свойства GeoJSON что означают для каждого слоя. */
@@ -68,7 +81,11 @@ fun shapeFromProperties(kind: ShapeKind, prop: (String) -> String?, rawNumVds: S
             val kv = prop("kvartal") ?: prop("num_kv") ?: return null
             val vd = prop("vydel")?.takeIf { it.isNotBlank() } ?: rawNumVds?.substringBefore(',')?.trim()
             if (vd.isNullOrBlank()) return null
-            buildShape(kind, kv, vd, parseColorOrNull(prop("vid_rubki_color")), rings)
+            buildShape(
+                kind, kv, vd, parseColorOrNull(prop("vid_rubki_color")), rings,
+                lk = prop("lesokultury") == "true",
+                pometka = prop("pometka")?.takeIf { it.isNotBlank() },
+            )
         }
         // участки культур приходят не потоковым GeoJSON, а из /api/map/lesokultury (MapViewModel)
         ShapeKind.LESOKULTURY -> null

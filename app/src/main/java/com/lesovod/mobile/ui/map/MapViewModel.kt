@@ -89,6 +89,9 @@ data class GeoNoteShareState(
 )
 
 data class MapUiState(
+    /** Можно ли скрывать лесосеки с карт (мастер, помощник, лесничий, контора; сервер vse83+). */
+    val mozhnoSkryvat: Boolean = false,
+    val skryvaem: Boolean = false,
     val layers: MapLayers = MapLayers(),
     val selection: MapSelection? = null,
     /** Ключи "квартал|выдел" делянок, где работа отмечена выполненной. */
@@ -441,11 +444,12 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Цвета по видам работ, статусы делянок и лесные культуры выбранного лесничества — лёгкие запросы. */
     private fun loadColors(num: Int, force: Boolean = false) {
+        loadMozhnoSkryvat()
         viewModelScope.launch {
             repository.getWorkColors(num, force).onSuccess { _uiState.value = _uiState.value.copy(workColors = it) }
         }
         viewModelScope.launch {
-            repository.getDelyankiForMap().onSuccess { refs ->
+            repository.getDelyankiForMap(force).onSuccess { refs ->
                 _uiState.value = withDelyankaColors(_uiState.value.copy(delyankaRefs = refs))
             }
         }
@@ -461,12 +465,55 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                     }, refId = lk.id)
                 }
                 _uiState.value = _uiState.value.copy(
-                    lesokulturyKeys = list.filter { !it.hasKontur }.associate { MapRepository.vydelKey(it.kvartal, it.vydel) to lkColor(it) },
+                    // на выделе есть нарисованный контур культур — старый участок «во весь выдел»
+                    // (из книги, без контура) выдел больше не обводит: одно место — один контур
+                    lesokulturyKeys = kontury.map { MapRepository.vydelKey(it.kvartal, it.vydel.orEmpty()) }.toSet().let { sKonturom ->
+                        list.filter { !it.hasKontur }.associate { MapRepository.vydelKey(it.kvartal, it.vydel) to lkColor(it) }
+                            .filterKeys { it !in sKonturom }
+                    },
                     lesokulturyKontury = kontury,
                     lesokulturyList = list,
                     lesokulturyLegend = list.map { lkColor(it) to (it.vidKultur ?: "Лесные культуры") }.distinct(),
                 )
             }
+        }
+    }
+
+    private var mozhnoSkryvatZagruzheno = false
+
+    private fun loadMozhnoSkryvat() {
+        if (mozhnoSkryvatZagruzheno) return
+        mozhnoSkryvatZagruzheno = true
+        viewModelScope.launch {
+            botRepository.mozhnoSkryvatSKart().onSuccess { _uiState.value = _uiState.value.copy(mozhnoSkryvat = it) }
+                .onFailure { mozhnoSkryvatZagruzheno = false }
+        }
+    }
+
+    /**
+     * «Скрыть с карт» из карточки: лесосека (делянка, лесосека ГИСлесхоза, участок культур)
+     * пропадает и здесь, и в QGIS. Вернуть — на сайте: Настройки → «Карты: что не показывать».
+     */
+    fun hideSelected() {
+        val sel = _uiState.value.selection ?: return
+        val pometka = sel.pometka ?: return
+        val num = currentNum() ?: return
+        _uiState.value = _uiState.value.copy(skryvaem = true)
+        viewModelScope.launch {
+            botRepository.skrytSKart(pometka).fold(
+                onSuccess = {
+                    repository.getLesoseki(num, force = true).onSuccess { realLesoseki = it }
+                    _uiState.value = _uiState.value.copy(
+                        skryvaem = false, selection = null, cardOpen = false,
+                        message = "Скрыто с карт (и в QGIS). Вернуть — на сайте: Настройки → «Карты: что не показывать»",
+                    )
+                    publishVydela()
+                    loadColors(num, force = true)
+                },
+                onFailure = {
+                    _uiState.value = _uiState.value.copy(skryvaem = false, message = "Не удалось скрыть: ${it.message}")
+                },
+            )
         }
     }
 
@@ -491,7 +538,8 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         val colors = HashMap<String, Int>()
         val legend = LinkedHashMap<Int, String>()
         // на одном выделе может быть несколько делянок (архивная и новая) — берём последнюю
-        state.delyankaRefs.filter { lesnichestvoMatches(it.lesnichestvo, state.selectedLesnichestvo) }
+        // скрытые с карт (вручную, закрытые, по виду рубки — сервер vse83+) не красим
+        state.delyankaRefs.filter { !it.skryta && lesnichestvoMatches(it.lesnichestvo, state.selectedLesnichestvo) }
             .sortedBy { it.delyankaId }
             .forEach { ref ->
                 val kv = ref.kvartal?.trim().orEmpty()
@@ -852,9 +900,21 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             val id = shape.refId ?: _uiState.value.lesokulturyList
                 .filter { !it.hasKontur && it.kvartal == shape.kvartal && it.vydel == shape.vydel }
                 .maxByOrNull { it.godSozdaniya.orEmpty() }?.id
-            MapSelection(shape.kvartal, shape.vydel, shape.kind, refId = id, ownKontur = shape.refId != null)
+            MapSelection(shape.kvartal, shape.vydel, shape.kind, refId = id, ownKontur = shape.refId != null,
+                pometka = id?.let { "lk:$it" })
         } else {
-            MapSelection(shape.kvartal, shape.vydel, shape.kind)
+            // делянка Лесовода на этом кв./выд. (не скрытая) — для «Скрыть с карт» и пометки л/к
+            val ref = shape.vydel?.let { vd ->
+                findDelyanka(_uiState.value.delyankaRefs.filter { !it.skryta }, shape.kvartal, vd, _uiState.value.selectedLesnichestvo)
+            }
+            val pometka = when (shape.kind) {
+                ShapeKind.LESOSEKA -> shape.pometka ?: ref?.let { "delyanka:${it.delyankaId}" }
+                ShapeKind.VYDEL -> ref?.let { "delyanka:${it.delyankaId}" }
+                else -> null
+            }
+            val lk = shape.kind != ShapeKind.KVARTAL && (shape.lk || ref?.lesokultury == true)
+            MapSelection(shape.kvartal, shape.vydel, shape.kind, pometka = pometka, lk = lk,
+                lkInfo = ref?.lkInfo?.takeIf { lk && it.isNotBlank() })
         }
         if (_uiState.value.selection == tapped) {
             openSelected()

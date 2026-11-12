@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Download
@@ -459,6 +460,7 @@ fun MapScreen(
                 onGuard = if (viewModel.canGuardSelected()) viewModel::startGuardOnSelected else null,
                 onShowAs = viewModel::showSelectedAs,
                 hasDelyanka = viewModel.selectedHasDelyanka(),
+                onHide = if (state.mozhnoSkryvat && state.selection?.pometka != null) viewModel::hideSelected else null,
                 modifier = measureBottom,
             )
         }
@@ -1035,6 +1037,7 @@ private fun ObjectCard(
     onGuard: (() -> Unit)? = null,
     onShowAs: (ShapeKind) -> Unit = {},
     hasDelyanka: Boolean = false,
+    onHide: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val selection = state.selection
@@ -1101,6 +1104,15 @@ private fun ObjectCard(
                     }
                 }
 
+                if (!state.isLoadingCard && selection != null && selection.lk && selection.kind != ShapeKind.LESOKULTURY) {
+                    Text(
+                        "🌲 На лесных культурах" + (selection.lkInfo?.let { " · $it" } ?: ""),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color(0xFF00897B),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+
                 if (!state.isLoadingCard && selection != null) {
                     val label = selection.title()
                     if (point != null) {
@@ -1128,6 +1140,21 @@ private fun ObjectCard(
                             )
                         }
                         PointActions(point = point, label = label, onNavigate = null, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    if (onHide != null) {
+                        // лесосеки ложатся друг на друга (уборка захламлённости на весь выдел и т.п.):
+                        // ненужную убираем с карт — здесь и в QGIS; вернуть — на сайте в Настройках
+                        com.lesovod.mobile.ui.components.LvSoftButton(
+                            text = if (state.skryvaem) "Скрываю…" else when (selection.kind) {
+                                ShapeKind.LESOKULTURY -> "Скрыть участок с карт"
+                                else -> "Скрыть делянку с карт"
+                            },
+                            onClick = onHide,
+                            icon = Icons.Filled.VisibilityOff,
+                            height = 48,
+                            enabled = !state.skryvaem,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
                     }
                     if (selection.vydel != null) VydelHistorySection(state.history, state.historyLoading)
                 }

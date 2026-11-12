@@ -11,6 +11,8 @@ import com.lesovod.mobile.data.network.dto.DorogaCreateRequest
 import com.lesovod.mobile.data.network.dto.DorogaDto
 import com.lesovod.mobile.data.network.dto.DorogiListDto
 import com.lesovod.mobile.data.network.dto.GeoNoteCreateRequest
+import com.lesovod.mobile.data.network.dto.KartaPometkaRequest
+import com.lesovod.mobile.data.network.dto.KartaPometkiDto
 import com.lesovod.mobile.data.network.dto.KartaProbaCreateRequest
 import com.lesovod.mobile.data.network.dto.KartaProbaDto
 import com.lesovod.mobile.data.network.dto.KartaProbaMoveRequest
@@ -379,6 +381,16 @@ interface ApiService {
 
     @GET("api/map/sklady")
     suspend fun listSklady(): List<SkladDto>
+
+    // --- пометки лесосек на картах (сервер vse83+): «Скрыть с карт» ---
+    @GET("api/karta/pometki")
+    suspend fun getKartaPometki(@Header("Authorization") bearerToken: String): KartaPometkiDto
+
+    @POST("api/karta/pometki")
+    suspend fun postKartaPometka(
+        @Header("Authorization") bearerToken: String,
+        @Body body: KartaPometkaRequest,
+    ): kotlinx.serialization.json.JsonObject
 
     // --- лесные дороги (сервер vse81+): видят все, рисуют руководители ---
     @GET("api/dorogi")
