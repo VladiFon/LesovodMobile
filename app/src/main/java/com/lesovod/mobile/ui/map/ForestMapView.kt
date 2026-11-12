@@ -80,6 +80,11 @@ data class MapSelection(
     val kind: ShapeKind,
     val refId: Int? = null,
     val ownKontur: Boolean = false,
+    /** Ключ пометки на сервере («gisleshoz:uid», «delyanka:id», «lk:id») — для «Скрыть с карт». */
+    val pometka: String? = null,
+    /** Лесосека / делянка лежит на лесных культурах; lkInfo — какие («ЛК 2019 С»). */
+    val lk: Boolean = false,
+    val lkInfo: String? = null,
 )
 
 private enum class LocateMode { Off, Follow, Heading }

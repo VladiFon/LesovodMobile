@@ -242,6 +242,22 @@ class BotRepository(
         Unit
     }
 
+    // --- пометки лесосек на картах (сервер vse83+) ---
+
+    /** Можно ли этому человеку скрывать лесосеки с карт; старый сервер — нельзя. */
+    suspend fun mozhnoSkryvatSKart(): Result<Boolean> = safeCall {
+        api.getKartaPometki(requireToken()).mozhno
+    }
+
+    /** pometka — «gisleshoz:uid», «delyanka:id», «lk:id» из слоя карты. */
+    suspend fun skrytSKart(pometka: String): Result<Unit> = safeCall {
+        val istochnik = pometka.substringBefore(':')
+        val klyuch = pometka.substringAfter(':', "")
+        require(istochnik.isNotBlank() && klyuch.isNotBlank()) { "Нет номера лесосеки" }
+        api.postKartaPometka(requireToken(), com.lesovod.mobile.data.network.dto.KartaPometkaRequest(istochnik, listOf(klyuch), skryta = true))
+        Unit
+    }
+
     // --- лесные дороги (сервер vse81+) ---
 
     suspend fun createDoroga(request: DorogaCreateRequest): Result<DorogaDto> = safeCall {

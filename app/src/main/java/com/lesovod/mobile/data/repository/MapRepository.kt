@@ -79,6 +79,7 @@ class MapRepository(
      * отфильтровывались, и лесосеки из QGIS на телефоне не показывались вовсе.
      */
     suspend fun getLesoseki(num: Int, force: Boolean = false): Result<List<MapShape>> = cachedShapes(
+        // ключ прежний: старый кэш (без пометок л/к) нужен без связи и сам обновится по TTL
         key = "lesoseki_v2_$num", // v2: после исправления фильтра по имени слоя старый пустой кэш не годится
         ttlMs = LESOSEKI_TTL_MS,
         force = force,
@@ -122,9 +123,10 @@ class MapRepository(
     )
 
     /** Где заведены делянки (кв./выд. → delyanka_id). Кэшируется ненадолго: список меняется, когда заводят делянки. */
-    suspend fun getDelyankiForMap(): Result<List<DelyankaMapRefDto>> = cached(
+    suspend fun getDelyankiForMap(force: Boolean = false): Result<List<DelyankaMapRefDto>> = cached(
         key = "delyanki_for_map",
         ttlMs = DELYANKI_TTL_MS,
+        force = force,
         fetch = { api.getDelyankiForMap() },
         decode = { json.decodeFromString<List<DelyankaMapRefDto>>(it.readBytes().decodeToString()) },
         encode = { value, out -> out.write(json.encodeToString(value).toByteArray()) },

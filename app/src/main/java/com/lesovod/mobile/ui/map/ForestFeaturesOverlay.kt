@@ -78,6 +78,34 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
     /** Приблизительные прямоугольники вместо настоящих контуров делянок не выбираем — тап уходит в выдел под ними. */
     var lesosekiTappable: Boolean = true
 
+    /**
+     * «Одно место — один контур» (0.21.0): выделы, на которых есть настоящий контур лесосеки
+     * или участка культур, не заливаем целиком — иначе на одном месте лежат три слоя
+     * (заливка выдела + лесосека + культуры). Считается заново, только когда сменились списки.
+     */
+    private var konturKeysFor: Pair<List<MapShape>, List<MapShape>>? = null
+    private var konturKeysKesh: Set<String> = emptySet()
+
+    private fun konturKeys(): Set<String> {
+        val src = lesoseki to lesokulturyKontury
+        val prev = konturKeysFor
+        if (prev == null || prev.first !== src.first || prev.second !== src.second) {
+            konturKeysKesh = HashSet<String>().apply {
+                // pometka есть только у настоящих лесосек с сервера (не у прямоугольников-заглушек)
+                if (layers.lesoseki) lesoseki.forEach { if (it.pometka != null && it.vydel != null) add(CompletedWorkStore.key(it.kvartal, it.vydel)) }
+                if (layers.lesokultury) lesokulturyKontury.forEach { if (it.vydel != null) add(CompletedWorkStore.key(it.kvartal, it.vydel)) }
+            }
+            konturKeysFor = src
+        }
+        return konturKeysKesh
+    }
+
+    private val lesosekaLkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * density
+        pathEffect = DashPathEffect(floatArrayOf(6f * density, 5f * density), 0f)
+    }
+
     private val path = Path()
     private val point = Point()
     private val geo = GeoPoint(0.0, 0.0)
@@ -128,9 +156,11 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
 
         val view = View(canvas, projection, south, north, west, east, pxPerDegree, zoom)
         if (layers.kvartaly) kvartaly.forEach { drawShape(it, view) }
+        konturKeysFor = null // слои могли включить/выключить
         if (layers.vydela) vydela.forEach { drawShape(it, view) }
-        if (layers.lesokultury) lesokulturyKontury.forEach { drawKontur(it, view) }
         if (layers.lesoseki) lesoseki.forEach { drawShape(it, view) }
+        // культуры — сверху: их контур обычно лежит внутри лесосеки и выдела
+        if (layers.lesokultury) lesokulturyKontury.forEach { drawKontur(it, view) }
     }
 
     private fun drawKontur(shape: MapShape, v: View) {
@@ -165,6 +195,12 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
 
         applyStyle(shape)
         buildPath(shape, v.projection)
+        if (shape.kind == ShapeKind.LESOSEKA && shape.lk && layers.lesokultury && !isSelected(shape)) {
+            // лесосека на лесных культурах: только тонкий пунктир, культуры видны сквозь неё
+            lesosekaLkPaint.color = strokePaint.color
+            v.canvas.drawPath(path, lesosekaLkPaint)
+            return
+        }
         if (fillPaint.alpha > 0) v.canvas.drawPath(path, fillPaint)
         v.canvas.drawPath(path, strokePaint)
         if (shape.kind == ShapeKind.VYDEL && shape.vydel != null) {
@@ -183,6 +219,11 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
             ShapeKind.LESOSEKA, ShapeKind.LESOKULTURY -> false
         }
         if (labelled) drawLabel(shape, v)
+    }
+
+    private fun isSelected(shape: MapShape): Boolean {
+        val sel = selection ?: return false
+        return sel.kind == shape.kind && sel.kvartal == shape.kvartal && sel.vydel == shape.vydel
     }
 
     private fun applyStyle(shape: MapShape) {
@@ -213,7 +254,10 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
                     else -> delyankaStatusColors[key]
                 }
                 if (base != null) {
-                    fillPaint.color = withAlpha(base, 110)
+                    // по статусу / виду рубки делянку и так заливает её контур: если на выделе есть
+                    // свой контур лесосеки или культур — выдел только обводим, без второй заливки
+                    val estKontur = colorMode != ColorMode.WORKS && key in konturKeys()
+                    fillPaint.color = if (estKontur) AndroidColor.TRANSPARENT else withAlpha(base, 110)
                     strokePaint.color = base
                     strokePaint.strokeWidth = 2f
                 } else {

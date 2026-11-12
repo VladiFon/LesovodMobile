@@ -22,4 +22,9 @@ data class DelyankaMapRefDto(
     val zagotovitel: String? = null,
     /** false — наряды по сторонней делянке пишет сам заготовитель: для отчёта не предлагаем. */
     @SerialName("nashi_naryady") val nashiNaryady: Boolean = true,
+    /** Не рисовать на карте (сервер vse83+): скрыта вручную, закрыта, вид рубки не показывается. */
+    val skryta: Boolean = false,
+    /** Делянка лежит на лесных культурах: lk_info — какие культуры («ЛК 2019 С»). */
+    val lesokultury: Boolean = false,
+    @SerialName("lk_info") val lkInfo: String? = null,
 )
