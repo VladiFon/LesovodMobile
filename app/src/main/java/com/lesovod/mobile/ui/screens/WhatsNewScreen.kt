@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.TextIncrease
 import androidx.compose.material3.Icon
@@ -56,11 +58,23 @@ object WhatsNew {
 }
 
 /** Куда ведёт «Показать, где это». */
-enum class WhatsNewTarget { MORE, PROFILE }
+enum class WhatsNewTarget { MORE, PROFILE, MAP }
 
 private data class NewsCard(val icon: ImageVector, val title: String, val text: String, val target: WhatsNewTarget?)
 
 private val NEWS = listOf(
+    NewsCard(
+        Icons.Rounded.Map,
+        "Карта: «Где я» и «Что рядом»",
+        "Сверху крупно видно, в каком вы квартале и выделе. Кнопка «+» внизу: метка, фото, отчёт отсюда и список всего, что рядом, со стрелкой, куда идти.",
+        WhatsNewTarget.MAP,
+    ),
+    NewsCard(
+        Icons.Rounded.Layers,
+        "Слои одним нажатием",
+        "Делянки, выдела, культуры, метки и пробы включаются чипами прямо под «Где я». На карточке выдела большие кнопки «Вести сюда» и «Отчёт отсюда».",
+        WhatsNewTarget.MAP,
+    ),
     NewsCard(
         Icons.Rounded.Apps,
         "«Ещё» разложено по полочкам",

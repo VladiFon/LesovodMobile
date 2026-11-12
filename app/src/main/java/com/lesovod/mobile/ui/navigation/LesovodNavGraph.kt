@@ -165,8 +165,12 @@ fun LesovodNavGraph() {
             }
         }
         composable(Screen.Map.route) {
-            MainScaffold(navController) {
-                MapScreen(onOpenStock = { id -> navController.openStock(id) })
+            // на карте свой «+» (метка, фото, отчёт отсюда, что рядом) — общий не показываем
+            MainScaffold(navController, showFab = false) {
+                MapScreen(
+                    onOpenStock = { id -> navController.openStock(id) },
+                    onOpenReport = { navController.navigate(Screen.WorkReport.route) { launchSingleTop = true } },
+                )
             }
         }
         composable(Screen.Notes.route) { MainScaffold(navController) { NotesScreen() } }
@@ -206,6 +210,7 @@ fun LesovodNavGraph() {
                     val route = when (target) {
                         WhatsNewTarget.MORE -> Screen.More.route
                         WhatsNewTarget.PROFILE -> Screen.Profile.route
+                        WhatsNewTarget.MAP -> Screen.Map.route
                     }
                     navController.navigate(route) {
                         popUpTo(Screen.WhatsNew.route) { inclusive = true }
@@ -256,6 +261,7 @@ fun NavHostController.openStock(delyankaId: Int? = null) {
 @Composable
 private fun MainScaffold(
     navController: NavHostController,
+    showFab: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -349,7 +355,7 @@ private fun MainScaffold(
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
+            if (showFab) FloatingActionButton(
                 onClick = { showQuickActions = true },
                 shape = CircleShape,
                 containerColor = MaterialTheme.colorScheme.tertiary,
