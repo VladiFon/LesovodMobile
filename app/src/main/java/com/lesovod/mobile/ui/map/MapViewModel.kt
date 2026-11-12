@@ -524,7 +524,15 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         loadGeoNotes(force = true)
         loadTasks()
         loadRoads(force = true)
-        _uiState.value = _uiState.value.copy(message = "Цвета, метки, пробы, дороги и задачи обновлены")
+        // границы лесосек тоже: их меняют в QGIS («Опубликовать в Лесовод») и прячут «Скрыть с карт»;
+        // раньше висели до 3 часов из кэша
+        viewModelScope.launch {
+            repository.getLesoseki(num, force = true).onSuccess {
+                realLesoseki = it
+                publishVydela()
+            }
+        }
+        _uiState.value = _uiState.value.copy(message = "Лесосеки, цвета, метки, пробы, дороги и задачи обновлены")
     }
 
     fun setColorMode(mode: ColorMode) {
