@@ -11,6 +11,8 @@ enum class ThemeMode(val label: String) {
     DARK("Тёмная"),
     LIGHT("Светлая"),
     SYSTEM("Как в системе"),
+    /** Белый фон, чёрные буквы, сочные цвета — для яркого солнца и снега. */
+    SUN("Солнце"),
 }
 
 /** Хранит выбранную тему в SharedPreferences и отдаёт её потоком — MainActivity перерисуется сразу. */
@@ -31,6 +33,17 @@ class ThemePrefs private constructor(context: Context) {
         _large.value = on
     }
 
+    /** Кнопка-солнышко на карте: включить «Солнце» и вернуть прежнюю тему тем же нажатием. */
+    fun toggleSun() {
+        if (_mode.value == ThemeMode.SUN) {
+            val back = prefs.getString(KEY_BEFORE_SUN, null)?.let { raw -> ThemeMode.entries.firstOrNull { it.name == raw } }
+            setMode(back?.takeIf { it != ThemeMode.SUN } ?: ThemeMode.DARK)
+        } else {
+            prefs.edit { putString(KEY_BEFORE_SUN, _mode.value.name) }
+            setMode(ThemeMode.SUN)
+        }
+    }
+
     fun setMode(mode: ThemeMode) {
         prefs.edit { putString(KEY_MODE, mode.name) }
         _mode.value = mode
@@ -39,6 +52,7 @@ class ThemePrefs private constructor(context: Context) {
     companion object {
         private const val KEY_MODE = "mode"
         private const val KEY_LARGE = "large"
+        private const val KEY_BEFORE_SUN = "before_sun"
 
         @Volatile
         private var instance: ThemePrefs? = null

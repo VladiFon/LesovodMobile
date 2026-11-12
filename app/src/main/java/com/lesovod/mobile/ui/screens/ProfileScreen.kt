@@ -259,7 +259,7 @@ private fun ThemeCard() {
             }
         }
         Text(
-            "Тёмная тема лучше читается в лесу и бережёт батарею",
+            "Тёмная лучше читается в лесу и бережёт батарею. «Солнце» для яркого дня и снега: белый фон и чёрные буквы",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = Spacing.xs),

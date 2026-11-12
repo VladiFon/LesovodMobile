@@ -18,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.Directions
 import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material.icons.rounded.Apps
@@ -69,6 +71,18 @@ enum class WhatsNewTarget { MORE, PROFILE, MAP }
 private data class NewsCard(val icon: ImageVector, val title: String, val text: String, val target: WhatsNewTarget?)
 
 private val NEWS = listOf(
+    NewsCard(
+        Icons.Rounded.Route,
+        "След: назад к машине",
+        "На карте «+» → «Записать след». Голубой пунктир покажет, где вы прошли. Заплутали, жмите «Назад по следу», и телефон поведёт обратно к началу. След хранится только у вас; на сервер уйдёт, если сами нажмёте «Сохранить».",
+        WhatsNewTarget.MAP,
+    ),
+    NewsCard(
+        Icons.Rounded.WbSunny,
+        "Режим «Солнце»",
+        "На ярком солнце или снегу экран не видно? Солнышко вверху карты: белый фон, чёрные буквы, всё чётко. Нажмёте ещё раз, и вернётся прежняя тема. Есть и в Профиле.",
+        WhatsNewTarget.MAP,
+    ),
     NewsCard(
         Icons.Rounded.Directions,
         "Навигатор по лесным дорогам",

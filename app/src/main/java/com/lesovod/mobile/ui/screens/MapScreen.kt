@@ -82,6 +82,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.WbSunny
+import com.lesovod.mobile.data.local.ThemeMode
+import com.lesovod.mobile.data.local.ThemePrefs
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -148,12 +151,15 @@ fun MapScreen(
     // пока идёт обмер обходом, экран не гаснет — иначе GPS-точки перестают приходить
     val view = LocalView.current
     val keepOn = state.walk.recording || state.probaDraft?.averaging == true || state.guard != null || state.azimuth != null ||
-        state.driving || state.roadDraft?.recording == true
+        state.driving || state.roadDraft?.recording == true || state.trail.recording
     DisposableEffect(keepOn) {
         view.keepScreenOn = keepOn
         onDispose { view.keepScreenOn = false }
     }
 
+    val appContext = LocalContext.current
+    val themePrefs = remember { ThemePrefs.getInstance(appContext) }
+    val themeMode by themePrefs.mode.collectAsState()
     var layersOpen by remember { mutableStateOf(false) }
     var toolsMenuOpen by remember { mutableStateOf(false) }
     var plusOpen by remember { mutableStateOf(false) }
@@ -256,6 +262,7 @@ fun MapScreen(
             roads = if (state.layers.dorogi || state.tool == MapTool.ROAD || state.navTarget != null) state.roads else emptyList(),
             selectedRoadId = state.selectedRoad?.id,
             roadDraft = state.roadDraft?.points ?: emptyList(),
+            trail = state.trail.points,
             onRoadTap = { closeOverlays(); viewModel.onRoadTap(it) },
             myLocation = state.myLocation,
             focus = state.focus,
@@ -338,6 +345,9 @@ fun MapScreen(
                     closeOverlays()
                     viewModel.openSearch(!state.search.open)
                 })
+                MapGlassButton(Icons.Filled.WbSunny, "Режим «Солнце»", active = themeMode == ThemeMode.SUN, onClick = {
+                    themePrefs.toggleSun()
+                })
                 MapHelpButton()
             }
             if (!state.search.open) {
@@ -401,6 +411,17 @@ fun MapScreen(
                         onSend = viewModel::sendRoute,
                         onAzimuth = viewModel::startAzimuth,
                         onStop = viewModel::stopNavigation,
+                        modifier = Modifier.padding(end = 56.dp),
+                    )
+                }
+
+                if (state.trail.recording || state.trail.points.isNotEmpty()) {
+                    TrailBar(
+                        trail = state.trail,
+                        onToggle = { if (state.trail.recording) viewModel.pauseTrail() else viewModel.startTrail() },
+                        onBack = viewModel::backByTrail,
+                        onSave = viewModel::saveTrail,
+                        onClear = viewModel::clearTrail,
                         modifier = Modifier.padding(end = 56.dp),
                     )
                 }
@@ -642,6 +663,9 @@ fun MapScreen(
                     PlusAction("Фото-метка", PlusIcons.Photo) { viewModel.startNoteHere() },
                     PlusAction("Отчёт отсюда", PlusIcons.Report) { viewModel.prepareReportHere(); onOpenReport() },
                     PlusAction("Что рядом", PlusIcons.Nearby) { viewModel.openNearby(true) },
+                    PlusAction(if (state.trail.points.isEmpty()) "Записать след" else "След", PlusIcons.Trail) {
+                        if (!state.trail.recording) viewModel.startTrail()
+                    },
                 ),
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp),
             )

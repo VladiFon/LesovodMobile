@@ -17,11 +17,21 @@ val LocalIsDarkTheme = staticCompositionLocalOf { true }
 @Composable
 fun LesovodTheme(
     darkTheme: Boolean = true,
+    /** Режим «Солнце»: светлая тема с максимальным контрастом. */
+    sun: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) PolyanaDarkColors else PolyanaLightColors
+    val colorScheme = when {
+        sun -> PolyanaSunColors
+        darkTheme -> PolyanaDarkColors
+        else -> PolyanaLightColors
+    }
     val semanticColors = if (darkTheme) DarkSemanticColors else LightSemanticColors
-    val lv = if (darkTheme) LvDark else LvLight
+    val lv = when {
+        sun -> LvSun
+        darkTheme -> LvDark
+        else -> LvLight
+    }
 
     CompositionLocalProvider(
         LocalSemanticColors provides semanticColors,
@@ -40,3 +50,20 @@ fun LesovodTheme(
 /** Короткий доступ: MaterialTheme.semanticColors.ok и т.п. */
 val MaterialTheme.semanticColors: SemanticColors
     @Composable get() = LocalSemanticColors.current
+
+/** «Солнце»: чистый белый, чёрный текст и тёмные контуры — читается на ярком свету. */
+val PolyanaSunColors = PolyanaLightColors.copy(
+    primary = androidx.compose.ui.graphics.Color(0xFF145A2E),
+    background = androidx.compose.ui.graphics.Color.White,
+    onBackground = androidx.compose.ui.graphics.Color.Black,
+    surface = androidx.compose.ui.graphics.Color.White,
+    onSurface = androidx.compose.ui.graphics.Color.Black,
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFEDEDED),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF1A1A1A),
+    outline = androidx.compose.ui.graphics.Color(0xFF333333),
+    outlineVariant = androidx.compose.ui.graphics.Color(0xFF666666),
+    surfaceContainer = androidx.compose.ui.graphics.Color(0xFFF2F2F2),
+    surfaceContainerLow = androidx.compose.ui.graphics.Color(0xFFF8F8F8),
+    surfaceContainerHigh = androidx.compose.ui.graphics.Color(0xFFEAEAEA),
+    surfaceContainerHighest = androidx.compose.ui.graphics.Color(0xFFE2E2E2),
+)
