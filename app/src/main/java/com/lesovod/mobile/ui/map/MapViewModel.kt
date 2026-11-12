@@ -524,7 +524,15 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         loadGeoNotes(force = true)
         loadTasks()
         loadRoads(force = true)
-        _uiState.value = _uiState.value.copy(message = "Цвета, метки, пробы, дороги и задачи обновлены")
+        // границы лесосек тоже: их меняют в QGIS («Опубликовать в Лесовод») и прячут «Скрыть с карт»;
+        // раньше висели до 3 часов из кэша
+        viewModelScope.launch {
+            repository.getLesoseki(num, force = true).onSuccess {
+                realLesoseki = it
+                publishVydela()
+            }
+        }
+        _uiState.value = _uiState.value.copy(message = "Лесосеки, цвета, метки, пробы, дороги и задачи обновлены")
     }
 
     fun setColorMode(mode: ColorMode) {
@@ -973,7 +981,9 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                     onFailure = { _uiState.value.copy(isLoadingCard = false, cardError = it.message) },
                 )
                 selection.kind == ShapeKind.LESOSEKA ->
-                    _uiState.value.copy(isLoadingCard = false, cardNotice = "Контур делянки есть на карте, но в системе она не заведена — данных нет")
+                    _uiState.value.copy(isLoadingCard = false, cardNotice = "Этот контур пришёл из ГИСлесхоза или загруженного файла, делянки в Лесоводе на нём нет. " +
+                        "Удалили в QGIS? Нажмите там «Опубликовать в Лесовод», потом здесь «Слои» → «Обновить». " +
+                        "Старый файл, загруженный руками, удаляется на сайте: Настройки → «Карты: что не показывать».")
                 else -> repository.getVydelCard(selection.kvartal, vydel, lesnichestvo).fold(
                     onSuccess = { _uiState.value.copy(isLoadingCard = false, selectedCard = it.toVydelCard()) },
                     onFailure = { _uiState.value.copy(isLoadingCard = false, cardError = it.message) },

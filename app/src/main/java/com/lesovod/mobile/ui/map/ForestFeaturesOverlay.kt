@@ -91,8 +91,9 @@ class ForestFeaturesOverlay(density: Float) : Overlay() {
         val prev = konturKeysFor
         if (prev == null || prev.first !== src.first || prev.second !== src.second) {
             konturKeysKesh = HashSet<String>().apply {
-                // pometka есть только у настоящих лесосек с сервера (не у прямоугольников-заглушек)
-                if (layers.lesoseki) lesoseki.forEach { if (it.pometka != null && it.vydel != null) add(CompletedWorkStore.key(it.kvartal, it.vydel)) }
+                // настоящие контуры лесосек (не прямоугольники-заглушки, когда лесосек на сервере нет):
+                // делянку красит её контур, а выдел только обводится
+                if (layers.lesoseki && lesosekiTappable) lesoseki.forEach { if (it.vydel != null) add(CompletedWorkStore.key(it.kvartal, it.vydel)) }
                 if (layers.lesokultury) lesokulturyKontury.forEach { if (it.vydel != null) add(CompletedWorkStore.key(it.kvartal, it.vydel)) }
             }
             konturKeysFor = src
